@@ -213,6 +213,10 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
     const o = obj.$overlay as { page?: string; param?: string } | undefined;
     return o?.page ? `${o.page}.${o.param || '?'}` : '(dialog input)';
   }
+  if (key === '$map') {
+    const m = obj.$map as { id?: string; value?: unknown } | undefined;
+    return `${m?.id || '(no map)'} · ${propertyValuePreview(m?.value, undefined, depth + 1)}`;
+  }
   if (key === '$user') {
     const u = obj.$user as { field?: string } | undefined;
     if (u?.field === 'userList') return 'User list';

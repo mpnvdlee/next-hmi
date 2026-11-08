@@ -573,6 +573,47 @@ def test_put_config_without_a_dialogs_key_keeps_the_stored_folder(client, dialog
     assert not page_file.exists()
 
 
+
+_SEVERITY_MAP = {
+    "id": "alarm-severity",
+    "type": "Color",
+    "cases": [{"when": 1, "then": "--hmi-accent"}, {"when": 2, "then": "--hmi-warn"}],
+    "default": "--hmi-text-muted",
+}
+
+
+def test_put_config_round_trips_value_maps_and_keeps_them_when_omitted(client):
+    assert client.put("/api/config/config", json={"pages": [], "valueMaps": [_SEVERITY_MAP]}).status_code == 200
+    assert client.get("/api/config/config").json()["valueMaps"] == [_SEVERITY_MAP]
+    # An older client that knows nothing of value maps must not empty them.
+    assert client.put("/api/config/config", json={"pages": []}).status_code == 200
+    assert client.get("/api/config/config").json()["valueMaps"] == [_SEVERITY_MAP]
+
+
+@pytest.mark.parametrize("maps", [
+    [{**_SEVERITY_MAP, "type": "Icon"}],
+    [{**_SEVERITY_MAP, "id": ""}],
+    [_SEVERITY_MAP, _SEVERITY_MAP],
+    "not-a-list",
+])
+def test_put_config_rejects_a_malformed_value_map(client, maps):
+    assert client.put("/api/config/config", json={"pages": [], "valueMaps": maps}).status_code == 422
+
+
+def test_validate_draft_resolves_a_map_against_the_editors_unsaved_maps(client):
+    draft = {
+        "id": "p1",
+        "sections": {"content": [{
+            "id": "g1", "type": "Gauge",
+            "properties": {"label": {"$map": {"id": "state-text", "value": {"$static": 1}}}},
+        }]},
+    }
+    unknown = client.post("/api/config/validate", json={"kind": "page", "draft": draft}).json()
+    assert [d["code"] for d in unknown["diagnostics"]] == ["map-unknown"]
+    maps = [{"id": "state-text", "type": "String", "cases": [], "default": ""}]
+    known = client.post("/api/config/validate", json={"kind": "page", "draft": draft, "valueMaps": maps}).json()
+    assert known["diagnostics"] == []
+
 def test_put_config_keeps_the_page_files_of_the_dialogs_folder(client, dialogs_dir):
     """A page in the Dialogs folder is indexed under `dialogs`, not `pages` —
     the sweep runs per directory, so each one has to be counted against its own

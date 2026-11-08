@@ -24,7 +24,7 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
   external-libraries/     ← ESM bundles consumable by custom widgets
   datasources/
     <DatasourceName>.json
-  config.json             ← page index + globalEvents + embedded project metadata/defaultTheme
+  config.json             ← page index + globalEvents + valueMaps + embedded project metadata/defaultTheme
   themes/
     <themeId>.json        ← one theme each (colors, typography, spacing, numpad, toasts)
   pages/
@@ -167,6 +167,7 @@ Top-level shape (`api.config_api._empty_config`):
   "shell": {},
   "dialogs": [],
   "globalEvents": {},
+  "valueMaps": [],
   "mcpEnabled": false
 }
 ```
@@ -201,6 +202,15 @@ reads as an empty list.
 - `onVariableChanged` — not an action list but a list of triggers,
   `{ variable: { $var: … }, actions: [...] }`, each run when its variable's
   value changes (its first value included)
+
+`valueMaps` is the project's value maps, read by the [`$map`](value-types.md)
+source and edited under **Value Maps** in the editor tree. Each entry is
+`{ id, type, cases: [{ when, then }], default }`: `type` is `Color`, `String`,
+`Boolean`, `Integer` or `Float`, `when` a literal, `then` and `default` a value
+of the map's type (on a String map also a `$loc`). `PUT /api/config/config`
+checks the entries against `backend/models/value_map.py` and refuses a
+malformed one or a duplicate id with a 422, and keeps the stored list when the
+body omits the key. Absent means empty, so the key needed no migration.
 
 Index page node — structural only. Saving the index strips everything else, so
 a page's title, icon and the rest of its metadata live in its page document:

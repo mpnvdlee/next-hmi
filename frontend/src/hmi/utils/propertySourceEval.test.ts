@@ -3,6 +3,7 @@ import {
   type EvaluationContext,
   type ResolvedValue,
 } from './propertySourceEval';
+import type { ValueMap } from '@shared/types/config';
 
 describe('propertySourceEval', () => {
   it('reads one bit of a variable as a Boolean', () => {
@@ -657,6 +658,39 @@ describe('propertySourceEval', () => {
         mockContext,
       );
       expect(result).toBe('fallback');
+    });
+  });
+
+  describe('$map', () => {
+    const maps: Record<string, ValueMap> = {
+      severity: {
+        id: 'severity',
+        type: 'String',
+        cases: [
+          { when: '1', then: { $loc: 'sev.low' } },
+          { when: 2, then: 'high' },
+        ],
+        default: 'unknown',
+      },
+      bare: { id: 'bare', type: 'Color', cases: [] },
+    };
+    const ctx: EvaluationContext = {
+      resolveVariable: () => 1,
+      resolveTranslation: (key) => `t:${key}`,
+      resolveValueMap: (id) => maps[id],
+    };
+
+    it('looks its value up in the named map, a translation key included', () => {
+      expect(
+        evaluatePropertyValue({ $map: { id: 'severity', value: { $var: { path: 'P:S' } } } }, ctx),
+      ).toBe('t:sev.low');
+      expect(evaluatePropertyValue({ $map: { id: 'severity', value: 2 } }, ctx)).toBe('high');
+    });
+
+    it('gives the default without a match, nothing without a default or a map', () => {
+      expect(evaluatePropertyValue({ $map: { id: 'severity', value: 9 } }, ctx)).toBe('unknown');
+      expect(evaluatePropertyValue({ $map: { id: 'bare', value: 9 } }, ctx)).toBeUndefined();
+      expect(evaluatePropertyValue({ $map: { id: 'gone', value: 1 } }, ctx)).toBeNull();
     });
   });
 

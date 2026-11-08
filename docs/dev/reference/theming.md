@@ -478,7 +478,9 @@ always-open state never collides with the inline row's session key.
 `FieldActions` (exported from the same module) is the shared flush-right
 button column — clear/revert/edit buttons for a field portal here instead of
 floating inline in the field's content, so every row's action affordance
-lines up in one column.
+lines up in one column. A clear or revert button goes in `<FieldActions clear>`,
+which a `FieldGroup` with `hideClear` drops — for a list row whose own `×`
+already removes the whole entry, as a value map's case does.
 
 `FieldHeaderActions` (same module) is the counterpart on the **title row**: a
 list editor's add control portals behind the field's label instead of trailing

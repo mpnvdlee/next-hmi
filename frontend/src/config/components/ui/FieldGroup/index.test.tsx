@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import FieldGroup, { FieldHeaderActions } from './index';
+import { PickerField } from '../PathInputField';
 
 const SCHEMA: SchemaField = { type: 'string', label: 'Speed' };
 
@@ -158,5 +159,31 @@ describe('FieldHeaderActions', () => {
 
     expect(document.querySelector('.cfg-field-group__header')).toBeNull();
     expect(screen.getByTestId('add').parentElement).toHaveClass('cfg-field-group__header-actions');
+  });
+});
+
+describe('FieldGroup — hideClear', () => {
+  function renderPath(hideClear: boolean) {
+    return render(
+      <FieldGroup label="Then" tier={1} hideClear={hideClear}>
+        <PickerField
+          displayText="PLC: speed"
+          pickTitle="Pick"
+          onPick={() => {}}
+          onClear={() => {}}
+        />
+      </FieldGroup>,
+    );
+  }
+
+  it("drops the value's clear × but keeps its other buttons", () => {
+    renderPath(true);
+    expect(screen.queryByTitle('Clear')).toBeNull();
+    expect(screen.getByTitle('Pick')).toBeTruthy();
+  });
+
+  it('shows the clear × by default', () => {
+    renderPath(false);
+    expect(screen.getByTitle('Clear')).toBeTruthy();
   });
 });

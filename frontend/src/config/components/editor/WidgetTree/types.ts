@@ -11,6 +11,8 @@ export type NodeKind =
   | 'container'
   /** One named slot of a reusable-component instance. */
   | 'widget-slot'
+  | 'value-maps-root'
+  | 'value-map'
   | 'leaf';
 
 export interface ContextMenuState {

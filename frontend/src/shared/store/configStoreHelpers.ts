@@ -377,3 +377,27 @@ export function removeComponentFromPage(
 
   return { page: nextPage, removed };
 }
+
+/**
+ * `value` with every `$map` reference to value map `from` pointing at `to`. Hands
+ * back the very same object wherever nothing changed, so a caller can tell which
+ * pages a rename reached by identity.
+ */
+export function renameValueMapReferences<T>(value: T, from: string, to: string): T {
+  if (Array.isArray(value)) {
+    return mapPreserving(value, (item) => renameValueMapReferences(item, from, to)) as T;
+  }
+  if (!value || typeof value !== 'object') return value;
+  let next: Record<string, unknown> | null = null;
+  for (const [key, child] of Object.entries(value)) {
+    let mapped = renameValueMapReferences(child, from, to);
+    if (key === '$map' && mapped && typeof mapped === 'object') {
+      const ref = mapped as { id?: unknown };
+      if (ref.id === from) mapped = { ...ref, id: to };
+    }
+    if (mapped === child) continue;
+    next ??= { ...(value as Record<string, unknown>) };
+    next[key] = mapped;
+  }
+  return (next ?? value) as T;
+}

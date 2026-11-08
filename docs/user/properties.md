@@ -45,6 +45,7 @@ A `Byte` is a whole number from 0 to 255 — what an OPC-UA `Byte` tag holds, a 
 | `$time` · `$random` · `$alarmCount` | DateTime, Date, Time or String / Integer or Float / Integer | The clock as text in the format you pick, a random number, a live alarm count. |
 | `$page` · `$languages` | String / Integer / String[] | Page metadata, and the configured language list. |
 | `$recipe` · `$recipeList` | String / Boolean / Record[] | Recipe state, and the saved-recipe grid. |
+| `$map` | the map's type | A value looked up in one of the project's [value maps](#reuse-a-lookup-value-maps-map). |
 
 A source with a **Field** choice — Page, Viewport, Recipe, User, Device — lists only the fields that fit the property: on a whole-number property Page offers just **Depth**, Viewport just **Width** and **Height**.
 
@@ -91,6 +92,20 @@ Three sources cover almost every "it depends" on a screen, and they are usually 
 ```
 
 Cases are tried in order and the first match wins. Both `when` and `then` are full properties, so a case can match against a tag and return another one. A `$switch` with three cases replaces the three-deep nest of `$if`s that would otherwise be needed — reach for it as soon as there is a third branch.
+
+## Reuse a lookup: value maps (`$map`)
+
+When the same `$switch` turns up on many screens — an alarm severity that becomes a colour, a machine state that becomes text — define it once as a **value map** and point each property at it.
+
+In the editor tree, **Value Maps** sits under **Global Events**. Press **+**, or right-click it › **Add Value Map**, to add a map; right-click a map to **Rename**, **Duplicate** or **Delete** it. In the properties panel give it an **Id**, a **Type** (Color, String, Boolean, Integer or Float), its **When → then** cases and a **Default**. On a String map a `then` can be a translation key. The maps are saved with the project, in `config.json`.
+
+On a property, choose **Value Map** as the source, pick the map and set the **Value** it looks up — usually a tag:
+
+```
+"color": { "$map": { "id": "alarm-severity", "value": { "$var": { "path": "LinePLC:Alarms/Severity" } } } }
+```
+
+Only maps of the property's own type are offered. Cases are tried in order like a `$switch`'s, and with no match the map gives its default; a map without a default leaves the property empty, so the widget shows its own default. A property that names a map that is gone, or one of another type, shows up in the diagnostics. Renaming a map — in the tree or through its **Id** — takes every property that uses it along, on every page, dialog and component.
 
 ## Build a string from parts: `$stringExpr`
 

@@ -20,6 +20,7 @@ export type PropertySource =
   | '$formula'
   | '$random'
   | '$switch'
+  | '$map'
   | '$user'
   | '$userGroups'
   | '$device'
@@ -185,6 +186,20 @@ export function producedFits(produced: ProducedValueType, fieldType: string): bo
   if (produced === 'any' || produced === fieldType) return true;
   // a duration is a number of seconds
   return fieldType === 'duration' && (produced === 'integer' || produced === 'float');
+}
+
+/** Whether a value map of `mapType` fills a field of `fieldType` (any one of
+ *  a union's types): the same type, or a number in a duration. No field type
+ *  takes any map. Mirrors `_validate_map_ref` in structure.py. */
+export function valueMapFits(
+  mapType: string,
+  fieldType: string | readonly string[] | undefined,
+): boolean {
+  if (fieldType === undefined) return true;
+  // A map's type is a scalar type or `color`, which only `color` equals.
+  const produced = mapType.toLowerCase() as ProducedValueType;
+  const types = typeof fieldType === 'string' ? [fieldType] : fieldType;
+  return types.some((t) => producedFits(produced, t.toLowerCase()));
 }
 
 /** Whether a produced type fits a field of any kind: a scalar by
@@ -392,6 +407,17 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
         default: defaultValueFor(fieldType, defaultValue),
       },
     }),
+  },
+  {
+    source: '$map',
+    key: '$map',
+    contentTier: 3,
+    label: 'Value Map',
+    description: 'A value looked up in one of the project value maps.',
+    abbr: 'M',
+    // The type of the map it names; the color kind lists it too.
+    produces: ['string', 'boolean', 'integer', 'float'],
+    createDefault: () => ({ $map: { id: '', value: { $var: { path: '' } } } }),
   },
   {
     source: '$user',

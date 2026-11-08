@@ -77,6 +77,8 @@ SOURCE_PRODUCES: dict[str, tuple[str, ...]] = {
     # Whole numbers unless `integer: false`.
     "$random": ("integer", "float"),
     "$switch": ("any",),
+    # The type of the value map it names; the color kind lists it below.
+    "$map": ("string", "boolean", "integer", "float"),
     "$user": _field_produces("$user"),
     "$userGroups": ("boolean",),
     "$device": _field_produces("$device"),
@@ -109,7 +111,7 @@ _LIST_KINDS = frozenset({"option-list", "item-list"})
 
 # Editor kinds are not scalars; their sources are listed per kind.
 EDITOR_KIND_SOURCES: dict[str, tuple[str, ...]] = {
-    "color": ("$static", "$var", "$if", "$switch", "$widgetProp"),
+    "color": ("$static", "$var", "$if", "$switch", "$map", "$widgetProp"),
     "icon": ("$static", "$var", "$urlParam", "$if", "$switch", "$page", "$widgetProp"),
     "image": ("$static", "$var", "$urlParam", "$if", "$switch", "$widgetProp"),
     "video": ("$static", "$var", "$urlParam", "$if", "$switch", "$widgetProp"),

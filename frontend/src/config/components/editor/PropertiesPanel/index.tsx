@@ -46,6 +46,7 @@ import type {
 import { LOCKED_FEEDBACK_MODES } from '@shared/types/config';
 import { inputMode, type ComponentPropertySchema } from '@shared/types/componentProperty';
 import PanelHeader from '../../ui/PanelHeader';
+import ValueMapPanel from './ValueMapPanel';
 import PropRow from '../../ui/PropRow';
 import PathInputField from '../../ui/PathInputField';
 import GroupsField from '../../ui/GroupsField';
@@ -95,7 +96,7 @@ import { primaryType } from '@shared/utils/valueTypes';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { detectCopyPasteKey } from '@shared/utils/domEvent';
-import { EDITOR_NODE_IDS } from '@shared/constants/editorSentinels';
+import { EDITOR_NODE_IDS, parseValueMapNodeId } from '@shared/constants/editorSentinels';
 
 const SECTION_IDS = new Set<string>([EDITOR_NODE_IDS.PAGES, EDITOR_NODE_IDS.DIALOGS]);
 
@@ -362,6 +363,11 @@ function PropertiesPanelBody() {
 
   if (selectedId === EDITOR_NODE_IDS.EVENTS) {
     return <GlobalEventsPanel />;
+  }
+
+  const valueMapId = parseValueMapNodeId(selectedId);
+  if (valueMapId !== null) {
+    return <ValueMapPanel mapId={valueMapId} />;
   }
 
   if (selectedId && SHELL_AREA_PANELS[selectedId]) {

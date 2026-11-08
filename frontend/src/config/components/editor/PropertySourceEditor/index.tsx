@@ -31,6 +31,7 @@ import {
   CompareEditor,
   ConditionListEditor,
   IfEditor,
+  MapEditor,
   NotEditor,
   SwitchEditor,
 } from './editors/conditional';
@@ -130,6 +131,14 @@ const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
       value={value}
       onChange={onChange}
       schema={schema}
+      onOpenBindingPicker={onOpenBindingPicker}
+    />
+  ),
+  $map: ({ value, onChange, fieldType, onOpenBindingPicker }) => (
+    <MapEditor
+      value={value}
+      onChange={onChange}
+      fieldType={fieldType}
       onOpenBindingPicker={onOpenBindingPicker}
     />
   ),

@@ -35,7 +35,7 @@ export function withUnsetHint(
         // Portal the revert into the FieldGroup's shared action column so it sits
         // flush-right in the same bordered slot as every other row's buttons
         // (pick, unit, color clear), rather than floating after the control.
-        <FieldActions>
+        <FieldActions clear>
           <button
             type="button"
             className="cfg-row-action-btn cfg-row-action-btn--stretch"

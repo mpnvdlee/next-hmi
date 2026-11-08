@@ -432,6 +432,7 @@ export function CollapsiblePropertyCard({
   sourceless,
   staticEditor,
   actions,
+  hideClear,
 }: {
   title: string;
   /** Drops the label line above the box for rows in a list, where position —
@@ -455,6 +456,8 @@ export function CollapsiblePropertyCard({
   /** Extra row actions (e.g. a list item's remove `×`) — they land in the same
    *  bordered button column as the drawer and picker buttons. */
   actions?: ReactNode;
+  /** Drops the value's own clear / revert `×` — see `FieldGroup`. */
+  hideClear?: boolean;
 }) {
   const currentSource = getPropertySource(value) as PropertySource;
   const inheritedSlot = useSlotType();
@@ -520,6 +523,7 @@ export function CollapsiblePropertyCard({
       kindLabel={kindLabel}
       badge={sourceSelector}
       actions={actions}
+      hideClear={hideClear}
       drawerTitle={drawerTitle}
     >
       {editor}

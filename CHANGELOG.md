@@ -22,6 +22,15 @@ server listed.
 
 ### Added
 
+- **Value maps: define a lookup once, use it everywhere.** Under **Value
+  Maps** in the editor tree, below Global Events, a map turns a value into a
+  colour, a text, a number or a Boolean — alarm severity 2 into the warning
+  colour, machine state 3 into the translated word for "Fault" — with a
+  default for anything else. A property picks **Value Map** as its source, the
+  map and the tag it looks up; only maps of the property's type are offered,
+  and one that is gone or of the wrong type shows up in the diagnostics.
+  Right-click a map to rename it in the tree, duplicate or delete it; a new
+  name, there or in its **Id**, carries over to every property that uses it.
 - **A String Input can show and edit a variable.** Bind its **Variable** to a
   String tag, a page input or a dialog input: the field shows that text and
   writes what the operator types back to it, on Enter or on leaving the field,

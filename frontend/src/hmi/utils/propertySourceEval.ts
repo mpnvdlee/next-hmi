@@ -1,7 +1,12 @@
 import { isRecord } from '@shared/types/propertyValueGuards';
 import type { AlarmCountFilter } from '@shared/types/alarm';
 import type { RecipeField, RecipeRow } from '@shared/types/recipe';
-import { isBoundIndex, type PageField, type PagePathSegment } from '@shared/types/config';
+import {
+  isBoundIndex,
+  type PageField,
+  type PagePathSegment,
+  type ValueMap,
+} from '@shared/types/config';
 import type { HttpEntry, HttpRequestSpec } from '../store/httpSourceStore';
 import { imageBodyToUrl } from '@shared/utils/imageAsset';
 import { readBit } from '@shared/utils/valueTypes';
@@ -21,6 +26,8 @@ export type ResolvedValue = string | number | boolean | null | undefined;
 export interface EvaluationContext {
   resolveVariable?: (datasource: string, path: string) => ResolvedValue;
   resolveTranslation?: (key: string) => string;
+  /** The project value map `id`, for `$map`. */
+  resolveValueMap?: (id: string) => ValueMap | undefined;
   getUrlParam?: (name: string) => string | undefined;
   isPageActive?: (pageId: string) => boolean;
   /** Page id of the renderer scope (page route, overlay, page-group child).
@@ -112,6 +119,7 @@ const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $formula: (payload, ctx, d) => evaluateFormulaSource(payload, ctx, d),
   $random: (payload) => evaluateRandom(payload),
   $switch: (payload, ctx, d) => evaluateSwitch(payload, ctx, d),
+  $map: (payload, ctx, d) => evaluateMap(payload, ctx, d),
   $user: (payload, ctx) => evaluateUser(payload, ctx),
   $userGroups: (payload, ctx) => evaluateUserGroups(payload, ctx),
   $device: (payload, ctx) => evaluateDevice(payload, ctx),
@@ -483,6 +491,19 @@ function evaluateSwitch(
     return null;
   }
   return evaluatePropertyValueInternal(pickSwitchBranch(switchObj, context, depth), context, depth);
+}
+
+/** A value map is a `$switch` kept in one place: its cases and default, with
+ *  the `$map`'s own value as the discriminant. No map resolves to null. */
+function evaluateMap(payload: unknown, context: EvaluationContext, depth: number): ResolvedValue {
+  if (!isRecord(payload) || typeof payload.id !== 'string') return null;
+  const map = context.resolveValueMap?.(payload.id);
+  if (!map) return null;
+  return evaluateSwitch(
+    { value: payload.value, cases: map.cases, default: map.default },
+    context,
+    depth,
+  );
 }
 
 function evaluateWidgetProp(propObj: unknown, context: EvaluationContext): ResolvedValue {

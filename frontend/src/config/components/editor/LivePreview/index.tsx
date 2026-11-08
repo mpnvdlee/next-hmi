@@ -46,6 +46,7 @@ import { withBase } from '@shared/utils/runtimeBase';
 import {
   EDITOR_NODE_IDS,
   SHELL_AREA_LABELS,
+  parseValueMapNodeId,
   type EditorRegion,
 } from '@shared/constants/editorSentinels';
 import { findInPages, isFound } from '@shared/utils/widgetTree';
@@ -138,7 +139,11 @@ function resolveEditorCategoryTitle(
   previewAreaId: string,
   state: EditorTreeSnapshot,
 ): string {
-  if (selectedId === EDITOR_NODE_IDS.SETTINGS || selectedId === EDITOR_NODE_IDS.EVENTS) {
+  if (
+    selectedId === EDITOR_NODE_IDS.SETTINGS ||
+    selectedId === EDITOR_NODE_IDS.EVENTS ||
+    parseValueMapNodeId(selectedId) !== null
+  ) {
     return 'Global Settings';
   }
   if (selectedId === EDITOR_NODE_IDS.PAGES) return 'Pages';
@@ -218,6 +223,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
   const shell = useConfigStore((s) => s.shell);
   const dialogs = useConfigStore((s) => s.dialogs);
   const globalEvents = useConfigStore((s) => s.globalEvents);
+  const valueMaps = useConfigStore((s) => s.valueMaps);
   const loadedPageIds = useConfigStore((s) => s.loadedPageIds);
   const translationLanguages = useTranslationStore((s) => s.languages);
   const translationRows = useTranslationStore((s) => s.translations);
@@ -312,6 +318,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
     shell: unknown;
     dialogs: unknown;
     globalEvents: unknown;
+    valueMaps: unknown;
     loadedPageIds: unknown;
   };
   const lastPagesSnapshotRef = useRef<PagesSnapshot | null>(null);
@@ -331,6 +338,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
         shell: s.shell,
         dialogs: s.dialogs,
         globalEvents: s.globalEvents,
+        valueMaps: s.valueMaps,
         loadedPageIds: s.loadedPageIds,
       };
       const last = lastPagesSnapshotRef.current;
@@ -345,6 +353,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
         last.shell === snapshot.shell &&
         last.dialogs === snapshot.dialogs &&
         last.globalEvents === snapshot.globalEvents &&
+        last.valueMaps === snapshot.valueMaps &&
         last.loadedPageIds === snapshot.loadedPageIds
       )
         return;
@@ -423,6 +432,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
     shell,
     dialogs,
     globalEvents,
+    valueMaps,
     loadedPageIds,
     syncPages,
   ]);

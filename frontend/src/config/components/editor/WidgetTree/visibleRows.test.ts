@@ -1,4 +1,8 @@
-import { EDITOR_NODE_IDS, makePageSectionId } from '@shared/constants/editorSentinels';
+import {
+  EDITOR_NODE_IDS,
+  makePageSectionId,
+  makeValueMapNodeId,
+} from '@shared/constants/editorSentinels';
 import type { PageNode, ShellRegionId, WidgetConfig } from '@shared/types/config';
 import { flattenVisibleRows, rowsBetween, type VisibleRowsInput } from './visibleRows';
 
@@ -43,6 +47,7 @@ const ALL_SECTIONS = new Set([
   '__rightSidebar__',
   EDITOR_NODE_IDS.PAGES,
   EDITOR_NODE_IDS.DIALOGS,
+  EDITOR_NODE_IDS.VALUE_MAPS,
 ]);
 
 function input(overrides: Partial<VisibleRowsInput> = {}): VisibleRowsInput {
@@ -50,11 +55,13 @@ function input(overrides: Partial<VisibleRowsInput> = {}): VisibleRowsInput {
     pages,
     shell,
     dialogs,
+    valueMapIds: ['severity'],
     collapsed: new Set<string>(),
     sectionsOpen: ALL_SECTIONS,
     visible: {
       settings: true,
       events: true,
+      valueMaps: true,
       pages: true,
       dialogs: true,
       hiddenShellRegions: new Set<ShellRegionId>(),
@@ -70,6 +77,8 @@ describe('flattenVisibleRows', () => {
     expect(ids(flattenVisibleRows(input()))).toEqual([
       EDITOR_NODE_IDS.SETTINGS,
       EDITOR_NODE_IDS.EVENTS,
+      EDITOR_NODE_IDS.VALUE_MAPS,
+      makeValueMapNodeId('severity'),
       '__header__',
       'head-btn',
       '__leftSidebar__',
@@ -127,6 +136,7 @@ describe('flattenVisibleRows', () => {
           visible: {
             settings: false,
             events: false,
+            valueMaps: false,
             pages: true,
             dialogs: true,
             hiddenShellRegions: new Set<ShellRegionId>([

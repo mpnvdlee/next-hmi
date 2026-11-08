@@ -459,6 +459,7 @@ export default function PreviewView() {
         store.setRightSidebar(event.data.rightSidebar ?? []);
         store.setShell(event.data.shell ?? {});
         store.setGlobalEvents(event.data.globalEvents ?? {});
+        store.setValueMaps(event.data.valueMaps ?? []);
         return;
       }
 

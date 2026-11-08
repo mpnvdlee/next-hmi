@@ -19,7 +19,7 @@ import { randomUuid } from '@shared/utils/id';
 import { hasPropertySourceKey } from '@shared/types/propertyValueGuards';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
 import { ackAllAlarms } from '@hmi/components/alarmUtils';
-import { useConfigStore } from '@shared/store/configStore';
+import { findValueMap, useConfigStore } from '@shared/store/configStore';
 import { findPageNodeById, findPagePath } from '@shared/utils/pageTree';
 import { inputMode } from '@shared/types/componentProperty';
 
@@ -112,6 +112,7 @@ function storeEvalContext(scope: string): EvaluationContext {
   return {
     resolveVariable: readStoredVariable,
     resolveTranslation: (key) => useTranslationStore.getState().resolve(key),
+    resolveValueMap: findValueMap,
     resolveUser: (field) => resolveUserField(currentUser(), field),
     resolveUserGroups: () => currentUser()?.groups ?? ['guest'],
   };

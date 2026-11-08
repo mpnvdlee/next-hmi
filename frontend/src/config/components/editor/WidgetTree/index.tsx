@@ -72,11 +72,22 @@ import { detectCopyPasteKey, type SelectionModifiers } from '@shared/utils/domEv
 import { canExtendWith, verbTargets } from '@config/store/domains/selectionScope';
 import { flattenVisibleRows, rowsBetween, type VisibleRowsInput } from './visibleRows';
 import { matchesSearchWords, withDotSearchSeparators } from '@shared/utils/search';
-import { EDITOR_NODE_IDS, parseWidgetSlotId } from '@shared/constants/editorSentinels';
+import {
+  EDITOR_NODE_IDS,
+  parseValueMapNodeId,
+  parseWidgetSlotId,
+} from '@shared/constants/editorSentinels';
 import { slotTargetLabel } from '@shared/utils/componentSlots';
 import { insertComponentInto } from './insertComponent';
 import type { ContextMenuState, NodeKind } from './types';
 import AreaWidgetList from './AreaWidgetList';
+import ValueMapsSection from './ValueMapsSection';
+import {
+  addValueMap,
+  deleteValueMap,
+  duplicateValueMap,
+  renameValueMap,
+} from '@config/utils/valueMapActions';
 import TreePage from './TreePage';
 import TreePageGroup from './TreePageGroup';
 import SectionRow from './SectionRow';
@@ -189,6 +200,8 @@ export default function WidgetTree() {
   const leftSidebar = useConfigStore((s) => s.leftSidebar);
   const rightSidebar = useConfigStore((s) => s.rightSidebar);
   const dialogs = useConfigStore((s) => s.dialogs);
+  const valueMaps = useConfigStore((s) => s.valueMaps);
+  const valueMapIds = useMemo(() => valueMaps.map((m) => m.id), [valueMaps]);
   const loaded = useConfigStore((s) => s.loaded);
   const selectedId = useEditorDomainStore((s) => s.selectedId);
   const selectedIdList = useEditorDomainStore((s) => s.selectedIds);
@@ -354,6 +367,7 @@ export default function WidgetTree() {
 
   const settingsVisible = !isSearching || matchesSearchWords(wordSearchQuery, 'Settings');
   const eventsVisible = !isSearching || matchesSearchWords(wordSearchQuery, 'Global Events');
+  const valueMapsVisible = !isSearching || matchesSearchWords(wordSearchQuery, 'Value Maps');
   const pagesVisible =
     !isSearching || matchesSearchWords(wordSearchQuery, 'Pages') || filteredPages.length > 0;
   const dialogsVisible =
@@ -384,11 +398,13 @@ export default function WidgetTree() {
     pages: filteredPages,
     shell: filteredShell,
     dialogs: filteredDialogs,
+    valueMapIds,
     collapsed: effectiveCollapsed,
     sectionsOpen: effectiveSectionsOpen,
     visible: {
       settings: settingsVisible,
       events: eventsVisible,
+      valueMaps: valueMapsVisible,
       pages: pagesVisible,
       dialogs: dialogsVisible,
       hiddenShellRegions,
@@ -442,7 +458,10 @@ export default function WidgetTree() {
 
   const handleEditCommit = useCallback(
     (id: string) => {
-      if (editingTitle.trim()) {
+      const mapId = parseValueMapNodeId(id);
+      if (mapId !== null) {
+        void renameValueMap(mapId, editingTitle);
+      } else if (editingTitle.trim()) {
         const node = findPageNodeById(allPageRootNodes({ pages, dialogs }), id);
         if (node) {
           const title = editingTitle.trim();
@@ -492,6 +511,12 @@ export default function WidgetTree() {
           break;
 
         case 'rename': {
+          const mapId = parseValueMapNodeId(nodeId);
+          if (mapId !== null) {
+            setEditingPageId(nodeId);
+            setEditingTitle(mapId);
+            break;
+          }
           const pg = findPageNodeById(allPageRootNodes({ pages, dialogs }), nodeId);
           if (pg) {
             setEditingPageId(nodeId);
@@ -499,6 +524,20 @@ export default function WidgetTree() {
           }
           break;
         }
+
+        case 'addValueMap':
+          addValueMap();
+          if (!effectiveSectionsOpen.has(EDITOR_NODE_IDS.VALUE_MAPS))
+            toggleSection(EDITOR_NODE_IDS.VALUE_MAPS);
+          break;
+
+        case 'duplicateValueMap':
+          duplicateValueMap(parseValueMapNodeId(nodeId) ?? '');
+          break;
+
+        case 'deleteValueMap':
+          deleteValueMap(parseValueMapNodeId(nodeId) ?? '');
+          break;
 
         case 'deletePage':
           store.deletePage(nodeId);
@@ -555,7 +594,7 @@ export default function WidgetTree() {
         }
       }
     },
-    [ctxMenu, pages, dialogs],
+    [ctxMenu, pages, dialogs, effectiveSectionsOpen, toggleSection],
   );
 
   // ── Dragging ───────────────────────────────────────────────────────────────
@@ -746,6 +785,19 @@ export default function WidgetTree() {
                       />
                     )}
                   </TreeRow>
+                )}
+
+                {valueMapsVisible && (
+                  <ValueMapsSection
+                    isOpen={effectiveSectionsOpen.has(EDITOR_NODE_IDS.VALUE_MAPS)}
+                    onToggle={() => toggleSection(EDITOR_NODE_IDS.VALUE_MAPS)}
+                    selectedId={selectedId}
+                    onCtxMenu={handleCtxMenu}
+                    editingId={editingPageId}
+                    draft={editingTitle}
+                    onEditChange={setEditingTitle}
+                    onEditCommit={handleEditCommit}
+                  />
                 )}
 
                 {SHELL_REGION_IDS.map((region) => {

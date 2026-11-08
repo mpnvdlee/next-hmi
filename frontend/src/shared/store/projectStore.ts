@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { GlobalEventsConfig, PageNode, ShellConfig, WidgetConfig } from '../types/config';
+import type {
+  GlobalEventsConfig,
+  PageNode,
+  ShellConfig,
+  ValueMap,
+  WidgetConfig,
+} from '../types/config';
 import type { ComponentDefinition } from '../types/componentTypes';
 import { useConfigStore } from './configStore';
 import { useTranslationStore } from './translationStore';
@@ -32,6 +38,7 @@ interface Snapshot {
   shell: ShellConfig;
   dialogs: PageNode[];
   globalEvents: GlobalEventsConfig;
+  valueMaps: ValueMap[];
   translationLanguages: Array<{ code: string }>;
   translations: Record<string, Record<string, string>>;
   draftComponents: Record<string, ComponentDefinition>;
@@ -107,6 +114,7 @@ function captureSnapshot(): Snapshot {
     shell: structuredClone(c.shell),
     dialogs: structuredClone(c.dialogs),
     globalEvents: structuredClone(c.globalEvents),
+    valueMaps: structuredClone(c.valueMaps),
     translationLanguages: structuredClone(useTranslationStore.getState().languages),
     translations: structuredClone(useTranslationStore.getState().translations),
     draftComponents: structuredClone(useComponentStore.getState().draftComponents),
@@ -143,6 +151,7 @@ function restoreSnapshot(snapshot: Snapshot) {
   c.setShell(structuredClone(snapshot.shell));
   c.setDialogs(structuredClone(snapshot.dialogs));
   c.setGlobalEvents(structuredClone(snapshot.globalEvents));
+  c.setValueMaps(structuredClone(snapshot.valueMaps));
   useTranslationStore.setState({
     languages: structuredClone(snapshot.translationLanguages),
     translations: structuredClone(snapshot.translations),

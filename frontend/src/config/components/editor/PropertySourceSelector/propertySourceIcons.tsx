@@ -127,6 +127,13 @@ const ICONS: Record<PropertySource, ReactNode> = {
       <circle cx="17" cy="20" r="1.4" fill="currentColor" stroke="none" />
     </Icon>
   ),
+  // $map — two rows of input → output.
+  $map: (
+    <Icon viewBox="0 0 24 24" strokeWidth={2}>
+      <path d="M4 7h4M4 17h4M17 7h3M17 17h3" />
+      <path d="M10 7h5m-2-2 2 2-2 2M10 17h5m-2-2 2 2-2 2" />
+    </Icon>
+  ),
   // $user — person.
   $user: (
     <Icon>

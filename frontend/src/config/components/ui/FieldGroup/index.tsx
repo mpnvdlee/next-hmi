@@ -19,17 +19,20 @@ export type FieldGroupTier = 1 | 2 | 3;
 
 /** The nearest FieldGroup's trailing `__actions` slot element, so a leaf editor
  *  deep in the box body can render its own pick/clear buttons into the shared
- *  designated button column instead of inside the padded content area. Null when
+ *  designated button column instead of inside the padded content area. `el` is null when
  *  an editor renders standalone (no FieldGroup wrapper) — see `FieldActions`. */
-const FieldActionsSlotContext = createContext<HTMLElement | null>(null);
+const FieldActionsSlotContext = createContext<{ el: HTMLElement | null; clearHidden?: boolean }>({
+  el: null,
+});
 
 /** Renders a leaf editor's trailing action buttons into the enclosing
  *  FieldGroup's designated `__actions` column (via portal) so every field's
  *  buttons align in the same flush, bordered slot. Falls back to an inline
- *  group of the same class when there is no FieldGroup ancestor. */
-export function FieldActions({ children }: { children: ReactNode }) {
-  const slot = useContext(FieldActionsSlotContext);
-  if (!children) return null;
+ *  group of the same class when there is no FieldGroup ancestor. `clear` marks
+ *  a button that clears or reverts the value, which a `hideClear` field drops. */
+export function FieldActions({ children, clear }: { children: ReactNode; clear?: boolean }) {
+  const { el: slot, clearHidden } = useContext(FieldActionsSlotContext);
+  if (!children || (clear && clearHidden)) return null;
   if (slot) return createPortal(children, slot);
   return <div className="cfg-field-group__actions">{children}</div>;
 }
@@ -93,6 +96,9 @@ interface Props {
   badge?: ReactNode;
   /** Trailing row actions — reset `×`, binding picker `✎`, drawer `⤢`. */
   actions?: ReactNode;
+  /** Drops the clear / revert `×` the value's editor would add (`FieldActions
+   *  clear`) — for a row whose own `actions` already remove the whole entry. */
+  hideClear?: boolean;
   /** Controls that sit behind the label on the title row — the add button of a
    *  field that owns a list (cases, options). Descendant editors reach the same
    *  slot through `FieldHeaderActions`. Needs a `label` to have a row to sit on. */
@@ -138,6 +144,7 @@ export default function FieldGroup({
   sourceless,
   badge,
   actions,
+  hideClear,
   headerActions,
   diagnostic,
   forceSelected,
@@ -169,6 +176,7 @@ export default function FieldGroup({
     forceSelected,
     block,
     badge,
+    hideClear,
     headerActions,
     kindLabel,
   };
@@ -317,7 +325,7 @@ export default function FieldGroup({
     ) : null;
 
   return (
-    <FieldActionsSlotContext.Provider value={actionsEl}>
+    <FieldActionsSlotContext.Provider value={{ el: actionsEl, clearHidden: hideClear }}>
       <FieldHeaderSlotContext.Provider value={label ? headerEl : inheritedHeaderEl}>
         <FieldBelowSlotContext.Provider value={{ el: belowEl, label }}>
           <FieldPathContext.Provider value={fullPath}>

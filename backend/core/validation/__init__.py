@@ -38,6 +38,7 @@ from .structure import (
     validate_shell_regions,
     validate_var_ref,
     validate_widget_node,
+    value_map_types,
 )
 from .variable_fields import (
     CORE_WRITABLE_FIELDS,
@@ -88,4 +89,5 @@ __all__ = [
     "validate_var_ref",
     "validate_variable_write_fields",
     "validate_widget_node",
+    "value_map_types",
 ]

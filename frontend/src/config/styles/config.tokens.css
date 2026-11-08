@@ -136,6 +136,8 @@
   --cfg-field-group-radius: var(--radius-lg);
   --cfg-field-group-badge-size: var(--cfg-btn-height-sm);
   --cfg-field-group-action-size: 24px;
+  /* A value-map case's When field: a state number or a short word. */
+  --cfg-value-map-when-width: 4.5rem;
   --cfg-shadow-sm: var(--shadow-sm);
   --cfg-shadow-md: var(--shadow-md);
   --cfg-shadow-lg: var(--shadow-lg);

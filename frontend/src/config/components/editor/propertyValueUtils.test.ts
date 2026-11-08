@@ -12,6 +12,13 @@ describe('propertyValuePreview', () => {
     expect(propertyValuePreview({ $var: { path: 'ds:tag', index: 2 } })).toBe('ds: tag[2]');
   });
 
+  it('previews a $map as the map id and the value it looks up', () => {
+    expect(
+      propertyValuePreview({ $map: { id: 'states', value: { $var: { path: 'ds:st' } } } }),
+    ).toBe('states · ds: st');
+    expect(propertyValuePreview({ $map: { id: '', value: null } })).toBe('(no map) · —');
+  });
+
   it('recursively previews a one-level $if', () => {
     const value = {
       $if: {

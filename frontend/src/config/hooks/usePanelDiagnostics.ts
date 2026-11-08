@@ -14,6 +14,7 @@
 import { create } from 'zustand';
 import { useEffect, useMemo, useRef } from 'react';
 import { apiJson } from '@shared/utils/api';
+import { useConfigStore } from '@shared/store/configStore';
 
 type DiagnosticSeverity = 'error' | 'warning';
 
@@ -165,7 +166,12 @@ export function usePanelDiagnostics(artifact: DiagnosticsArtifact | null): void 
     const timer = setTimeout(() => {
       apiJson<{ diagnostics: Diagnostic[] }>('/api/config/validate', {
         method: 'POST',
-        body: { kind: artifact.kind, draft: artifact.draft },
+        // The unsaved value maps, so a `$map` naming a new map resolves.
+        body: {
+          kind: artifact.kind,
+          draft: artifact.draft,
+          valueMaps: useConfigStore.getState().valueMaps,
+        },
       })
         .then((res) => {
           // A newer edit superseded this in-flight request — drop the stale response.

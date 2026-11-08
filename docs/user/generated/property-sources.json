@@ -106,6 +106,17 @@
     ]
   },
   {
+    "key": "$map",
+    "label": "Value Map",
+    "description": "A value looked up in one of the project value maps.",
+    "produces": [
+      "string",
+      "boolean",
+      "integer",
+      "float"
+    ]
+  },
+  {
     "key": "$user",
     "label": "User Data",
     "description": "Information about the logged-in user or user list.",

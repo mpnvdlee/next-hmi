@@ -20,29 +20,29 @@ function FieldShell({ children, onPick, pickTitle, onClear, onClearMouseDown }: 
   return (
     <div className="cfg-var-field">
       {children}
-      {(onPick || onClear) && (
+      {onPick && (
         <FieldActions>
-          {onPick && (
-            <button
-              type="button"
-              className="cfg-row-action-btn cfg-row-action-btn--stretch"
-              title={pickTitle}
-              onClick={onPick}
-            >
-              <EditIcon />
-            </button>
-          )}
-          {onClear && (
-            <button
-              type="button"
-              className="cfg-row-action-btn cfg-row-action-btn--stretch"
-              title="Clear"
-              onMouseDown={onClearMouseDown}
-              onClick={onClear}
-            >
-              <ClearIcon />
-            </button>
-          )}
+          <button
+            type="button"
+            className="cfg-row-action-btn cfg-row-action-btn--stretch"
+            title={pickTitle}
+            onClick={onPick}
+          >
+            <EditIcon />
+          </button>
+        </FieldActions>
+      )}
+      {onClear && (
+        <FieldActions clear>
+          <button
+            type="button"
+            className="cfg-row-action-btn cfg-row-action-btn--stretch"
+            title="Clear"
+            onMouseDown={onClearMouseDown}
+            onClick={onClear}
+          >
+            <ClearIcon />
+          </button>
         </FieldActions>
       )}
     </div>

@@ -8,6 +8,7 @@ import type {
   PageGroupConfig,
   PageRoot,
   GlobalEventsConfig,
+  ValueMap,
   ShellAreaId,
   ShellConfig,
   LazyPageResponse,
@@ -52,8 +53,10 @@ import {
   pruneWidgets as _pruneWidgets,
   removeComponentFromPage as _removeComponentFromPage,
   removeNode as _removeNode,
+  renameValueMapReferences as _renameValueMapReferences,
   toIndexNodes as _toIndexNodes,
 } from './configStoreHelpers';
+import { useComponentStore } from './componentStore';
 import { apiJson, errorMessage } from '@shared/utils/api';
 
 const PAGE_SAVE_FIELDS = [
@@ -355,6 +358,8 @@ interface ConfigStore {
   /** The Dialogs folder: the second page-tree root, next to `pages` (see `PageRoot`). */
   dialogs: PageNode[];
   globalEvents: GlobalEventsConfig;
+  /** Project value maps, read by the `$map` source (config.json `valueMaps`). */
+  valueMaps: ValueMap[];
   /**
    * Counts changes to the *shape* of the tree — a page, page-group or widget
    * added, removed, moved, or replaced wholesale by a load. Transient view state, not
@@ -410,6 +415,15 @@ interface ConfigStore {
   setGlobalEvents(events: GlobalEventsConfig): void;
   /** User-initiated edit of globalEvents — pushes a throttled undo snapshot. */
   updateGlobalEvents(events: GlobalEventsConfig): void;
+  /** Bulk-set valueMaps from API load. Does not push an undo snapshot. */
+  setValueMaps(valueMaps: ValueMap[]): void;
+  /** User-initiated edit of valueMaps — pushes a throttled undo snapshot. */
+  updateValueMaps(valueMaps: ValueMap[]): void;
+  /** Rename a value map and every `$map` that reads it — on each page, dialog,
+   *  shell area, global event and component — as one undo step. Loads the pages
+   *  not opened yet first, so their references follow too. False, changing
+   *  nothing, when the new id is empty or already taken. */
+  renameValueMap(from: string, to: string): Promise<boolean>;
   /** Fetch a single page's component content from the backend and hydrate it.
    *  `force` re-fetches a page that is already loaded. */
   loadPageContent(pageId: string, options?: { force?: boolean }): Promise<void>;
@@ -505,6 +519,10 @@ interface ConfigStore {
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
+/** The project value map `id`, read fresh — the `$map` resolver. */
+export const findValueMap = (id: string): ValueMap | undefined =>
+  useConfigStore.getState().valueMaps.find((m) => m.id === id);
+
 export const useConfigStore = create<ConfigStore>((set, get) => ({
   pages: [],
   header: [],
@@ -514,6 +532,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   shell: {},
   dialogs: [],
   globalEvents: {},
+  valueMaps: [],
   structureRev: 0,
   loaded: false,
   loadedPageIds: new Set<string>(),
@@ -554,6 +573,57 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   updateGlobalEvents: (globalEvents) => {
     _throttledSnapshot();
     set({ globalEvents });
+  },
+  setValueMaps: (valueMaps) => set({ valueMaps }),
+  updateValueMaps: (valueMaps) => {
+    _throttledSnapshot();
+    set({ valueMaps });
+  },
+  renameValueMap: async (from, to) => {
+    const id = to.trim();
+    const taken = (s: ConfigStore) => s.valueMaps.some((m) => m.id === id);
+    if (!id || id === from || taken(get())) return false;
+    const { loadedPageIds } = get();
+    const unloaded = PAGE_ROOTS.flatMap((root) => flattenPages(get()[root])).filter(
+      (p) => !loadedPageIds.has(p.id),
+    );
+    await Promise.all(unloaded.map((p) => get().loadPageContent(p.id)));
+    if (taken(get())) return false;
+
+    const rename = <T>(value: T): T => _renameValueMapReferences(value, from, id);
+    _snapshot();
+    _setTree((s) => {
+      const pages = rename(s.pages);
+      const dialogs = rename(s.dialogs);
+      let dirtyPageIds = s.dirtyPageIds;
+      for (const [before, after] of [
+        [s.pages, pages],
+        [s.dialogs, dialogs],
+      ]) {
+        const old = new Map(flattenPages(before).map((p) => [p.id, p]));
+        for (const page of flattenPages(after)) {
+          if (old.get(page.id) !== page) dirtyPageIds = _withDirty(dirtyPageIds, page.id);
+        }
+      }
+      return {
+        valueMaps: s.valueMaps.map((m) => (m.id === from ? { ...m, id } : m)),
+        pages,
+        dialogs,
+        header: rename(s.header),
+        footer: rename(s.footer),
+        leftSidebar: rename(s.leftSidebar),
+        rightSidebar: rename(s.rightSidebar),
+        globalEvents: rename(s.globalEvents),
+        dirtyPageIds,
+      };
+    });
+    const components = useComponentStore.getState();
+    for (const saved of components.components) {
+      const current = components.draftComponents[saved.id] ?? saved;
+      const next = rename(current);
+      if (next !== current) components.setComponentDraft(next, 'properties');
+    }
+    return true;
   },
 
   // ── Page mutations ─────────────────────────────────────────────────────────
@@ -1008,6 +1078,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       shell,
       dialogs,
       globalEvents,
+      valueMaps,
       dirtyPageIds,
       indexRevision,
       pageRevisions,
@@ -1024,6 +1095,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           rightSidebar,
           shell,
           globalEvents,
+          valueMaps,
           revision: indexRevision ?? undefined,
         },
       });

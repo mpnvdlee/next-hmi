@@ -15,7 +15,7 @@ import { useAlarmStore } from '../store/alarmStore';
 import { useRecipeStore } from '../store/recipeStore';
 import { useDeviceInfoStore } from '../store/deviceInfoStore';
 import { readHttpSource } from '../store/httpSourceStore';
-import { useConfigStore } from '@shared/store/configStore';
+import { findValueMap, useConfigStore } from '@shared/store/configStore';
 import { withDeclaredDefaults } from '../utils/componentPropResolution';
 import {
   allPageRootNodes,
@@ -67,6 +67,8 @@ export function useEvalContext(): EvaluationContext {
   // current roots without the memo having to churn on every page edit — the
   // same split the other resolvers make with `getState()`.
   const dialogs = useConfigStore((s) => s.dialogs);
+  // Subscribed so an edited map re-evaluates its `$map`s; read fresh below.
+  const valueMaps = useConfigStore((s) => s.valueMaps);
   const pageRootsRef = useRef({ pages, dialogs });
   pageRootsRef.current = { pages, dialogs };
   useViewport();
@@ -100,6 +102,8 @@ export function useEvalContext(): EvaluationContext {
         },
 
         resolveTranslation: (key) => useTranslationStore.getState().resolve(key),
+
+        resolveValueMap: findValueMap,
 
         getUrlParam: (name) => new URLSearchParams(location.search).get(name) ?? undefined,
 
@@ -241,6 +245,7 @@ export function useEvalContext(): EvaluationContext {
     [
       activeLanguage,
       translations,
+      valueMaps,
       location,
       scope,
       inputScopeProps,

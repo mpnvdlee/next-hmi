@@ -19,6 +19,7 @@ export type EditorRegion = ShellRegionId | 'dialogs' | 'pages';
 export const EDITOR_NODE_IDS = {
   SETTINGS: '__settings__',
   EVENTS: '__events__',
+  VALUE_MAPS: '__valueMaps__',
   PAGES: '__pages__',
   DIALOGS: '__dialogs__',
   HEADER: '__header__',
@@ -33,6 +34,13 @@ export const SHELL_AREA_LABELS: Record<string, string> = {
   [EDITOR_NODE_IDS.LEFT_SIDEBAR]: 'Left Sidebar',
   [EDITOR_NODE_IDS.RIGHT_SIDEBAR]: 'Right Sidebar',
 };
+
+/** A value map's tree row, carried as selectedId: the map id behind a prefix
+ *  no page or widget id can start with. */
+const VALUE_MAP_PREFIX = '__valueMap__:';
+export const makeValueMapNodeId = (mapId: string): string => `${VALUE_MAP_PREFIX}${mapId}`;
+export const parseValueMapNodeId = (id: string | null): string | null =>
+  id?.startsWith(VALUE_MAP_PREFIX) ? id.slice(VALUE_MAP_PREFIX.length) : null;
 
 /**
  * Composite ids carried as selectedId / ctxMenu nodeId for tree rows that

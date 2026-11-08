@@ -226,6 +226,25 @@ export interface SwitchSource {
   };
 }
 
+/** $map: looks `value` up in the project value map `id` (see `ValueMap`). */
+export interface MapSource {
+  $map: { id: string; value: unknown };
+}
+
+export const VALUE_MAP_TYPES = ['Color', 'String', 'Boolean', 'Integer', 'Float'] as const;
+
+/**
+ * A project-wide lookup table in config.json `valueMaps`: the first case whose
+ * `when` equals the input gives `then`, else `default`. A String map's `then`
+ * may be a `$loc`. Mirrors backend/models/value_map.py.
+ */
+export interface ValueMap {
+  id: string;
+  type: (typeof VALUE_MAP_TYPES)[number];
+  cases: Array<{ when: string | number | boolean; then: unknown }>;
+  default?: unknown;
+}
+
 /** $user: current logged-in user data (username, groups, or full user list for items fields) */
 export interface UserSource {
   $user: {
@@ -772,6 +791,7 @@ export interface PagesConfig {
   /** Right-sidebar components — array form, rendered as the right sidebar content when shell.rightSidebar.component is absent. */
   rightSidebar?: WidgetConfig[];
   globalEvents?: GlobalEventsConfig;
+  valueMaps?: ValueMap[];
 }
 
 /**
@@ -790,6 +810,7 @@ export interface PagesBootstrapResponse {
   leftSidebar?: WidgetConfig[];
   rightSidebar?: WidgetConfig[];
   globalEvents?: GlobalEventsConfig;
+  valueMaps?: ValueMap[];
   /** Revision of the index's editable fields, sent back on save. */
   revision?: string;
   /** Revision of each page document, by page id, sent back on save. */

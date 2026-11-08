@@ -78,11 +78,13 @@ from core.validation import (
     validate_shell_areas,
     validate_users,
     validate_widget_node,
+    value_map_types,
 )
 from fastapi import APIRouter, BackgroundTasks, Query, Request
 from mcp_server.diff import make_diff
 from models.alarm import AlarmConfig
 from models.recipe import RecipeConfig
+from models.value_map import ValueMap
 from pydantic import ValidationError
 from services import widget_compiler
 from services.websocket_manager import websocket_manager
@@ -99,6 +101,7 @@ def _config_path():
 # (the default theme) are set from other screens, so a change there must not make an editor save stale.
 _INDEX_EDITABLE_FIELDS = (
     "pages", "dialogs", "header", "footer", "leftSidebar", "rightSidebar", "shell", "globalEvents",
+    "valueMaps",
 )
 
 
@@ -709,6 +712,7 @@ def _empty_config() -> dict[str, Any]:
         "shell": {},
         "dialogs": [],
         "globalEvents": {},
+        "valueMaps": [],
         "mcpEnabled": False,
     }
 
@@ -730,11 +734,30 @@ def _load_global_config() -> dict[str, Any]:
         "shell": raw.get("shell", {}) if isinstance(raw.get("shell"), dict) else {},
         "dialogs": _hydrate_index_tree(_list_field(raw, "dialogs"), "dialogs"),
         "globalEvents": raw.get("globalEvents", {}) if isinstance(raw.get("globalEvents"), dict) else {},
+        "valueMaps": _list_field(raw, "valueMaps"),
         "mcpEnabled": raw.get("mcpEnabled") is True,
     }
 
 
 # ── Index validation ───────────────────────────────────────────────────────────
+
+def _checked_value_maps(maps: Any) -> list[dict[str, Any]]:
+    if not isinstance(maps, list):
+        raise ConfigValidationError("'valueMaps' must be an array")
+    checked: list[dict[str, Any]] = []
+    for i, entry in enumerate(maps):
+        try:
+            checked.append(ValueMap.model_validate(entry).model_dump())
+        except ValidationError as exc:
+            err = exc.errors()[0]
+            where = "/".join(str(part) for part in err["loc"])
+            raise ConfigValidationError(f"valueMaps[{i}] {where}: {err['msg']}") from exc
+    ids = [m["id"] for m in checked]
+    duplicate = next((map_id for map_id in ids if ids.count(map_id) > 1), None)
+    if duplicate is not None:
+        raise ConfigValidationError(f"Duplicate value map id: {duplicate}")
+    return checked
+
 
 def _validate_index_node_identity(node: dict[str, Any], ids: set[str]) -> tuple[str, Any]:
     node_id = node.get("id")
@@ -844,6 +867,10 @@ async def put_config(body: dict) -> Any:
         "shell": body.get("shell", {}) if isinstance(body.get("shell"), dict) else {},
         "dialogs": [_clean_index_node(n) for n in _list_field(body, "dialogs") if isinstance(n, dict)],
         "globalEvents": body.get("globalEvents", {}) if isinstance(body.get("globalEvents"), dict) else {},
+        # Kept when the body omits it, like `dialogs`: an older client must not empty it.
+        "valueMaps": _checked_value_maps(
+            body["valueMaps"] if "valueMaps" in body else _list_field(existing_raw, "valueMaps")
+        ),
         # Preserve the admin-managed flag — `PUT /api/config` carries the editable
         # surface (pages/shell/etc.) and should not silently clear it.
         "mcpEnabled": body["mcpEnabled"] is True if "mcpEnabled" in body else existing_mcp_enabled,
@@ -869,6 +896,7 @@ async def put_config(body: dict) -> Any:
     ctx.page_properties = collect_page_properties(payload)
     ctx.dialog_ancestors = collect_dialog_ancestors(payload)
     ctx.page_variables = collect_page_variables(payload)
+    ctx.value_maps = value_map_types(payload["valueMaps"])
     report = validate_config_areas(payload, ctx)
     if not report.ok:
         raise ConfigValidationError(report.to_message())
@@ -969,6 +997,9 @@ async def validate_draft(body: dict) -> Any:
         raise ConfigValidationError("'draft' must be an object")
 
     ctx = build_context()
+    # The editor's unsaved maps, so a `$map` on a map not saved yet resolves.
+    if isinstance(body.get("valueMaps"), list):
+        ctx.value_maps = value_map_types(body["valueMaps"])
     artifact_id = draft.get("id") if isinstance(draft.get("id"), str) else None
     if kind == "page":
         report = validate_page(draft, ctx)

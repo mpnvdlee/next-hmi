@@ -1,0 +1,26 @@
+/* One value-map case a line: When, the arrow, Then (with its ×). */
+.cfg-value-map-case {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cfg-space-1);
+}
+
+/* The field boxes keep their own bottom margin; the row's gap spaces them. */
+.cfg-value-map-case .cfg-field-group {
+  margin-bottom: 0;
+}
+
+.cfg-value-map-case__when {
+  flex: 0 0 var(--cfg-value-map-when-width);
+  min-width: 0;
+}
+
+.cfg-value-map-case__then {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-value-map-case__arrow {
+  line-height: var(--cfg-input-height);
+  color: var(--cfg-source-switch);
+}

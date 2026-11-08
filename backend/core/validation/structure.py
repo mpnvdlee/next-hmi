@@ -51,6 +51,7 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$loc",
     "$if",
     "$switch",
+    "$map",
     "$compare",
     "$not",
     "$and",
@@ -216,6 +217,9 @@ class ValidationContext:
     # required members against one element. build_context shares the index
     # cached with the registry; a hand-built context indexes its own.
     _struct_elements: _StructElements | None = field(default=None, repr=False)
+    # Value map id -> its type ("Color", "String", …), from config.json
+    # `valueMaps`. None where the maps are unknown, which skips the `$map` checks.
+    value_maps: dict[str, str] | None = None
     # Keys of the active (Default) translation dictionary.
     translation_keys: frozenset[str] = field(default_factory=frozenset)
     # Curated built-in icon ids — mirrors frontend/src/shared/config/iconAllowlist.ts.
@@ -1185,7 +1189,19 @@ def build_context() -> ValidationContext:
         image_assets=_collect_asset_names(active_images_dir()),
         video_assets=_collect_asset_names(active_videos_dir()),
         http_allowed_origins=frozenset(listed_origins(config)),
+        value_maps=value_map_types(config.get("valueMaps")),
     )
+
+
+def value_map_types(maps: Any) -> dict[str, str]:
+    """Value map id -> type for a `valueMaps` list; malformed entries are skipped."""
+    if not isinstance(maps, list):
+        return {}
+    return {
+        m["id"]: m["type"]
+        for m in maps
+        if isinstance(m, dict) and isinstance(m.get("id"), str) and isinstance(m.get("type"), str)
+    }
 
 
 def _has_property_source(value: Any) -> bool:
@@ -2999,6 +3015,34 @@ def _takes_only_whole_numbers(schema_field: dict | None) -> bool:
     return "integer" in accepted and not accepted & {"float", "duration"}
 
 
+def _validate_map_ref(
+    payload: dict, schema_field: dict | None, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """A `$map` names a project value map and the value it looks up."""
+    _validate_slot(
+        payload.get("value"), None, ctx, f"{path}/$map/value", report,
+        code="map-value-empty", message="value to look up is unset",
+    )
+    map_id = payload.get("id")
+    if not isinstance(map_id, str) or map_id == "":
+        report.warn(f"{path}/$map/id", "no value map chosen", severity="warning", code="map-empty")
+        return
+    if ctx.value_maps is None:
+        return
+    map_type = ctx.value_maps.get(map_id)
+    if map_type is None:
+        report.warn(path, f"unknown value map '{map_id}'", severity="error", code="map-unknown")
+        return
+    # The same type only (a number also fills a duration), as the editor's map picker lists them.
+    tokens = _type_tokens(schema_field) if isinstance(schema_field, dict) else []
+    if tokens and not any(source_rules.produced_fits(map_type.lower(), t) for t in tokens):
+        report.warn(
+            path,
+            f"value map '{map_id}' gives a {map_type}, which this field does not take",
+            severity="error", code="map-type",
+        )
+
+
 def _validate_property_value(
     value: Any,
     schema_field: dict | None,
@@ -3114,6 +3158,8 @@ def _validate_property_value(
                 _validate_slot(when, None, ctx, f"{path}/$switch/{i}/when", report)
                 _validate_slot(then, schema_field, ctx, f"{path}/$switch/{i}/then", report)
         _validate_slot(payload.get("default"), schema_field, ctx, f"{path}/$switch/default", report)
+    elif source_key == "$map" and isinstance(payload, dict):
+        _validate_map_ref(payload, schema_field, ctx, path, report)
     elif source_key == "$compare" and isinstance(payload, dict):
         _validate_slot(
             payload.get("left"), None, ctx, f"{path}/$compare/left", report,
@@ -3609,6 +3655,21 @@ def validate_global_events(events: Any, ctx: ValidationContext) -> ValidationRep
     return report
 
 
+def validate_value_maps(maps: Any, ctx: ValidationContext) -> ValidationReport:
+    """Validate each value map's outputs against the map's type. Paths are
+    relative to the list itself (``/0/cases/1/then``)."""
+    report = ValidationReport()
+    for i, value_map in enumerate(maps if isinstance(maps, list) else []):
+        if not isinstance(value_map, dict) or not isinstance(value_map.get("type"), str):
+            continue
+        schema = {"type": value_map["type"]}
+        cases = value_map.get("cases")
+        for j, case in enumerate(cases if isinstance(cases, list) else []):
+            if isinstance(case, dict):
+                _validate_slot(case.get("then"), schema, ctx, f"/{i}/cases/{j}/then", report)
+        _validate_slot(value_map.get("default"), schema, ctx, f"/{i}/default", report)
+    return report
+
 def validate_page_node_events(node: Any, ctx: ValidationContext) -> ValidationReport:
     """Validate the action targets in a page or page-group node's ``events``
     map. Paths are relative to the node itself (``/events/onOpen/0``)."""
@@ -3646,6 +3707,7 @@ def validate_config_areas(config: Any, ctx: ValidationContext) -> ValidationRepo
         return report
     report.extend(validate_shell_areas(config, ctx))
     report.extend(_reparented(validate_global_events(config.get("globalEvents"), ctx), "/globalEvents"))
+    report.extend(_reparented(validate_value_maps(config.get("valueMaps"), ctx), "/valueMaps"))
     for root in INDEX_ROOTS:
         _walk_page_group_events(
             root_nodes(config, root), ctx_for_root(ctx, root), f"/{root}", report

@@ -16,11 +16,16 @@ import type {
   AndSource,
   CompareSource,
   IfSource,
+  MapSource,
   NotSource,
   OrSource,
   SwitchSource,
 } from '@shared/types/config';
 import { primaryType } from '@shared/utils/valueTypes';
+import { useConfigStore } from '@shared/store/configStore';
+import { valueMapFits } from '@hmi/utils/propertySourceRegistry';
+import PropRow from '../../../ui/PropRow';
+import Select from '../../../ui/Select';
 
 const IF_CONDITION_SCHEMA: SchemaField = { type: 'Boolean', label: 'Condition' };
 const NOT_VALUE_SCHEMA: SchemaField = { type: 'Boolean', label: 'Value' };
@@ -398,6 +403,53 @@ export function SwitchEditor({
           />
         </ParentPathContext.Provider>
       )}
+    </>
+  );
+}
+
+/** $map — a project value map (only those of the field's type) + the value it looks up. */
+export function MapEditor({
+  value,
+  onChange,
+  fieldType,
+  onOpenBindingPicker,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+  fieldType?: string | readonly string[];
+  onOpenBindingPicker?: OpenBindingPicker;
+}) {
+  const valueMaps = useConfigStore((s) => s.valueMaps);
+  const mapObj = (value as MapSource)?.$map ?? { id: '', value: null };
+  const parent = useParentPath();
+  const fitting = valueMaps.filter((m) => valueMapFits(m.type, fieldType));
+
+  return (
+    <>
+      <PropRow label="Map">
+        <Select value={mapObj.id} onChange={(id) => onChange({ $map: { ...mapObj, id } })}>
+          <option value="">{fitting.length ? 'Choose a map' : 'No map of this type'}</option>
+          {fitting.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.id}
+            </option>
+          ))}
+        </Select>
+      </PropRow>
+      <ParentPathContext.Provider value={withSegs(parent, '$map', 'value')}>
+        <BranchEditor
+          label="Value"
+          value={mapObj.value ?? null}
+          onChange={(v) => onChange({ $map: { ...mapObj, value: v } })}
+          schema={COMPARE_OPERAND_SCHEMA}
+          slot={true}
+          onOpenBindingPicker={wrapPicker(
+            onOpenBindingPicker,
+            (b) => onChange({ $map: { ...mapObj, value: { $var: b } } }),
+            mapObj.value,
+          )}
+        />
+      </ParentPathContext.Provider>
     </>
   );
 }
