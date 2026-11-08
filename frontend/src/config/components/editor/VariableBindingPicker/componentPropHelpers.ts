@@ -1,5 +1,6 @@
 import {
   componentPropertyToSchemaField,
+  inputMode,
   type ComponentPropertySchema,
   type StructSchemaNode,
 } from '@shared/types/componentProperty';
@@ -117,7 +118,10 @@ export function structSchemaNodeFits(node: StructSchemaNode, slot: PropSlot): bo
  *  writing field — its own `write` flag. */
 export function componentPropVerdict(prop: ComponentPropertySchema, slot: PropSlot): PropVerdict {
   if (!componentPropFits(prop, slot)) return { ok: false };
-  return slot.write && prop.write !== true ? NOT_WRITABLE : { ok: true };
+  // A Value input is written locally, so any writing field may take it.
+  return slot.write && prop.write !== true && inputMode(prop) !== 'value'
+    ? NOT_WRITABLE
+    : { ok: true };
 }
 
 /** The drawer's verdict on one field of a struct property: only a variable

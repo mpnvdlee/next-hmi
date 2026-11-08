@@ -3,12 +3,15 @@ import './componentProperty.css';
 import '../editor/BindingPickerShell/style.css';
 import {
   componentPropertyToSchemaField,
+  inputMode,
+  isStructInput,
   OPTION_TYPE_EMPTY_VALUE,
   OPTION_TYPE_OPTIONS,
   propertyTypeLabel,
   VALUELESS_PROPERTY_TYPES,
   type ComponentPropertyOptionType,
   type ComponentPropertySchema,
+  type InputMode,
   type StructSchemaNode,
 } from '@shared/types/componentProperty';
 import { primaryType } from '@shared/utils/valueTypes';
@@ -37,6 +40,9 @@ interface Props {
   title?: string;
   /** Singular form of `title`, for the add and delete controls. */
   itemNoun?: string;
+  /** Nothing opens the owner with values — a page of the Pages section — so
+   *  every input is a Value, and the choice is not offered. */
+  valueOnly?: boolean;
   onChange: (next: Record<string, ComponentPropertySchema>) => void;
 }
 
@@ -45,6 +51,7 @@ export default function ComponentPropertiesEditor({
   ownerName,
   title = 'Component Properties',
   itemNoun = 'component property',
+  valueOnly = false,
   onChange,
 }: Props) {
   const [addingProp, setAddingProp] = useState(false);
@@ -109,6 +116,7 @@ export default function ComponentPropertiesEditor({
             key={key}
             propKey={key}
             schema={schema}
+            valueOnly={valueOnly}
             onChange={(patch) => handlePatchProperty(key, patch)}
             onDelete={() => handleDeleteProperty(key)}
             onEditStructSchema={() => setEditingStructKey(key)}
@@ -139,9 +147,17 @@ export default function ComponentPropertiesEditor({
   );
 }
 
+const MODE_OPTIONS: { value: InputMode; label: string }[] = [
+  { value: 'value', label: 'Value' },
+  { value: 'binding', label: 'Binding' },
+];
+
+const MODE_LABEL: Record<InputMode, string> = { value: 'Value', binding: 'Binding' };
+
 function ComponentPropertyRow({
   propKey,
   schema,
+  valueOnly,
   onChange,
   onDelete,
   onEditStructSchema,
@@ -150,6 +166,7 @@ function ComponentPropertyRow({
 }: {
   propKey: string;
   schema: ComponentPropertySchema;
+  valueOnly: boolean;
   onChange: (patch: Partial<ComponentPropertySchema>) => void;
   onDelete: () => void;
   onEditStructSchema: () => void;
@@ -158,6 +175,8 @@ function ComponentPropertyRow({
 }) {
   const primary = primaryType(schema.type);
   const optionType = schema.optionType ?? 'string';
+  const mode = inputMode(schema);
+  const fixedMode = valueOnly || isStructInput(primary);
 
   function changeOptionType(next: ComponentPropertyOptionType) {
     // The labels are the author's work, so the rows stay — but a value written
@@ -211,6 +230,41 @@ function ComponentPropertyRow({
 
       <StatedRow label="Type">{propertyTypeLabel(schema)}</StatedRow>
 
+      {/* A struct is a variable folder, so always a Binding; on a page nothing
+          opens with values, so every input is a Value. */}
+      {mode &&
+        (fixedMode ? (
+          <StatedRow label="Kind">{MODE_LABEL[valueOnly ? 'value' : mode]}</StatedRow>
+        ) : (
+          <PropRow
+            label="Kind"
+            description={
+              mode === 'value'
+                ? 'Read once when opened, then this screen’s own; never written back.'
+                : 'A variable, followed live and written through to it.'
+            }
+            tier={2}
+            sourceless
+          >
+            <Select
+              value={mode}
+              onChange={(next) =>
+                onChange(
+                  next === 'value'
+                    ? { mode: 'value', write: undefined }
+                    : { mode: 'binding', defaultValue: undefined },
+                )
+              }
+            >
+              {MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </PropRow>
+        ))}
+
       {primary === 'struct' && (
         <PropRow
           label="Struct schema"
@@ -255,11 +309,11 @@ function ComponentPropertyRow({
         />
       </PropRow>
 
-      {/* A struct declares write access per field, and an actions or widgets
-          property or a page input binds no variable at all — for everything else
-          the flag is what limits the picker to writable variables (see
+      {/* Only a Binding writes a variable: a Value is written locally, a struct
+          declares write access per field, and a page input binds no variable.
+          The flag is what limits the picker to writable variables (see
           VariableBindingPicker). */}
-      {!VALUELESS_PROPERTY_TYPES.has(primary) && schema.format !== 'page' && (
+      {mode === 'binding' && !fixedMode && schema.format !== 'page' && (
         <PropRow
           label="Write access"
           description="Only allow binding to a variable the component may write."
@@ -304,8 +358,9 @@ function ComponentPropertyRow({
 
       {/* These have no single literal to fall back to — a struct resolves to a
           variable subtree, an actions list to handlers, a widgets property to
-          whatever the caller drops in the slot. */}
-      {!VALUELESS_PROPERTY_TYPES.has(primary) && (
+          whatever the caller drops in the slot, a Binding to the variable the
+          caller names. */}
+      {!VALUELESS_PROPERTY_TYPES.has(primary) && (mode !== 'binding' || valueOnly) && (
         <PropRow
           label="Default value"
           description="Used wherever an instance leaves this property unset."

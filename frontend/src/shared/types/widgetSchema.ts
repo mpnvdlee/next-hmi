@@ -43,6 +43,9 @@ export interface SchemaField {
   requiredFields?: RequiredFieldEntry[];
   /** When true, variable picker only shows writable variables. */
   write?: boolean;
+  /** Takes a variable binding only — no literal or computed source. Set on a
+   *  component's or dialog's Binding input (`inputMode`). */
+  bindsOnly?: boolean;
   /** For a `format: 'select'` field: the list of options shown in the dropdown.
    *  A `{ $loc }` value makes the option itself a translation, so the dropdown
    *  offers translated captions without opening the free translation picker.

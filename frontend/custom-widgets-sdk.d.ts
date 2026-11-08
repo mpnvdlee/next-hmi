@@ -443,6 +443,8 @@ interface SchemaField {
       }
   )[];
   write?: boolean;
+  /** Takes a variable binding only — set on a component's Binding input. */
+  bindsOnly?: boolean;
   options?: {
     label: string;
     value?: string | number | boolean | { $loc: string };

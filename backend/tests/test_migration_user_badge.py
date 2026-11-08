@@ -139,8 +139,8 @@ def test_the_coordinator_carries_a_format_10_project_to_11(project: Path) -> Non
 
     result = pm.run_baseline_migration(project)
 
-    assert (result.from_version, result.to_version) == (10, 11)
-    assert read_project_metadata(project).formatVersion == 11
+    assert (result.from_version, result.to_version) == (10, pm.PROJECT_FORMAT_VERSION)
+    assert read_project_metadata(project).formatVersion == pm.PROJECT_FORMAT_VERSION
     assert sorted(result.files_changed) == ["config.json", "pages/home.json"]
 
 

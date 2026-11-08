@@ -157,25 +157,15 @@
                               "label": {
                                 "$loc": "Bean level"
                               },
-                              "text": {
-                                "$stringExpr": {
-                                  "template": "{Round(1)} %",
-                                  "wildcards": {
-                                    "1": {
-                                      "$var": {
-                                        "path": "Brew:Hopper/BeanLevel"
-                                      }
-                                    }
-                                  }
-                                }
-                              },
                               "value": {
                                 "$var": {
                                   "path": "Brew:Hopper/BeanLevel"
                                 }
                               },
                               "max": 100,
-                              "color": "var(--hmi-accent)"
+                              "color": "var(--hmi-accent)",
+                              "unit": "%",
+                              "decimals": 0
                             },
                             "layout": {
                               "widthMode": "fill",
@@ -190,25 +180,15 @@
                               "label": {
                                 "$loc": "Water tank"
                               },
-                              "text": {
-                                "$stringExpr": {
-                                  "template": "{Round(1)} %",
-                                  "wildcards": {
-                                    "1": {
-                                      "$var": {
-                                        "path": "Brew:Tank/WaterLevel"
-                                      }
-                                    }
-                                  }
-                                }
-                              },
                               "value": {
                                 "$var": {
                                   "path": "Brew:Tank/WaterLevel"
                                 }
                               },
                               "max": 100,
-                              "color": "var(--hmi-ok)"
+                              "color": "var(--hmi-ok)",
+                              "unit": "%",
+                              "decimals": 0
                             },
                             "layout": {
                               "widthMode": "fill",

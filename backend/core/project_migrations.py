@@ -52,6 +52,8 @@ from core.manifest import (
 from core.migration_button_container import migrate_button_container
 from core.migration_dialogs_folder import STEP_NAME as DIALOGS_FOLDER_STEP_NAME
 from core.migration_dialogs_folder import migrate_dialogs_folder
+from core.migration_input_modes import STEP_NAME as INPUT_MODES_STEP_NAME
+from core.migration_input_modes import migrate_input_modes
 from core.migration_padding import migrate_padding
 from core.migration_size_modes import migrate_size_modes
 from core.migration_user_badge import migrate_user_badge
@@ -61,9 +63,9 @@ from core.project_packer import BACKUPS_SUBDIR, pack_project, safe_filename
 from core.time_utils import iso_now
 from core.version import app_version
 
-PROJECT_FORMAT_VERSION = 11
-# The release that introduced format 11. See the module docstring; bump with it.
-PROJECT_FORMAT_MIN_APP = "1.1.0"
+PROJECT_FORMAT_VERSION = 12
+# The release that introduced format 12. See the module docstring; bump with it.
+PROJECT_FORMAT_MIN_APP = "1.2.0"
 
 @dataclass(frozen=True)
 class _Target:
@@ -258,6 +260,13 @@ _STEPS: list[MigrationStep] = [
         name="retire-user-badge-and-pressable-container",
         targets=("config", "pages", "dialogs", "components"),
         run=_retire_user_badge_and_pressable_container,
+    ),
+    MigrationStep(
+        from_version=11,
+        to_version=12,
+        name=INPUT_MODES_STEP_NAME,
+        targets=("config", "pages", "dialogs", "components"),
+        run=migrate_input_modes,
     ),
 ]
 

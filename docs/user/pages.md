@@ -85,7 +85,11 @@ action that opens the page fills the value in. One "Motor detail" page then serv
 motor on the plant instead of one page per machine. The values belong to the overlay, so
 navigating inside it keeps them.
 
-Each parameter also takes a **default value**, which applies whenever nothing supplied one.
+Each parameter is a **Value** or a **Binding** ([Value or Binding](properties.md#value-or-binding)).
+A Value is read once as the dialog opens and is then the dialog's own: a field inside can
+change it for this screen, and closing the dialog throws it away. A Binding is a variable the
+opener passes, live, and writing it writes the controller. A Value also takes a **default
+value**, which applies whenever nothing supplied one.
 A parameter of type **Page** gets a page picker in the Open Dialog action, and a
 **Navigate To Page** action inside the dialog can go to whatever page the caller picked.
 
@@ -94,6 +98,13 @@ A parameter of type **Page** gets a page picker in the Open Dialog action, and a
 > in the **Pages** section is a navigation destination: it is reached from a menu or a URL,
 > where there is no action to hand it values. It can still be opened as an overlay — it
 > just takes no parameters, and uses the default close behaviour.
+
+**A page in Pages has page variables.** The same panel there is called **Page Variables**,
+and every entry is a Value: it starts at its default each time the page opens, a field or a
+Write on the page changes it, and leaving the page throws it away. A search box and the list
+it filters can share one this way, per screen, with nothing stored on the server. A page
+group's page variables last while the operator moves between its pages. State the whole
+machine shares belongs in a static datasource instead.
 
 **A whole page group can be opened too.** The group's active page shows inside the group's
 header and footer, so the operator gets the tabs as well — one parameterised, tabbed modal

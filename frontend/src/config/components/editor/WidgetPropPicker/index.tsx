@@ -79,6 +79,8 @@ function adaptSchema(
   return {
     type: prop.type ?? 'string',
     label: prop.label,
+    // Another widget's state, written through nothing here — never a local Value.
+    mode: 'binding',
     structSchema: fields.length
       ? fields.map((f) => ({
           kind: 'variable' as const,

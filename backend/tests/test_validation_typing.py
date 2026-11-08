@@ -290,6 +290,13 @@ def test_an_instance_value_is_typed_by_the_declaration(card_ctx):
     assert _codes(validate_widget_node(_instance({"count": 3}), card_ctx)) == []
 
 
+def test_an_instance_reads_a_live_formula_into_a_value_once(card_ctx):
+    live = {"$if": {"condition": {"$var": {"path": "PLC:Run"}}, "then": 1, "else": 2}}
+    report = validate_widget_node(_instance({"count": live}), card_ctx)
+    assert "value-reads-once" in _codes(report)
+    assert "value-reads-once" not in _codes(validate_widget_node(_instance({"count": {"$if": {"condition": True, "then": 1, "else": 2}}}), card_ctx))
+
+
 def test_an_instance_binding_is_typed_by_the_declaration(card_ctx):
     report = validate_widget_node(_instance({"count": {"$var": {"path": "PLC:Speed"}}}), card_ctx)
     assert _codes(report) == ["var-type"]
@@ -308,7 +315,8 @@ def test_an_instance_of_an_unknown_interface_is_not_typed(ctx):
 # ── $componentProp ───────────────────────────────────────────────────────────
 
 _INPUTS = {
-    "setpoint": {"type": "float", "label": "Setpoint"},
+    # A Binding: a Value is written locally, so it would fit a writing field.
+    "setpoint": {"type": "float", "label": "Setpoint", "mode": "binding"},
     "target": {"type": "float", "label": "Target", "write": True},
     "slot": {"type": "widgets", "label": "Slot"},
     "motor": {
@@ -519,6 +527,65 @@ def test_open_dialog_inputs_are_typed_by_the_target(ctx):
     assert _codes(_action(dialog, action)) == ["var-type"]
     action["componentProperties"] = {"motorId": {"$var": {"path": "PLC:Count"}}}
     assert _codes(_action(dialog, action)) == []
+
+
+def test_open_dialog_fills_inputs_the_targets_groups_declare(ctx):
+    dialog = replace(
+        _dialog_ctx(ctx),
+        page_ids={"detail", "grp"},
+        page_property_keys={"detail": frozenset({"n"}), "grp": frozenset({"title", "n"})},
+    )
+    action = {"type": "openDialog", "pageId": "detail", "componentProperties": {"title": "Motor 1"}}
+    assert _codes(_action(dialog, action)) == []
+    action["componentProperties"] = {"zzz": "x"}
+    assert _codes(_action(dialog, action)) == ["prop-unknown"]
+    # Typed by the innermost declaration: the page's own `n` is an Integer.
+    dialog.page_properties["detail"] = {"n": {"type": "integer", "label": "N"}}
+    action["componentProperties"] = {"n": "x"}
+    assert _codes(_action(dialog, action)) == ["literal-type"]
+
+
+@pytest.mark.parametrize(
+    ("value", "codes"),
+    [
+        ({"$var": {"path": "PLC:Count"}}, []),
+        ({"$componentProp": "target"}, []),
+        (3, ["binding-source"]),
+        ({"$formula": {"expression": "{1} * 2", "wildcards": {"1": {"$var": {"path": "PLC:Count"}}}, "round": True}}, ["binding-source"]),
+        # A Value passed on would let the dialog write the opener's own state.
+        ({"$componentProp": "setpoint_value"}, ["binding-source"]),
+    ],
+)
+def test_a_binding_input_takes_only_a_variable(input_ctx, value, codes):
+    dialog = replace(
+        input_ctx,
+        page_ids={"detail"},
+        page_property_keys={"detail": frozenset({"count"})},
+        page_properties={"detail": {"count": {"type": "integer", "label": "Count", "mode": "binding"}}},
+        input_schema={
+            **_INPUTS,
+            "target": {"type": "integer", "label": "Target", "mode": "binding"},
+            "setpoint_value": {"type": "integer", "label": "Setpoint", "mode": "value"},
+        },
+    )
+    action = {"type": "openDialog", "pageId": "detail", "componentProperties": {"count": value}}
+    assert _codes(_action(dialog, action)) == codes
+
+
+def test_a_value_input_takes_anything_and_reads_a_live_formula_once(ctx):
+    dialog = replace(
+        ctx,
+        page_ids={"detail"},
+        page_property_keys={"detail": frozenset({"jog"})},
+        page_properties={"detail": {"jog": {"type": "float", "label": "Jog", "write": True, "mode": "value"}}},
+    )
+    action = {"type": "openDialog", "pageId": "detail", "componentProperties": {"jog": 0.5}}
+    assert _codes(_action(dialog, action)) == []
+    action["componentProperties"] = {"jog": {"$var": {"path": "PLC:Speed"}}}
+    assert _codes(_action(dialog, action)) == []
+    formula = {"$formula": {"expression": "{1} * 0.5", "wildcards": {"1": {"$var": {"path": "PLC:Speed"}}}}}
+    action["componentProperties"] = {"jog": formula}
+    assert _codes(_action(dialog, action)) == ["value-reads-once"]
 
 
 def test_an_action_value_reads_the_surrounding_inputs(input_ctx):

@@ -1493,7 +1493,7 @@ def test_toggle_target_naming_a_writable_boolean_input_is_clean():
 @pytest.mark.parametrize(
     "inputs, code",
     [
-        ({"value": {"type": "float"}}, "componentprop-type"),
+        ({"value": {"type": "float", "mode": "binding"}}, "componentprop-type"),
         ({"value": {"type": "string", "write": True}}, "componentprop-type"),
         ({}, "componentprop-unknown"),
     ],

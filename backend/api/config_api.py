@@ -6,8 +6,6 @@ from typing import Any
 from core import telemetry
 from core.component_validation import (
     DIRECT_BINDING_MESSAGE,
-    NESTED_PROP_MESSAGE,
-    component_nested_prop_paths,
     component_var_source_paths,
 )
 from core.exceptions import (
@@ -62,6 +60,7 @@ from core.validation import (
     collect_dialog_ancestors,
     collect_page_properties,
     collect_page_property_keys,
+    collect_page_variables,
     component_slot_property_gaps,
     component_undeclared_slots,
     ctx_for_page_group,
@@ -381,17 +380,6 @@ def _validate_component_tree(
             DIRECT_BINDING_MESSAGE,
             severity="error",
             code="component-direct-binding",
-        )
-    def is_actions(widget_type: str, key: str) -> bool:
-        field = (ctx.widget_schema_for(widget_type) or {}).get(key)
-        return key == "actions" or (isinstance(field, dict) and field.get("type") == "actions")
-
-    for nested_path in component_nested_prop_paths(component, is_actions):
-        report.warn(
-            nested_path,
-            NESTED_PROP_MESSAGE,
-            severity="warning",
-            code="componentprop-nested",
         )
     for key in component_slot_property_gaps(component):
         report.warn(
@@ -880,6 +868,7 @@ async def put_config(body: dict) -> Any:
     ctx.page_property_keys = collect_page_property_keys(payload)
     ctx.page_properties = collect_page_properties(payload)
     ctx.dialog_ancestors = collect_dialog_ancestors(payload)
+    ctx.page_variables = collect_page_variables(payload)
     report = validate_config_areas(payload, ctx)
     if not report.ok:
         raise ConfigValidationError(report.to_message())

@@ -550,7 +550,24 @@
     }
   },
   {
-    "name": "property not declared writable does not fill a writing field",
+    "name": "Binding not declared writable does not fill a writing field",
+    "prop": {
+      "type": "float",
+      "label": "S",
+      "mode": "binding"
+    },
+    "slot": {
+      "fieldType": "float",
+      "write": true
+    },
+    "fits": true,
+    "verdict": {
+      "ok": false,
+      "reason": "Not declared writable"
+    }
+  },
+  {
+    "name": "Value input fills a writing field",
     "prop": {
       "type": "float",
       "label": "S"
@@ -561,8 +578,7 @@
     },
     "fits": true,
     "verdict": {
-      "ok": false,
-      "reason": "Not declared writable"
+      "ok": true
     }
   },
   {

@@ -15,7 +15,7 @@
     }
   },
   {
-    "name": "writing float",
+    "name": "write access makes a Binding",
     "input": {
       "type": "float",
       "label": "Setpoint",
@@ -28,7 +28,36 @@
       "label": "Setpoint",
       "write": true,
       "min": 0,
-      "max": 100
+      "max": 100,
+      "bindsOnly": true
+    }
+  },
+  {
+    "name": "a Value drops write access",
+    "input": {
+      "type": "float",
+      "label": "Speed",
+      "mode": "value",
+      "write": true,
+      "defaultValue": 10
+    },
+    "output": {
+      "type": "float",
+      "label": "Speed",
+      "defaultValue": 10
+    }
+  },
+  {
+    "name": "a Binding takes a variable only",
+    "input": {
+      "type": "boolean",
+      "label": "Enabled",
+      "mode": "binding"
+    },
+    "output": {
+      "type": "boolean",
+      "label": "Enabled",
+      "bindsOnly": true
     }
   },
   {

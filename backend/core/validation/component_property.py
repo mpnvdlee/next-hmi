@@ -47,15 +47,53 @@ def _required_fields(nodes: list) -> list[dict[str, Any]]:
     return out
 
 
+# Types that hold no single writable value, so they have no mode (`inputMode`).
+_MODELESS_TYPES = frozenset({"actions", "widgets", "icon", "image", "video"})
+
+
+def _primary(prop: dict[str, Any]) -> str:
+    types = _type_list(prop.get("type"))
+    return types[0] if types else ""
+
+
+def is_struct_input(type_token: str) -> bool:
+    """`struct` or a struct's own name — not a simple type, an editor kind or
+    the `select` sugar over one (`isStructInput`)."""
+    return type_token.lower() != "select" and _is_struct_type(type_token)
+
+
+def input_mode(prop: dict[str, Any]) -> str | None:
+    """'value' (read once, then local), 'binding' (a variable, live) or None for
+    a type that has no mode. Mirrors `inputMode` in componentProperty.ts: a
+    struct always binds; a declaration without a mode is a Value unless it
+    declares write access, which only a Binding can use."""
+    primary = _primary(prop)
+    if primary.lower() in _MODELESS_TYPES:
+        return None
+    if is_struct_input(primary):
+        return "binding"
+    mode = prop.get("mode")
+    if mode in ("value", "binding"):
+        return mode
+    return "binding" if prop.get("write") is True else "value"
+
+
 def to_schema_field(prop: dict[str, Any]) -> dict[str, Any]:
     """A declaration as the schema field an editor row and the validator use."""
-    rest = {k: v for k, v in prop.items() if k not in ("structSchema", "optionType")}
+    rest = {k: v for k, v in prop.items() if k not in ("structSchema", "optionType", "mode")}
     if rest.get("type") == "widgets":
         return {k: rest[k] for k in ("type", "label", "description", "group") if k in rest}
     field = dict(rest)
     struct_schema = prop.get("structSchema")
     if isinstance(struct_schema, list) and struct_schema:
         field["requiredFields"] = _required_fields(struct_schema)
+    # A Value is written locally, so write access constrains nothing; a Binding
+    # takes a variable only.
+    mode = input_mode(prop)
+    if mode == "value":
+        field.pop("write", None)
+    elif mode == "binding" and not is_struct_input(_primary(prop)):
+        field["bindsOnly"] = True
     if field.get("type") == "select":
         field["type"] = _OPTION_TYPE_BASE.get(prop.get("optionType") or "string", "string")
         field["format"] = "select"
@@ -177,7 +215,9 @@ def declaration_verdict(prop: dict[str, Any], slot: dict[str, Any]) -> str | Non
     or None when it can (`componentPropVerdict`)."""
     if not declaration_fits(prop, slot):
         return "type"
-    return "read-only" if slot.get("write") is True and prop.get("write") is not True else None
+    # A Value input is written locally, so any writing field may take it.
+    writable = prop.get("write") is True or input_mode(prop) == "value"
+    return "read-only" if slot.get("write") is True and not writable else None
 
 
 def node_verdict(node: dict[str, Any], slot: dict[str, Any]) -> str | None:

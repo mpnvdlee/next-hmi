@@ -489,7 +489,7 @@ describe('ModalStack page overlays — input properties', () => {
     expect(screen.getByRole('button', { name: 'M7' })).toBeInTheDocument();
   });
 
-  it('gives a page outside the Dialogs folder no input scope, even when the action supplies values', () => {
+  it('gives a page outside the Dialogs folder only its page variables, never a supplied value', () => {
     useHmiStore.setState({
       openPageOverlays: [
         {
@@ -501,11 +501,10 @@ describe('ModalStack page overlays — input properties', () => {
       ],
     });
     renderOverlay();
-    // Neither the supplied value nor the page's own declared default reaches
-    // it — `$componentProp` only resolves inside the Dialogs folder, so an
-    // ordinary page opened as an overlay never gets an input scope at all.
+    // Nothing is passed to an ordinary page: its Value input is a page
+    // variable, starting at its default whatever the action carried.
     expect(screen.queryByRole('button', { name: 'M7' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'M1' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'M1' })).toBeInTheDocument();
   });
 });
 
@@ -698,14 +697,13 @@ describe('ModalStack page overlays — page groups take input properties too', (
     expect(chromeLabels(container)).toEqual(['OUTER', 'INNER', '']);
   });
 
-  it('gives a page-group tree outside the Dialogs folder no input scope at any level', () => {
-    // Same GROUP_TREE, opened from `pages:` instead of `dialogs:` — every
-    // level's declared default and the supplied value alike go unresolved.
+  it('gives a page-group tree outside the Dialogs folder its page variables, never a supplied value', () => {
+    // Same GROUP_TREE, opened from `pages:` instead of `dialogs:` — the
+    // supplied value goes unread, and each level's Value starts at its default.
     useConfigStore.setState({ dialogs: [], pages: GROUP_TREE });
     openOverlay('p1', { motorId: 'M7' });
     const { container } = renderOverlay();
-    expect(contentLabels(container)[0]).not.toBe('M7');
-    expect(contentLabels(container)[0]).not.toBe('PAGE');
+    expect(contentLabels(container)[0]).toBe('PAGE');
   });
 });
 

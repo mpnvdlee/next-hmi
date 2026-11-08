@@ -151,6 +151,23 @@ describe('openDialog input parameters', () => {
     expect(container.textContent).toContain('Machines (page group)');
     expect(screen.getByText('Line id')).toBeInTheDocument();
   });
+
+  it('lists the inputs the target page and its enclosing groups declare', () => {
+    const page = pageWithParams();
+    const group = {
+      id: 'g1',
+      title: 'Machines',
+      type: 'page-group',
+      children: [page],
+      componentProperties: { lineId: { type: 'String', label: 'Line id' } },
+    } as unknown as PageNode;
+    const ctx = { ...makeCtx(), overlayTargets: { dialogs: [group, page], pages: [] } };
+    const OpenDialogEditor = ACTION_EDITORS.openDialog!;
+    render(<OpenDialogEditor action={{ type: 'openDialog', pageId: 'p1' }} ctx={ctx} />);
+
+    expect(screen.getByText('Motor id')).toBeInTheDocument();
+    expect(screen.getByText('Line id')).toBeInTheDocument();
+  });
 });
 
 describe('overlay target pickers offer one root each', () => {

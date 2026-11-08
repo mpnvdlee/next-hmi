@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { useVariableStore, type VarMeta } from '../store/variableStore';
+import { LOCAL_INPUT_DATASOURCE, useVariableStore, type VarMeta } from '../store/variableStore';
 import { useHmiStore } from '../store/hmiStore';
 import { useAlarmStore } from '../store/alarmStore';
 import { useRecipeStore } from '../store/recipeStore';
@@ -205,10 +205,31 @@ function ingestConfigChanged(msg: ConfigChangedMsg): void {
 }
 
 /**
+ * A write or toggle aimed at a Value input's local slot, applied here instead
+ * of sent: every writer — an action, a widget's write-back — ends in this one
+ * frame, so this is the single place a local write has to be caught.
+ */
+function writeLocalInput(msg: unknown): boolean {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const { type, datasource, path, value, requestId } = msg as Record<string, unknown>;
+  if (datasource !== LOCAL_INPUT_DATASOURCE) return false;
+  if (type !== 'write_field' && type !== 'toggle_field') return false;
+  const key = `${LOCAL_INPUT_DATASOURCE}:${String(path)}`;
+  const store = useVariableStore.getState();
+  store.setScalar(key, type === 'toggle_field' ? !store.values[key] : value);
+  // Answer like the backend would, after the caller has registered the request.
+  if (typeof requestId === 'string') {
+    queueMicrotask(() => resolvePending(requestId, { datasource, path }, true));
+  }
+  return true;
+}
+
+/**
  * Send any JSON-serialisable message. Safe to call before the socket opens:
  * the message is dropped then, and the call returns `false`.
  */
 export function sendWsMessage(msg: unknown): boolean {
+  if (writeLocalInput(msg)) return true;
   if (_ws?.readyState === WebSocket.OPEN) {
     if (
       typeof msg === 'object' &&

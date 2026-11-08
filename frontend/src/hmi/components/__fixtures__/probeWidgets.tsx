@@ -1,5 +1,9 @@
+// A test fixture: fast refresh never reloads it, so its view may sit beside the entries.
+/* eslint-disable react-refresh/only-export-components */
 import type { HmiWidgetProps } from '@shared/types/config';
 import type { RegistryEntry } from '@shared/types/widgetSchema';
+import { isVarSource } from '@shared/types/propertyValueGuards';
+import { useVariableStore } from '../../store/variableStore';
 
 /**
  * Stand-ins for real built-in widgets in suites that mock the registry.
@@ -21,13 +25,20 @@ export const GateProbe: RegistryEntry = {
 
 /** Renders its `label` as a button, so a test has an accessible name to find.
  *  `value` is declared because the binding overlay only harvests variables out
- *  of properties the schema knows about (see `isRenderedProperty`). */
+ *  of properties the schema knows about (see `isRenderedProperty`). A bound
+ *  label reads the store, so a Value input's local slot shows; the resolver
+ *  hooks are not imported, since they pull in the registry this mocks. */
+function LabeledProbeView({ properties }: HmiWidgetProps) {
+  const label = properties?.label;
+  const key = isVarSource(label) ? label.$var.path : undefined;
+  const live = useVariableStore((s) => (key ? s.values[key] : undefined));
+  return <button type="button">{String((key ? live : label) ?? '')}</button>;
+}
+
 export const LabeledProbe: RegistryEntry = {
   name: 'Labeled Probe',
   category: 'Test',
-  component: ({ properties }: HmiWidgetProps) => (
-    <button type="button">{String(properties?.label ?? '')}</button>
-  ),
+  component: LabeledProbeView,
   schema: { value: { type: 'string', label: 'Value' } },
 };
 

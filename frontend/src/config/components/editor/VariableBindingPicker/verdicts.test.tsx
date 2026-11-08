@@ -358,7 +358,9 @@ describe('Repeat item verdicts', () => {
 
 describe('component input property verdicts', () => {
   const PROPERTIES = {
-    speed: { type: 'float', label: 'Speed' },
+    // A Binding: a Value is written locally, so any writing field takes it.
+    speed: { type: 'float', label: 'Speed', mode: 'binding' as const },
+    jog: { type: 'float', label: 'Jog' },
     setpoint: { type: 'float', label: 'Setpoint', write: true },
     count: { type: 'integer', label: 'Count' },
     mode: { type: 'select', optionType: 'integer' as const, label: 'Mode' },
@@ -396,6 +398,7 @@ describe('component input property verdicts', () => {
     ['writable Float', 'float', undefined, 'motor/Target', '✓', true],
     ['writable, any type', undefined, undefined, 'speed', '✗', true],
     ['writable, any type', undefined, undefined, 'setpoint', '✓', true],
+    ['writable Float', 'float', undefined, 'jog', '✓', true],
     ['Integer', 'integer', undefined, 'speed', '✗'],
     ['Integer', 'integer', undefined, 'mode', '✓'],
     ['String', 'string', undefined, 'mode', '✗'],

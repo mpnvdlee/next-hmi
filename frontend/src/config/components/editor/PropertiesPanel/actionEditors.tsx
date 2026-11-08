@@ -46,7 +46,7 @@ import {
   componentPropertyToSchemaField,
   type ComponentPropertySchema,
 } from '@shared/types/componentProperty';
-import { isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
+import { findPagePath, isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
 import { ResultFieldsContext } from '../PropertySourceEditor/resultFieldsContext';
 import { varBindingOf } from '../bindingPickerUtils';
 import { BOOLEAN_SLOT, schemaFieldPicker, slotFilter } from '../PropertySourceEditor/editors/utils';
@@ -524,6 +524,19 @@ function everyOverlayTargetOption(targets: OverlayTargets) {
 
 const OpenDialogEditor: EditorFor<'openDialog'> = ({ action, ctx }) => {
   const target = findOverlayTarget(ctx.overlayTargets, action.pageId);
+  // The target's own inputs over its enclosing groups', innermost winning, as
+  // the runtime reads them. The flattened list holds each root ahead of its
+  // descendants, so the first path found runs from the root.
+  const declared = useMemo(
+    () =>
+      Object.assign(
+        {},
+        ...findPagePath(ctx.overlayTargets.dialogs, action.pageId).map(
+          (node) => node.componentProperties,
+        ),
+      ) as Record<string, ComponentPropertySchema>,
+    [ctx.overlayTargets.dialogs, action.pageId],
+  );
   return (
     <>
       <ActionFieldRow ctx={ctx} fieldKey="pageId" schema={DIALOG_SCHEMA} label="Dialog">
@@ -535,7 +548,7 @@ const OpenDialogEditor: EditorFor<'openDialog'> = ({ action, ctx }) => {
       <OverlayLayoutFields action={action} ctx={ctx} defaultSize="medium" />
       {target?.inDialogs && (
         <ActionComponentProperties
-          declared={target.node.componentProperties}
+          declared={declared}
           values={action.componentProperties ?? {}}
           onChange={(next) => ctx.update({ componentProperties: next })}
         />

@@ -14,6 +14,34 @@ export interface VarMeta {
   fieldRanges?: Record<string, { min?: number; max?: number }>;
 }
 
+/**
+ * Datasource of a Value input's local slot (`useValueInputs`). It lives in this
+ * store so every reader, writer and subscription treats it as a variable, but
+ * it is this browser's own state: the backend never sees it, so nothing a
+ * connection or metadata frame replaces may drop it.
+ */
+export const LOCAL_INPUT_DATASOURCE = '$input';
+const LOCAL_INPUT_PREFIX = `${LOCAL_INPUT_DATASOURCE}:`;
+
+/** The store key of one Value input slot of one mounted frame. */
+export function localInputKey(frame: string, slot: string): string {
+  return `${LOCAL_INPUT_PREFIX}${frame}/${slot}`;
+}
+
+export function isLocalInputKey(key: string): boolean {
+  return key.startsWith(LOCAL_INPUT_PREFIX);
+}
+
+/** `next` with the local input slots of `prev` carried over. */
+function keepLocalInputs(
+  prev: Record<string, unknown>,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = { ...next };
+  for (const key of Object.keys(prev)) if (isLocalInputKey(key)) out[key] = prev[key];
+  return out;
+}
+
 interface VariableStore {
   /**
    * Live variable values: composite key ("datasource:path") → value (scalar,
@@ -77,7 +105,7 @@ export const useVariableStore = create<VariableStore>((set) => ({
       return { values: { ...state.values, ...updates } };
     }),
 
-  replaceValues: (values) => set({ values: { ...values } }),
+  replaceValues: (values) => set((state) => ({ values: keepLocalInputs(state.values, values) })),
 
   markSnapshotReceived: () => set({ snapshotReceived: true }),
 
@@ -93,10 +121,10 @@ export const useVariableStore = create<VariableStore>((set) => ({
     }),
 
   setWsConnected: (v) =>
-    set(
+    set((state) =>
       v
         ? {
-            values: {},
+            values: keepLocalInputs(state.values, {}),
             varMeta: {},
             metadataReceived: false,
             wsConnected: true,
@@ -120,6 +148,10 @@ export const useVariableStore = create<VariableStore>((set) => ({
       for (const key of Object.keys(meta)) {
         if (key in state.values) values[key] = state.values[key];
       }
-      return { varMeta: meta, values, metadataReceived: true };
+      return {
+        varMeta: meta,
+        values: keepLocalInputs(state.values, values),
+        metadataReceived: true,
+      };
     }),
 }));

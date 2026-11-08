@@ -215,7 +215,7 @@ export default function SchemaFieldRow({
   // formula, a literal or any other computed source leaves the control nothing
   // to write — so it binds like a struct: `$var`, or a scope source standing in
   // for one.
-  const writesBack = schema.write === true && isSourceCapable;
+  const writesBack = (schema.write === true || schema.bindsOnly === true) && isSourceCapable;
   const bindsOnly = isStruct || writesBack;
   // The row's own union — exported as `bindsVariable` so the panels that decide
   // whether to *offer* the picker ask exactly the question this row answers.

@@ -1,6 +1,5 @@
 import { Suspense, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { PageConfig, PageNode, PageGroupConfig, WidgetConfig } from '@shared/types/config';
-import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import { resolvePageContext } from '@shared/utils/pageTree';
 import { useConfigStore } from '@shared/store/configStore';
 import WidgetRenderer from './WidgetRenderer';
@@ -9,34 +8,72 @@ import { COLUMN_FLOW } from './layoutUtils';
 import { PageGroupStackContext, type PageGroupStackEntry } from './PageGroupStackContext';
 import { HostPageContext } from '../context/HostPageContext';
 import { InputScopeContext, type InputScopeValue } from '../context/InputScopeContext';
-import { withDeclaredDefaults } from '../utils/componentPropResolution';
+import { valueInputSeeds, withDeclaredDefaults } from '../utils/componentPropResolution';
+import { useValueInputs, type ValueInputSeed } from '../hooks/useValueInputs';
 import { ComponentSelfSuspenseContext } from '../context/ComponentSuspenseContext';
 import { prefetchWidgetModules, widgetModulesLoaded } from '../registry/widgetRegistry';
 import { ContentSpinner } from '@shared/components/Spinner';
 
-type Declarations = Record<string, ComponentPropertySchema> | undefined;
+/** A page or group of the view's own trail, as far as its inputs go. */
+type DeclaringNode = Pick<PageConfig | PageGroupConfig, 'id' | 'componentProperties'>;
+
+/** A Value input's slot in the view's frame: one per declaring node and name,
+ *  so a page's and its group's never share state. */
+const slotOf = (node: DeclaringNode, key: string) => `${node.id}/${key}`;
 
 /**
- * Layer declared defaults under the values already in scope, innermost scope
- * first. `withDeclaredDefaults` only fills a key that is still `undefined`, so
- * folding the chain innermost -> outermost is the whole precedence rule in one
- * line: values the action supplied beat every default, and the innermost
- * declaration of a name beats an outer one's.
+ * The scope a chain of declaring nodes publishes, innermost node first.
+ *
+ * A Value input reads its local slot; any other input the value passed in, or
+ * else its default. `withDeclaredDefaults` only fills a key that is still
+ * `undefined`, so folding the chain innermost -> outermost is the whole
+ * precedence rule: values the action supplied beat every default, and the
+ * innermost declaration of a name beats an outer one's. A node that takes no
+ * inputs (`takesInputs` false: a page of the Pages section) has only its Value
+ * inputs, the page variables, which start at their default.
  *
  * A chain that declares nothing publishes no frame of its own — the inherited
  * one passes through untouched, so an ordinary page keeps costing nothing.
  */
-function foldDeclaredDefaults(
+function foldInputScope(
   inherited: InputScopeValue | null,
-  chain: Declarations[],
+  chain: DeclaringNode[],
+  locals: Record<string, unknown>,
+  takesInputs: boolean,
 ): InputScopeValue | null {
-  if (!chain.some(Boolean)) return inherited;
-  return {
-    properties: chain.reduce(
-      (acc, declared) => withDeclaredDefaults(acc, declared),
-      inherited?.properties ?? {},
+  const props: Record<string, unknown> = { ...(inherited?.properties ?? {}) };
+  const declaredInside = new Set<string>();
+  let declares = false;
+  for (const node of chain) {
+    for (const [key, schema] of Object.entries(node.componentProperties ?? {})) {
+      const local = locals[slotOf(node, key)];
+      if (local !== undefined) {
+        if (!declaredInside.has(key)) props[key] = local;
+      } else if (takesInputs) {
+        if (props[key] === undefined && schema?.defaultValue !== undefined) {
+          props[key] = schema.defaultValue;
+        }
+      } else continue;
+      declaredInside.add(key);
+      declares = true;
+    }
+  }
+  return declares ? { properties: props } : inherited;
+}
+
+/** One seed per Value input the chain declares, from the value passed in or
+ *  else the declaration's default. */
+function trailSeeds(
+  chain: DeclaringNode[],
+  supplied: Record<string, unknown> | undefined,
+): ValueInputSeed[] {
+  return chain.flatMap((node) =>
+    valueInputSeeds(
+      node.componentProperties,
+      withDeclaredDefaults(supplied, node.componentProperties),
+      `${node.id}/`,
     ),
-  };
+  );
 }
 
 interface PageGroupPageViewProps {
@@ -45,8 +82,8 @@ interface PageGroupPageViewProps {
   onNavigate: (pageId: string, replace?: boolean) => void;
   emptyMessage?: string;
   /** Whether the nodes shown take input parameters — true only for a page
-   *  overlay of the Dialogs folder. Anywhere else a node's declarations are
-   *  ignored and its `$componentProp`s read nothing. */
+   *  overlay of the Dialogs folder. Anywhere else only a node's Value inputs
+   *  count, starting at their defaults. */
   takesInputs?: boolean;
 }
 
@@ -98,6 +135,19 @@ export default function PageGroupPageView({
   // groups, whose parameters have nothing to do with what the overlay shows.
   const chromeOffset = stack.length - pageGroups.length;
 
+  // Value inputs of this view's own trail, read when their node appears and
+  // dropped when it leaves: a group's survive moving between its pages. Only a
+  // Dialogs-folder trail was passed anything; a Pages one starts at defaults.
+  const trail = useMemo<DeclaringNode[]>(
+    () => (page ? [page, ...[...pageGroups].reverse()] : []),
+    [page, pageGroups],
+  );
+  const seeds = useMemo(
+    () => trailSeeds(trail, takesInputs ? inheritedScope?.properties : undefined),
+    [trail, takesInputs, inheritedScope],
+  );
+  const [locals, seeder] = useValueInputs(seeds);
+
   // Scope for each shell's own header/footer band, aligned with `stack`. Chrome
   // sits outside the page, so the active page's declarations are not in its
   // chain — only its own group's, then its ancestors'.
@@ -105,27 +155,20 @@ export default function PageGroupPageView({
     () =>
       stack.map((_, level) => {
         const index = level - chromeOffset;
-        if (index < 0 || !takesInputs) return inheritedScope;
-        return foldDeclaredDefaults(
+        if (index < 0) return inheritedScope;
+        return foldInputScope(
           inheritedScope,
-          pageGroups
-            .slice(0, index + 1)
-            .reverse()
-            .map((group) => group.componentProperties),
+          pageGroups.slice(0, index + 1).reverse(),
+          locals,
+          takesInputs,
         );
       }),
-    [stack, chromeOffset, pageGroups, inheritedScope, takesInputs],
+    [stack, chromeOffset, pageGroups, inheritedScope, takesInputs, locals],
   );
 
   const pageScope = useMemo(
-    () =>
-      takesInputs
-        ? foldDeclaredDefaults(inheritedScope, [
-            page?.componentProperties,
-            ...[...pageGroups].reverse().map((group) => group.componentProperties),
-          ])
-        : inheritedScope,
-    [page, pageGroups, inheritedScope, takesInputs],
+    () => foldInputScope(inheritedScope, trail, locals, takesInputs),
+    [trail, inheritedScope, takesInputs, locals],
   );
 
   if (!page) {
@@ -134,6 +177,7 @@ export default function PageGroupPageView({
 
   return (
     <PageGroupStackContext.Provider value={stack}>
+      {seeder}
       <ActiveBranch stack={stack} chromeScopes={chromeScopes} page={page} pageScope={pageScope} />
     </PageGroupStackContext.Provider>
   );

@@ -147,7 +147,23 @@ A reusable **Component** declares **input properties** the parent fills in. Insi
 
 Both reads are typed. The `$componentProp` and `$widgetProp` pickers judge each input or exported value against the field it would fill, exactly as the variable picker judges a tag — one that does not fit is marked ✗ and cannot be confirmed — and the value an instance puts into an input is checked against the input's type like any widget property. The warnings pill flags a stored read or value that does not fit.
 
-An action inside the component can write through an input, too. Declare the input with **write** access — a **Float** input `value` with write ticked, say — and set the action's **Variable** row (Write Data Variable, Toggle Boolean Variable, Edit Value) to the input's source pill: the action writes whatever variable the instance passed in. One parameter-row component with an **Edit Value** button then edits a different setpoint per instance. The picker lists only inputs declared writable with a type the action writes, and the warnings pill flags one that is not. In the file:
+### Value or Binding
+
+Every input — of a component, a dialog, a page or a page group — has a **Kind**, chosen on its row:
+
+| | **Value** | **Binding** |
+|---|---|---|
+| Whoever places or opens it passes | anything: text, a translation, a formula, a variable | a variable only, or a Binding it received itself |
+| Read | once, when the instance appears or the dialog opens | live |
+| A Write, Toggle, Edit Value or input field inside changes | its own copy, in this screen or instance only | the variable, on the controller |
+| Goes back to whoever passed it | never | through the variable |
+| Lasts | until the dialog closes, the page is left or the instance goes; opening again reads again | as long as the variable |
+
+A **Value** is the screen's own state: a search filter on a recipe page, a jog speed in a motor dialog, a session flag inside a component. A second panel showing the same screen has its own copy and does not move along. A **Binding** is a tag: what it shows is what the controller has, and writing it writes the controller. A **Struct** input is always a Binding, and **Actions**, **Widget slot**, **Icon**, **Image** and **Video** inputs have no kind — they pass through as given. Only a Binding takes **Write access** or loses its **Default value**: a Value is always writable, and a Binding gets its value from the variable.
+
+Where an input is a Binding, the instance's or Open Dialog's row offers only the variable picker, and the warnings pill flags a fixed value, a formula or a Value input passed to it. A formula given to a Value is read once, and the warnings pill says so: to keep it live, pass the variable as a Binding and do the computing inside, with `$componentProp` in an `$if`, `$compare` or string expression. A page of the **Pages** section is opened by nothing, so it has only Values — its **Page Variables**, each starting at its default whenever the page opens.
+
+An action inside the component can write through an input, too. Declare the input as a **Binding** with **write** access — a **Float** input `value`, say — and set the action's **Variable** row (Write Data Variable, Toggle Boolean Variable, Edit Value) to the input's source pill: the action writes whatever variable the instance passed in. One parameter-row component with an **Edit Value** button then edits a different setpoint per instance. The picker lists only Values and inputs declared writable, with a type the action writes, and the warnings pill flags one that is not. Point the same action at a Value input and it changes the instance's own copy instead. In the file:
 
 ```json
 { "type": "editValue", "target": { "$componentProp": "value" } }
@@ -163,8 +179,7 @@ An input of type **Select (enum)** gives whoever places the component a fixed li
 
 Pages and page groups declare their **input parameters** in the same panel (see [Pages](pages.md)), so the option kinds apply there too.
 
-> [!IMPORTANT]
-> **`$componentProp` has to be the whole value of a property.** Use it directly — a Label's **Text** set to `$componentProp: title` — and it stays live. Bury it inside another source (as one arm of an `$if`, a wildcard of a string expression) or put it on a **Layout** field, and it fills in once and then stops updating. The warnings pill flags this. Actions are the exception: an action reads its fields when it fires, so inside an action list — an Edit Value **Title** of `Set {1}` with `{1}` the input, a Show Toast message — the input can sit anywhere and is always current. Elsewhere, do the thinking on the *instance* instead: the instance may bind `$var`, compare, format — then pass the finished value in through a plain `$componentProp`.
+A Binding input stays live wherever it sits: as a property's whole value (a Label's **Text** set to `$componentProp: title`), inside another source — the condition of an `$if`, a `$compare` operand, a wildcard of a string expression — or on a **Layout** field. A slash-path reaches into a struct input from there too, so a component given one device folder can colour a button with `$if` on `device/Func/stJogForward/bValue` and follow the tag as it changes. Inside an action list the input is read when the action fires.
 
 ### Passing widgets into a component (slots)
 

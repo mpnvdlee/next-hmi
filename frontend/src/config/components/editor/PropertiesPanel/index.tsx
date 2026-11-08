@@ -44,7 +44,7 @@ import type {
   LockedFeedback,
 } from '@shared/types/config';
 import { LOCKED_FEEDBACK_MODES } from '@shared/types/config';
-import type { ComponentPropertySchema } from '@shared/types/componentProperty';
+import { inputMode, type ComponentPropertySchema } from '@shared/types/componentProperty';
 import PanelHeader from '../../ui/PanelHeader';
 import PropRow from '../../ui/PropRow';
 import PathInputField from '../../ui/PathInputField';
@@ -477,6 +477,14 @@ function PropertiesPanelBody() {
 
 /** Merge declarations from innermost scope outwards — the first chain entry to
  *  declare a name owns it, matching what the runtime resolves. */
+function valueInputsOf(
+  declared: Record<string, ComponentPropertySchema> | undefined,
+): Record<string, ComponentPropertySchema> | undefined {
+  return declared
+    ? Object.fromEntries(Object.entries(declared).filter(([, p]) => inputMode(p) === 'value'))
+    : undefined;
+}
+
 function mergeDeclarations(
   chain: (Record<string, ComponentPropertySchema> | undefined)[],
 ): Record<string, ComponentPropertySchema> {
@@ -495,8 +503,8 @@ function mergeDeclarations(
  * declarations over its ancestor page-groups' — page shadows group, inner group
  * shadows outer. A widget in page-group chrome renders around pages rather than
  * inside one, so it gets its group chain alone. Only the Dialogs folder's pages
- * take input parameters, so anywhere else the scope is empty whatever the
- * nodes declare.
+ * take input parameters; anywhere else the scope holds the nodes' Value inputs
+ * alone — the page variables.
  *
  * A scope that declares nothing publishes nothing: consumers key on the context
  * being present, not on its contents, so an empty frame would offer
@@ -515,11 +523,13 @@ function PageComponentPropertyScope({
   children: ReactNode;
 }) {
   const value = useMemo(() => {
-    if (!takesInputs) return null;
-    const declared = mergeDeclarations([
+    const chain = [
       page?.componentProperties,
       ...[...(groupTrail ?? [])].reverse().map((group) => group.componentProperties),
-    ]);
+    ];
+    // Outside the Dialogs folder nothing passes values in; a node there has
+    // only its Value inputs, its page variables.
+    const declared = mergeDeclarations(takesInputs ? chain : chain.map(valueInputsOf));
     return Object.keys(declared).length > 0 ? { properties: declared } : null;
   }, [page, groupTrail, takesInputs]);
   return (
@@ -703,15 +713,14 @@ function PagePanel({
           inputs={inDialogs ? page.componentProperties : undefined}
           onPatch={(patch) => updatePage(page.id, patch)}
         />
-        {inDialogs && (
-          <ComponentPropertiesEditor
-            ownerName={resolvePageTitle(page.title)}
-            title="Input Parameters"
-            itemNoun="input parameter"
-            properties={page.componentProperties ?? {}}
-            onChange={(next) => updatePage(page.id, { componentProperties: next })}
-          />
-        )}
+        <ComponentPropertiesEditor
+          ownerName={resolvePageTitle(page.title)}
+          title={inDialogs ? 'Input Parameters' : 'Page Variables'}
+          itemNoun={inDialogs ? 'input parameter' : 'page variable'}
+          valueOnly={!inDialogs}
+          properties={page.componentProperties ?? {}}
+          onChange={(next) => updatePage(page.id, { componentProperties: next })}
+        />
       </FieldPathContext.Provider>
     </PanelScopeContext.Provider>
   );
@@ -1000,15 +1009,14 @@ function PageGroupPanel({
           inputs={inDialogs ? pageGroup.componentProperties : undefined}
           onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
         />
-        {inDialogs && (
-          <ComponentPropertiesEditor
-            ownerName={resolvePageTitle(pageGroup.title)}
-            title="Input Parameters"
-            itemNoun="input parameter"
-            properties={pageGroup.componentProperties ?? {}}
-            onChange={(next) => updatePageGroup(pageGroup.id, { componentProperties: next })}
-          />
-        )}
+        <ComponentPropertiesEditor
+          ownerName={resolvePageTitle(pageGroup.title)}
+          title={inDialogs ? 'Input Parameters' : 'Page Variables'}
+          itemNoun={inDialogs ? 'input parameter' : 'page variable'}
+          valueOnly={!inDialogs}
+          properties={pageGroup.componentProperties ?? {}}
+          onChange={(next) => updatePageGroup(pageGroup.id, { componentProperties: next })}
+        />
       </FieldPathContext.Provider>
     </PanelScopeContext.Provider>
   );

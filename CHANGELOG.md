@@ -14,7 +14,8 @@ heading.
 Opens the HMI to the systems around it and shuts out the ones that should not
 reach it: API v1 for a MES or badge reader, tokens under Settings › Tokens, bit
 bindings and a `Byte` type for status words, and an editor that keeps up with
-an AI assistant's changes. Projects stay on file format 11. Read **Changed**
+an AI assistant's changes. Projects move to file format 12, where every input
+is a Value or a Binding. Read **Changed**
 before you update: a reverse proxy must pass the browser's `Host` with its
 port, and an `$http` URL that takes its server from a placeholder needs that
 server listed.
@@ -83,6 +84,22 @@ server listed.
   the live connection is down.
 
 ### Changed
+
+- **Every input is a Value or a Binding (breaking).** An input of a component
+  or a dialog has a **Kind**; a page's is always a Value, and the warnings
+  pill flags a Binding declared on one. A Value takes anything, is read once
+  when the dialog opens or the instance appears, and is then that screen's or
+  instance's own: a Write, Toggle or input field changes it there and nothing
+  goes back. A Binding takes a variable only, stays live and writes to the
+  controller. A Binding given a fixed value or a formula is flagged in the
+  warnings pill. Opening a project moves it to file format 12 and works out
+  each input's kind: a Binding where every opener or instance passes a
+  variable, a Value otherwise. A formula that was passed in and kept computing
+  inside a dialog is now read once; the warnings pill flags each case. To keep
+  it live, pass the variable as a Binding and compute inside, as the NEXT BREW
+  example's Metric Row now does. **Start** asks to upgrade a project the first
+  time 1.2.0 opens it, zipping it into `.backups/` first; a 1.1.x build then
+  shows **Requires update** and names 1.2.0 as the version it needs.
 
 - **A `Byte` tag no longer fits a field that takes an Integer.** An OPC-UA
   `Byte` — a Siemens `BYTE` or `USINT` — used to arrive as an Integer. It is
@@ -173,6 +190,10 @@ server listed.
 
 ### Fixed
 
+- **Open Dialog fills a group's inputs.** The action listed only the inputs
+  the dialog page declares, and validation warned about any other,
+  so an input its page group declares could not be set. Both now include the
+  inputs of every group the page sits in.
 - **An AI assistant on another machine can reach MCP.** `/mcp` answered
   every client that did not address the HMI as `localhost` or `127.0.0.1`
   with `421 Invalid Host header`, so an assistant on a laptop on the plant
@@ -217,6 +238,13 @@ server listed.
   on a group shows its first page in the temporary tab, but a double-click
   left it temporary, while on a page it pins the tab. It now pins that first
   page too.
+- **A component or dialog input stays live inside a formula.** An input read
+  inside an `$if`, `$compare`, `$not`, `$switch` or string expression, or on a
+  Layout field, showed its first value and then stopped following the tag. It
+  now updates like an input used as a whole value, so a dialog given one
+  device folder can work out its own colours and texts with
+  `$componentProp: device/Run`. The warning "`$componentProp` is only
+  substituted as a property's whole value" is gone with it.
 
 ### Security
 

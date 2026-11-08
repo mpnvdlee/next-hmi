@@ -38,18 +38,53 @@ describe('ComponentPropertiesEditor', () => {
     });
   });
 
-  it('marks a property as needing write access', async () => {
+  it('marks a Binding as needing write access', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
-    render(<ComponentPropertiesEditor properties={properties} onChange={onChange} />);
+    const binding = { motorSpeed: { ...properties.motorSpeed, mode: 'binding' as const } };
+    render(<ComponentPropertiesEditor properties={binding} onChange={onChange} />);
 
     await user.click(screen.getByText('Motor speed'));
     const row = screen.getByText('Write access').closest('.cfg-field-group') as HTMLElement;
     await user.click(within(row).getByRole('button', { name: 'Yes' }));
 
     expect(onChange).toHaveBeenCalledWith({
-      motorSpeed: { type: 'float', label: 'Motor speed', write: true },
+      motorSpeed: { type: 'float', label: 'Motor speed', mode: 'binding', write: true },
     });
+  });
+
+  it('makes an input a Binding, which takes no default and offers write access', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const withDefault = { motorSpeed: { ...properties.motorSpeed, defaultValue: 10 } };
+    const { rerender } = render(
+      <ComponentPropertiesEditor properties={withDefault} onChange={onChange} />,
+    );
+
+    await user.click(screen.getByText('Motor speed'));
+    expect(screen.queryByText('Write access')).not.toBeInTheDocument();
+    const row = screen.getByText('Kind').closest('.cfg-field-group') as HTMLElement;
+    await user.click(within(row).getByRole('combobox'));
+    await user.click(screen.getByRole('option', { name: 'Binding' }));
+
+    const next = onChange.mock.calls[onChange.mock.calls.length - 1]?.[0];
+    expect(next).toEqual({
+      motorSpeed: { type: 'float', label: 'Motor speed', mode: 'binding', defaultValue: undefined },
+    });
+    rerender(<ComponentPropertiesEditor properties={next} onChange={onChange} />);
+    expect(screen.getByText('Write access')).toBeInTheDocument();
+    expect(screen.queryByText('Default value')).not.toBeInTheDocument();
+  });
+
+  it('offers only Value on a page of the Pages section', async () => {
+    const user = userEvent.setup();
+    render(<ComponentPropertiesEditor properties={properties} valueOnly onChange={vi.fn()} />);
+
+    await user.click(screen.getByText('Motor speed'));
+
+    expect(screen.getByText('Value')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Binding' })).not.toBeInTheDocument();
   });
 
   it('offers no write-access toggle for a struct property, which declares it per field', async () => {

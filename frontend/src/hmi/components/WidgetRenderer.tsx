@@ -152,11 +152,11 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   const ghost = useRepeatScope()?.ghost === true;
   const entry = widgetRegistry[node.type];
 
-  const isVisible = usePropBoolean(node.properties, 'visible', true);
-  const isInteractable = usePropBoolean(node.properties, 'interactable', true);
-
   // Resolve translation references in properties ({ "$loc": "key" }).
   const resolvedProperties = useResolvedProperties(node.properties);
+
+  const isVisible = usePropBoolean(resolvedProperties, 'visible', true);
+  const isInteractable = usePropBoolean(resolvedProperties, 'interactable', true);
 
   // Status is read from the *resolved* properties: a widget inside a component
   // definition binds through `$componentProp`, which only becomes the real

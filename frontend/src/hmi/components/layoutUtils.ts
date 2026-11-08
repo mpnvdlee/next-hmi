@@ -13,6 +13,7 @@ import { extractVarKeys } from '../utils/extractVarKeys';
 import { resolveComponentPropValue, withDeclaredDefaults } from '../utils/componentPropResolution';
 import { componentDefinition } from '@shared/store/componentStore';
 import { useEvalContext } from '../hooks/useEvalContext';
+import { useInputScope } from '../context/InputScopeContext';
 import { useLiveScalars } from '../hooks/useLiveScalars';
 import { getViewportSnapshot } from '../hooks/useViewport';
 import { useBindingValue, useVariableMeta } from '../hooks/useVariable';
@@ -376,8 +377,15 @@ export function layoutHasPropertySource(layout?: LayoutConfig): boolean {
  * through untouched. Call only when `layoutHasPropertySource(layout)` is true so
  * static-layout nodes don't subscribe to variable updates.
  */
-export function useResolvedLayout(layout?: LayoutConfig): LayoutConfig | undefined {
+export function useResolvedLayout(raw?: LayoutConfig): LayoutConfig | undefined {
   const evalCtx = useEvalContext();
+  const inputScope = useInputScope();
+  // Same up-front `$componentProp` swap as widget properties, so a forwarded
+  // `$var` in a layout field is subscribed below.
+  const layout = useMemo(
+    () => resolveComponentPropValue(raw, inputScope?.properties) as LayoutConfig | undefined,
+    [raw, inputScope],
+  );
   // `evalCtx` is stable across both variable and viewport ticks by design, so
   // neither reaches the memo on its own. `$var` folds in through the signature
   // of the layout's own keys; `$viewport` — what a responsive `direction` or
@@ -869,9 +877,12 @@ export function collectComponentPriorityKeys(components: WidgetConfig[]): string
     seenComponents: ReadonlySet<string>,
   ): void {
     for (const comp of nodes) {
-      const properties = resolveScopedProperties(comp.properties, scope);
+      const properties = resolveComponentPropValue(comp.properties, scope) as
+        Record<string, unknown> | undefined;
       for (const key of extractVarKeys(properties)) keySet.add(key);
-      for (const key of extractVarKeys(comp.layout)) keySet.add(key);
+      for (const key of extractVarKeys(resolveComponentPropValue(comp.layout, scope))) {
+        keySet.add(key);
+      }
       if (comp.children?.length) {
         walk(comp.children, scope, seenComponents);
       }
@@ -893,15 +904,3 @@ export function collectComponentPriorityKeys(components: WidgetConfig[]): string
 }
 
 const COMPONENT_TYPE_PREFIX = '$component:';
-
-function resolveScopedProperties(
-  properties: Record<string, unknown> | undefined,
-  scope: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  if (!properties || !scope) return properties;
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(properties)) {
-    out[key] = resolveComponentPropValue(value, scope);
-  }
-  return out;
-}

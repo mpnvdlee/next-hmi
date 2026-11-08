@@ -132,8 +132,8 @@ Outside any project, the runtime keeps its own state:
 
 ### Format versions
 
-This build writes format **11** (`PROJECT_FORMAT_VERSION`) and stamps
-`minAppVersion` `1.1.0` (`PROJECT_FORMAT_MIN_APP`) beside it. A project stamped
+This build writes format **12** (`PROJECT_FORMAT_VERSION`) and stamps
+`minAppVersion` `1.2.0` (`PROJECT_FORMAT_MIN_APP`) beside it. A project stamped
 lower is carried up through every step of `_STEPS` in
 `core/project_migrations.py`, in order; each one rewrites only the shape below
 and skips what it has already converted:
@@ -145,6 +145,7 @@ and skips what it has already converted:
 | 8 → 9 | `write-target-source` | `core/migration_write_targets.py` | Every `writeDataVariable` / `toggleDataVariable` swaps its `datasource` / `path` pair for one `target`, `{ "$var": { "path": "<datasource>:<path>" } }`; a pair with an empty half becomes no `target` |
 | 9 → 10 | `release-1-1-fields` | `core/project_migrations.py` | Nothing — the stamp marks the fields 1.1.0 added to files a 1.0.x build parses strictly: `values` in `alarms.json` and `values` / `value_refs` in `alarm_state.json`, the `numpad` and `toasts` sections of a theme. That build would read either alarm file as invalid, fall back to an empty one and save it over the original, and would fail to load the theme; the stamp makes it refuse the project instead |
 | 10 → 11 | `retire-user-badge-and-pressable-container` | `core/migration_user_badge.py`, then `core/migration_button_container.py` | Every `UserBadge` becomes a row `Container` that keeps its id, name, layout and visibility, holding a `user` Icon and username / groups Labels (a Button Container when the badge had press actions), a guest-only sign-in Button for `onSignIn` and a sign-out Button for `onSignOut`. Then every `Container` with `actions.onPress` or `onRelease.onRelease` actions becomes a `ButtonContainer`; one whose lists are empty only loses those keys |
+| 11 → 12 | `input-modes` | `core/migration_input_modes.py` | Every declaration in a `componentProperties` map — of a component, a page document or a page-group node — whose type has a mode and that carries no `mode` gets one: `"binding"` when it declares `write`, or when every opener or instance that passes it passes a `$var`, a `$repeatItem` or a `$componentProp` forwarding an input that is itself a Binding (resolved over the whole chain, a dialog opened from inside a component included) and at least one does, else `"value"`. A dialog's openers are the `openDialog` actions naming the node, a group around it or a page inside it; a node of the Pages section has none, so its inputs become Values. Structs and the modeless types are left as they are. Each Value some opener fed a source that reads a variable gets a migration note: it is now read once |
 
 How a migration is staged, backed up and swapped in is in
 [backend.md](backend.md#project-format-migration).
@@ -340,11 +341,12 @@ key says. The AGPL notice beside it is edition-bound the same way, and no
 setting hides it (see `COMMERCIAL.md`).
 
 A page may carry `componentProperties`, the same `Record<string,
-ComponentPropertySchema>` interface a component declares. It is read only on a
-page of the Dialogs folder: the `openDialog` action supplies the values, each
-one it leaves out falls back to its declaration's `defaultValue`, and widgets
-inside read them with `$componentProp`. A page reached by navigation takes no
-inputs at all ([value-types.md](value-types.md#pages-and-page-groups-declare-the-same-inputs)).
+ComponentPropertySchema>` interface a component declares. On a page of the
+Dialogs folder the `openDialog` action supplies the values, each one it leaves
+out falls back to its declaration's `defaultValue`, and widgets inside read them
+with `$componentProp`. A page reached by navigation is passed nothing: only its
+Value inputs count, as page variables starting at their default
+([value-types.md](value-types.md#pages-and-page-groups-declare-the-same-inputs)).
 The field lives in the page document like the rest of the page metadata, and is
 optional.
 
@@ -386,8 +388,9 @@ the modal's header bar — title and close button — while the node is open as 
 overlay. Absent means shown. Like the keys above it belongs to the node the
 action named, so a group's flag decides, not its active page's.
 
-`componentProperties` is likewise only read here — declared on a page in its
-page document, on a group in its index node, exactly as above.
+`componentProperties` is likewise filled only here — declared on a page in its
+page document, on a group in its index node, exactly as above; outside this root
+only its Value inputs are read, from their defaults.
 
 ### Storage behavior
 
@@ -668,9 +671,9 @@ Only `name` is required (`ComponentDefinition` in `backend/models/component.py`,
 is a `builtin` (`name`) or `custom` (`path`) icon value, and optional positive
 `width` / `height` fix the component editor's canvas size.
 
-Each entry of `componentProperties` carries `type` and `label`, plus optional `description` (one line shown under the field in the properties panel), `defaultValue`, `structSchema`, `write`, `options`, `display`, `optionType`, `placeholder`, `min`, `max`, `step` — and nothing else (`extra="forbid"`). `defaultValue` is real at runtime, not editor-only: `ComponentRenderer` fills it in for every property the instance leaves `undefined`, so the value the properties panel prints as the field's `· default` hint is the value `$componentProp` resolves to. An explicit `null` is a set value and does *not* fall back.
+Each entry of `componentProperties` carries `type` and `label`, plus optional `description` (one line shown under the field in the properties panel), `defaultValue`, `structSchema`, `write`, `mode` (`"value"` or `"binding"`, see [value-types.md](value-types.md#value-or-binding); absent is a Value, or a Binding when `write` is set), `options`, `display`, `optionType`, `placeholder`, `min`, `max`, `step` — and nothing else (`extra="forbid"`). `defaultValue` is real at runtime, not editor-only: `ComponentRenderer` fills it in for every property the instance leaves `undefined`, so the value the properties panel prints as the field's `· default` hint is the value `$componentProp` resolves to. An explicit `null` is a set value and does *not* fall back.
 
-The component direct-binding rule is recursive: no `$var` source may appear in any child value or `componentProperties[*].defaultValue`, including inside nested objects, lists, or other property sources. Component writes, diagnostics, persisted reads, and project imports share that rule and report the exact escaped JSON source path ending in `/$var`; diagnostic field paths are unescaped for editor lookup. Startup scans all component files before metadata migration, leaving binding-invalid files byte-for-byte unchanged. A present component file that is malformed JSON, invalid UTF-8, or unreadable fails closed at its root source path (`components/<file>.json#/`) rather than being treated as absent or valid. The component root, nested directories, and JSON files must be real in-project filesystem entries, never symlinks or Windows reparse points. All metadata migration and CRUD/folder mutations remain anchored to retained no-follow POSIX directory descriptors or Windows no-delete-share directory handles; deletion is likewise descriptor/handle based. A root, group, or file swapped after validation therefore cannot redirect the operation to external data. Imports, pushes, and pulls reject and clean up such projects before registration. Nested reusable components are also rejected. A `$componentProp` is only substituted when it is a property's entire value (`"text": {"$componentProp": "label"}`); nested inside another source, or anywhere outside `properties` such as `layout`, it resolves once and then stops updating, so validation reports it as a `componentprop-nested` warning. Compute the derived value on the instance — instances may use `$var` freely — and pass the finished result through a plain `$componentProp`.
+The component direct-binding rule is recursive: no `$var` source may appear in any child value or `componentProperties[*].defaultValue`, including inside nested objects, lists, or other property sources. Component writes, diagnostics, persisted reads, and project imports share that rule and report the exact escaped JSON source path ending in `/$var`; diagnostic field paths are unescaped for editor lookup. Startup scans all component files before metadata migration, leaving binding-invalid files byte-for-byte unchanged. A present component file that is malformed JSON, invalid UTF-8, or unreadable fails closed at its root source path (`components/<file>.json#/`) rather than being treated as absent or valid. The component root, nested directories, and JSON files must be real in-project filesystem entries, never symlinks or Windows reparse points. All metadata migration and CRUD/folder mutations remain anchored to retained no-follow POSIX directory descriptors or Windows no-delete-share directory handles; deletion is likewise descriptor/handle based. A root, group, or file swapped after validation therefore cannot redirect the operation to external data. Imports, pushes, and pulls reject and clean up such projects before registration. Nested reusable components are also rejected. A `$componentProp` may sit anywhere in a property or `layout` value, nested in other sources included; the runtime substitutes it at any depth and it stays live.
 
 ### Component slots
 

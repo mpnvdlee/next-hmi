@@ -14,13 +14,6 @@ DIRECT_BINDING_MESSAGE = (
     "reusable components cannot bind directly to variables; use $componentProp"
 )
 
-NESTED_PROP_MESSAGE = (
-    "$componentProp is only substituted as a property's whole value; nested here "
-    "it renders once and then stops updating. Compute the value on the instance "
-    "and pass the result through a plain $componentProp"
-)
-
-
 def _pointer_segment(value: object) -> str:
     return str(value).replace("~", "~0").replace("/", "~1")
 
@@ -68,74 +61,9 @@ def _var_source_paths(value: Any, path: str) -> Iterator[str]:
     return _source_paths(value, path, "$var")
 
 
-def _component_prop_paths(value: Any, path: str) -> Iterator[str]:
-    return _source_paths(value, path, "$componentProp")
-
-
 def component_var_source_paths(component: Any) -> list[str]:
     """Return exact JSON pointers for prohibited ``$var`` sources."""
     return _walk_component_values(component, _var_source_paths, _var_source_paths)
-
-
-def _is_bare_component_prop(value: Any) -> bool:
-    """The one shape the runtime substitutes: a property whose entire value is
-    ``{"$componentProp": "<key>"}``. ``useResolvedProperties`` rewrites exactly
-    this before the widget renders, which is also what makes the forwarded
-    ``$var`` visible to ``extractVarKeys`` and therefore live."""
-    return isinstance(value, dict) and set(value) == {"$componentProp"}
-
-
-# (widget type, property key) -> whether that property holds an action list.
-ActionsPropertyCheck = Callable[[str, str], bool]
-
-
-def _nested_prop_paths_in_node(
-    node: Any, path: str, is_actions: ActionsPropertyCheck | None = None
-) -> Iterator[str]:
-    if isinstance(node, list):
-        for index, child in enumerate(node):
-            yield from _nested_prop_paths_in_node(child, f"{path}/{index}", is_actions)
-        return
-    if not isinstance(node, dict):
-        return
-
-    widget_type = node.get("type")
-    for key, value in node.items():
-        key_path = f"{path}/{_pointer_segment(key)}"
-        if key == "children":
-            yield from _nested_prop_paths_in_node(value, key_path, is_actions)
-        elif key == "properties" and isinstance(value, dict):
-            for prop_key, prop_value in value.items():
-                prop_path = f"{key_path}/{_pointer_segment(prop_key)}"
-                if _is_bare_component_prop(prop_value):
-                    continue
-                # An action reads its fields when it fires, against the firing
-                # site's input scope (executeWidgetActions), so a nested
-                # $componentProp there is as current as the press.
-                if is_actions is not None and isinstance(widget_type, str) and is_actions(
-                    widget_type, prop_key
-                ):
-                    continue
-                yield from _component_prop_paths(prop_value, prop_path)
-        else:
-            # Everything else — `layout` above all — never goes through the
-            # substitution pass, so a $componentProp there resolves to nothing.
-            yield from _component_prop_paths(value, key_path)
-
-
-def component_nested_prop_paths(
-    component: Any, is_actions: ActionsPropertyCheck | None = None
-) -> list[str]:
-    """Return JSON pointers for ``$componentProp`` uses the runtime cannot keep
-    live. ``is_actions`` names the properties that hold action lists, which
-    are exempt."""
-    # The tree takes the node-aware walk: only a `properties` entry's whole
-    # value is substituted, so where in a node the source sits decides the rule.
-    return _walk_component_values(
-        component,
-        lambda node, path: _nested_prop_paths_in_node(node, path, is_actions),
-        _component_prop_paths,
-    )
 
 
 @dataclass(frozen=True)

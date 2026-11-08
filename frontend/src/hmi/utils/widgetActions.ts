@@ -20,7 +20,8 @@ import { hasPropertySourceKey } from '@shared/types/propertyValueGuards';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
 import { ackAllAlarms } from '@hmi/components/alarmUtils';
 import { useConfigStore } from '@shared/store/configStore';
-import { findPageNodeById } from '@shared/utils/pageTree';
+import { findPageNodeById, findPagePath } from '@shared/utils/pageTree';
+import { inputMode } from '@shared/types/componentProperty';
 
 interface ActionContext {
   scope?: string;
@@ -142,12 +143,29 @@ export function executeWidgetActions(
       // Only a Dialogs-folder node declares input parameters, so only
       // `openDialog` carries values to resolve against the opener's scope.
       const supplied = action.type === 'openDialog' ? action.componentProperties : undefined;
+      // The node's own declarations over its enclosing groups', innermost winning.
+      const declared = supplied
+        ? Object.assign(
+            {},
+            ...findPagePath(useConfigStore.getState().dialogs, action.pageId).map(
+              (node) => node.componentProperties,
+            ),
+          )
+        : undefined;
+      // A Binding goes in as the variable it names; a Value is read here, once,
+      // in the opener's context — the dialog keeps what it got.
       const resolvedPageProps = supplied
         ? Object.fromEntries(
-            Object.entries(supplied).map(([k, v]) => [
-              k,
-              resolveComponentPropValue(v, inputScopeProps),
-            ]),
+            Object.entries(supplied).map(([k, v]) => {
+              const resolved = resolveComponentPropValue(v, inputScopeProps);
+              const decl = declared?.[k];
+              return [
+                k,
+                decl && inputMode(decl) === 'value'
+                  ? (evaluatePropertyValue(resolved, evalCtx) ?? null)
+                  : resolved,
+              ];
+            }),
           )
         : {};
       useHmiStore.getState().openPageOverlay({
