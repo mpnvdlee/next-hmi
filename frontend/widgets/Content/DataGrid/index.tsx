@@ -131,6 +131,11 @@ function text(v: unknown): string {
   return typeof v === 'object' ? JSON.stringify(v) : String(v);
 }
 
+/** A cell as the operator reads it: a number with a decimal comma. */
+function shown(v: unknown): string {
+  return typeof v === 'number' ? formatNumber(v) : text(v);
+}
+
 /** Ordinal, like Optix OrderBy: numbers by value, everything else by code unit. */
 function compare(a: unknown, b: unknown): number {
   if (typeof a === 'number' && typeof b === 'number') return a - b;
@@ -159,11 +164,12 @@ export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
   const { items: columnList } = useItemListProp(properties, 'columns');
   const valueMember = usePropString(properties, 'valueMember', '');
   const filterMember = usePropString(properties, 'filterMember', '');
-  const filterValue = usePropString(properties, 'filterValue', '');
+  // As stored, not usePropString's decimal comma: both are matched against cell text.
+  const filterValue = text(usePropVar(properties, 'filterValue'));
   const hideEmpty = usePropString(properties, 'hideEmpty', '');
   const sortMember = usePropString(properties, 'sortMember', '');
   const sortDesc = usePropString(properties, 'sortDirection', 'ascending') === 'descending';
-  const propSelected = usePropString(properties, 'selectedValue', '');
+  const propSelected = text(usePropVar(properties, 'selectedValue'));
 
   const [sort, setSort] = useState({ member: sortMember, desc: sortDesc });
   useEffect(() => setSort({ member: sortMember, desc: sortDesc }), [sortMember, sortDesc]);
@@ -370,7 +376,7 @@ export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
                     className="hmi-datagrid__cell"
                     data-align={c.align}
                   >
-                    {c.blank ? '' : text(cell(row.item, c.member))}
+                    {c.blank ? '' : shown(cell(row.item, c.member))}
                   </div>
                 ))}
               </div>

@@ -71,7 +71,9 @@ function readTriggerRect(trigger: HTMLButtonElement | null): PopupRect | null {
 export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
-  const propSelectedValue = usePropString(properties, 'selectedValue', '');
+  // As stored, not usePropString's decimal comma: it is matched against option values.
+  const rawSelected = usePropVar(properties, 'selectedValue');
+  const propSelectedValue = rawSelected == null ? '' : String(rawSelected);
   const [selected, setSelected] = useState<string>(propSelectedValue);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);

@@ -101,6 +101,7 @@ SDK_NAMES: tuple[str, ...] = (
     "levelDotClass",
     "formatAlarmTimeShort",
     "formatAlarmDateTime",
+    "formatNumber",
     "ackAlarm",
     "ackAllAlarms",
     "AlarmDetailDialog",

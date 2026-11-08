@@ -9,7 +9,7 @@ function NumpadHarness({
   onCancel = () => undefined,
   ...rest
 }: {
-  onApply?: (value: string) => void;
+  onApply?: (value: string, parsed: number) => void;
   onCancel?: () => void;
   min?: number;
   max?: number;
@@ -95,7 +95,7 @@ describe('VirtualNumpad', () => {
     await press(user, '4', '2', 'Enter');
 
     expect(screen.getByLabelText('Harness value')).toHaveTextContent('42');
-    expect(onApply).toHaveBeenCalledWith('42');
+    expect(onApply).toHaveBeenCalledWith('42', 42);
   });
 
   it('cancels on ×, without applying what was typed', async () => {
@@ -174,7 +174,7 @@ describe('VirtualNumpad', () => {
     await press(user, 'Back');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     await press(user, 'Enter');
-    expect(onApply).toHaveBeenCalledWith('10');
+    expect(onApply).toHaveBeenCalledWith('10', 10);
   });
 
   it('cannot apply an empty entry', () => {
@@ -191,7 +191,7 @@ describe('VirtualNumpad', () => {
     expect(field()).toHaveAttribute('placeholder', '35');
     expect(screen.queryByText(/Current setpoint/)).not.toBeInTheDocument();
     await press(user, '7', 'Enter');
-    expect(onApply).toHaveBeenCalledWith('7');
+    expect(onApply).toHaveBeenCalledWith('7', 7);
   });
 
   it('opens with the focus in a field that keeps the tablet keyboard shut', async () => {
@@ -208,10 +208,11 @@ describe('VirtualNumpad', () => {
     const user = userEvent.setup();
     render(<NumpadHarness decimals={2} allowNegative={false} />);
 
-    await user.keyboard('-1a2..345');
-    expect(field()).toHaveValue('12.34');
+    // A keyboard's point key types the decimal comma too.
+    await user.keyboard('-1a2.,345');
+    expect(field()).toHaveValue('12,34');
     await user.keyboard('{Backspace}');
-    expect(field()).toHaveValue('12.3');
+    expect(field()).toHaveValue('12,3');
   });
 
   it('toggles the sign on a typed minus, when negatives are allowed', async () => {
@@ -229,7 +230,7 @@ describe('VirtualNumpad', () => {
     await user.keyboard('{Enter}11{Enter}');
     expect(onApply).not.toHaveBeenCalled();
     await user.keyboard('{Backspace}{Enter}');
-    expect(onApply).toHaveBeenCalledWith('1');
+    expect(onApply).toHaveBeenCalledWith('1', 1);
   });
 
   it('accepts a paste only when the pasted text follows the rules', async () => {
@@ -241,19 +242,33 @@ describe('VirtualNumpad', () => {
     await user.paste('abc');
     expect(field()).toHaveValue('');
     await user.paste('-1.5');
-    expect(field()).toHaveValue('-1.5');
+    expect(field()).toHaveValue('-1,5');
   });
 
-  it('disables the point when decimals is 0', () => {
+  it('disables the comma when decimals is 0', () => {
     render(<NumpadHarness decimals={0} />);
-    expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: ',' })).toBeDisabled();
   });
 
-  it('stops taking digits after the point at the decimals limit', async () => {
+  it('stops taking digits after the comma at the decimals limit', async () => {
     const user = userEvent.setup();
-    render(<NumpadHarness decimals={1} />);
-    await press(user, '2', '.', '5', '5');
-    expect(screen.getByLabelText('Harness value')).toHaveTextContent('2.5');
+    const onApply = vi.fn();
+    render(<NumpadHarness decimals={1} onApply={onApply} />);
+    await press(user, '2', ',', '5', '5', 'Enter');
+    expect(field()).toHaveValue('2,5');
+    expect(onApply).toHaveBeenCalledWith('2.5', 2.5);
+  });
+
+  it('shows a comma but hands the caller the entry with a point', async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    render(<NumpadHarness onApply={onApply} />);
+    await user.paste('12,5');
+    expect(field()).toHaveValue('12,5');
+    expect(screen.getByLabelText('Harness value')).toHaveTextContent('12.5');
+    await press(user, 'Enter');
+    // A custom widget that parses the applied text itself keeps the fraction.
+    expect(parseFloat(onApply.mock.calls[0][0])).toBe(12.5);
   });
 
   it('disables minus when min is zero or more', () => {
@@ -272,7 +287,7 @@ describe('VirtualNumpad', () => {
     render(<NumpadHarness onApply={onApply} />);
 
     await press(user, '-', '9', '9', '9', 'Enter');
-    expect(onApply).toHaveBeenCalledWith('-999');
+    expect(onApply).toHaveBeenCalledWith('-999', -999);
   });
 
   it('puts every key in one grid, with the hooks the 4-column theme layout places', () => {

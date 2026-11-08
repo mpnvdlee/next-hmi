@@ -56,14 +56,11 @@ export const schema = {
   onChange: { type: 'actions' as const, label: 'On Change', event: 'onChange' },
 };
 
-/** The value as the field shows it at rest: digit groups and a typographic minus. */
+/** The value as the field shows it at rest, with a typographic minus. */
 function formatShown(value: number, places: number | undefined): string {
-  const text = places !== undefined ? Math.abs(value).toFixed(places) : String(Math.abs(value));
-  const [int, frac] = text.split('.');
-  const body = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (frac ? `.${frac}` : '');
-  // Compare the shown digits, so a -0.04 at one decimal reads 0.0, not −0.0.
-  if (Number(text) === 0) return body;
-  return value < 0 ? `\u2212${body}` : body;
+  const body = formatNumber(Math.abs(value), places);
+  // Read the shown digits, so a -0.04 at one decimal reads 0,0, not −0,0.
+  return value < 0 && /[1-9]/.test(body) ? `\u2212${body}` : body;
 }
 
 export const displayName = 'Number Input';
@@ -107,9 +104,13 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
 
   // The schema's 0–6 on `decimals` is an editor hint; a binding can deliver anything.
   const places = decimals != null ? Math.min(6, Math.max(0, Math.trunc(decimals))) : undefined;
-  const shownValue =
-    value == null ? '---' : places !== undefined ? value.toFixed(places) : String(value);
-  const displayValue = isEditing ? localValue : value == null ? '---' : formatShown(value, places);
+  const shownValue = value == null ? '---' : formatNumber(value, places);
+  // The numpad's entry keeps the point; the field shows it with a comma like every number.
+  const displayValue = isEditing
+    ? localValue.replace('.', ',')
+    : value == null
+      ? '---'
+      : formatShown(value, places);
   const isOutOfRange =
     !isEditing &&
     value != null &&
@@ -129,8 +130,7 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
 
   // A value outside min/max is refused, never clamped: the numpad keeps it on
   // screen and says why, so a typed 5000 cannot reach the machine as 200.
-  const commit = (raw: string) => {
-    const parsed = parseFloat(raw);
+  const commit = (_raw: string, parsed: number) => {
     if (!Number.isFinite(parsed) || parsed < min || parsed > max) return;
     setIsEditing(false);
     writeVariable(parsed);

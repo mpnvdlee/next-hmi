@@ -121,7 +121,7 @@ describe('StringInput', () => {
         await user.click(screen.getByRole('button', { name: key }));
 
       expect(useComponentPropStore.getState().props.entry.value).toBe('042');
-      expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: ',' })).toBeDisabled();
       expect(screen.getByRole('button', { name: '-' })).toBeDisabled();
 
       await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
@@ -293,6 +293,12 @@ describe('StringInput', () => {
 
       act(() => useVariableStore.getState().setScalar(KEY, ''));
       expect(field).toHaveValue('');
+    });
+
+    it('edits a bound number with its decimal point, as it is written back', () => {
+      act(() => useVariableStore.getState().setScalar(KEY, 3.5));
+      renderInput({ variable });
+      expect(screen.getByRole('textbox')).toHaveValue('3.5');
     });
 
     it('starts at Value when nothing is bound', () => {

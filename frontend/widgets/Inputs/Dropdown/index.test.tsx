@@ -72,6 +72,12 @@ describe('Dropdown', () => {
     expect(screen.getByRole('option', { name: 'Fahrenheit' })).toBeInTheDocument();
   });
 
+  it('matches a fractional selection against the option values, not its decimal-comma text', () => {
+    renderDropdown({ options: [{ label: 'Half', value: 1.5 }], selectedValue: 1.5 });
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Half');
+  });
+
   it('publishes the configured initial selection', () => {
     renderDropdown({ options: OPTIONS, selectedValue: 'C' });
 

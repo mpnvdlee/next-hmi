@@ -12,6 +12,7 @@ import type { PageGroupStackEntry } from '../components/PageGroupStackContext';
 import { imageBodyToUrl } from '@shared/utils/imageAsset';
 import { readBit } from '@shared/utils/valueTypes';
 import { withBase } from '@shared/utils/runtimeBase';
+import { toDecimalComma } from '@shared/utils/formatNumber';
 import { resolveComponentPropKey } from './componentPropResolution';
 import { toNumber } from './coercion';
 import { evaluateFormula, parseFormula } from './formula';
@@ -77,6 +78,9 @@ export interface EvaluationContext {
    * references nested inside other sources and inside action payloads.
    */
   inputScopeProps?: Record<string, unknown>;
+  /** The text is for a machine — a PLC write, a URL, an `$http` request — not
+   *  the operator: a number filled into a `{n}` placeholder keeps its point. */
+  machineText?: boolean;
   /**
    * Backend response payload made available to onSuccess / onFailed / onSettled
    * handlers via `{ $result: 'field' }`. Set by `actionDispatcher` when
@@ -688,18 +692,21 @@ const STRING_EXPR_FNS: Record<string, (v: string) => string> = {
 /**
  * Fill `{1}` / `{Trim(ToLower(2))}` placeholders in `template` with the text
  * `valueOf(key)` gives for each wildcard key, transforms applied. A placeholder
- * it gives `undefined` for, or that does not parse, is left intact.
+ * it gives `undefined` for, or that does not parse, is left intact. A number
+ * ends up with a decimal comma, as the HMI writes every number
+ * (`formatNumber`); the transforms still work on its JS text first.
  */
 export function fillPlaceholders(
   template: string,
-  valueOf: (key: string) => string | undefined,
+  valueOf: (key: string) => string | number | undefined,
 ): string {
   return template.replace(PLACEHOLDER_RE, (match, body: string) => {
     const parsed = parsePlaceholder(body);
     if (!parsed) return match;
 
-    let resolved = valueOf(parsed.key);
-    if (resolved === undefined) return match;
+    const raw = valueOf(parsed.key);
+    if (raw === undefined) return match;
+    let resolved = String(raw);
 
     // Apply transform functions inside-out (the fns array is outer-first)
     for (let i = parsed.fns.length - 1; i >= 0; i--) {
@@ -707,14 +714,15 @@ export function fillPlaceholders(
       if (fn) resolved = fn(resolved);
     }
 
-    return resolved;
+    return typeof raw === 'number' ? toDecimalComma(resolved) : resolved;
   });
 }
 
 /**
  * Fill `{n}` placeholders in `template` from `wildcards`, evaluating each
  * wildcard as a full property value. Shared by `$stringExpr` and by `$http`,
- * whose url / body / header values use the same syntax.
+ * whose url / body / header values use the same syntax. A `machineText`
+ * context keeps a number's decimal point: a machine reads it, not the operator.
  */
 function renderTemplate(
   template: string,
@@ -728,7 +736,8 @@ function renderTemplate(
     const wcValue = wildcards[key];
     if (wcValue === undefined) return undefined;
     const evaluated = evaluatePropertyValueInternal(wcValue, context, depth);
-    return evaluated != null ? String(evaluated) : '';
+    if (evaluated == null) return '';
+    return typeof evaluated === 'number' && !context.machineText ? evaluated : String(evaluated);
   });
 }
 
@@ -759,10 +768,12 @@ function evaluateHttp(payload: unknown, context: EvaluationContext, depth: numbe
   if (!isRecord(payload) || !context.resolveHttpRequest) return null;
 
   const wildcards = wildcardsOf(payload);
+  // A server reads the request, so every number in it keeps its point.
+  const machineCtx: EvaluationContext = { ...context, machineText: true };
   const url = renderTemplate(
     typeof payload.url === 'string' ? payload.url : '',
     wildcards,
-    context,
+    machineCtx,
     depth,
   ).trim();
   if (!url) return null;
@@ -778,7 +789,7 @@ function evaluateHttp(payload: unknown, context: EvaluationContext, depth: numbe
       headers[name] = renderTemplate(
         typeof h.value === 'string' ? h.value : '',
         wildcards,
-        context,
+        machineCtx,
         depth,
       );
     }
@@ -787,7 +798,7 @@ function evaluateHttp(payload: unknown, context: EvaluationContext, depth: numbe
   const bodyTemplate = typeof payload.body === 'string' ? payload.body : '';
   const body =
     method === 'POST' && bodyTemplate
-      ? renderTemplate(bodyTemplate, wildcards, context, depth)
+      ? renderTemplate(bodyTemplate, wildcards, machineCtx, depth)
       : undefined;
 
   const refreshSeconds = toNumber(payload.refreshSeconds) ?? 0;

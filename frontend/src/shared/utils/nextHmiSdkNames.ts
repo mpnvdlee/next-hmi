@@ -83,6 +83,7 @@ export const SDK_NAMES = [
   'levelDotClass',
   'formatAlarmTimeShort',
   'formatAlarmDateTime',
+  'formatNumber',
   'ackAlarm',
   'ackAllAlarms',
   'AlarmDetailDialog',

@@ -45,17 +45,9 @@ export const description = 'Increment / decrement a numeric variable with + / �
 export const category = 'Inputs';
 export const icon = { type: 'builtin', name: 'arrows-left-right' } as const;
 
-// The schema's min/max on `decimals` are editor hints, and the property is
-// expression-capable: a binding can deliver anything, and toFixed throws a
-// RangeError outside 0–100.
-function formatValue(value: number, decimals: number): string {
-  if (!Number.isFinite(value)) return '---';
-  return value.toFixed(Math.min(6, Math.max(0, Math.trunc(decimals))));
-}
-
 function formatInteger(value: bigint, decimals: number): string {
   const places = Math.min(6, Math.max(0, Math.trunc(decimals)));
-  return places > 0 ? `${value}.${'0'.repeat(places)}` : value.toString();
+  return places > 0 ? `${value},${'0'.repeat(places)}` : value.toString();
 }
 
 /** A value's exact integer, when it is written as integer digits. */
@@ -126,10 +118,11 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
     exactValue !== null
       ? formatInteger(exactValue, decimals)
       : fValue != null
-        ? formatValue(fValue, decimals)
+        ? formatNumber(fValue, decimals)
         : '---';
   // The entry starts empty, so until the first key the current value stays on show.
-  const displayValue = isEditing && localValue ? localValue : shownValue;
+  // The numpad's entry keeps the point; shown, it reads with a comma.
+  const displayValue = isEditing && localValue ? localValue.replace('.', ',') : shownValue;
   // Only a `$var` binding can be written back: with any other source the value
   // still renders but the writer no-ops, so the controls must read as disabled
   // rather than swallow the press.
@@ -170,9 +163,9 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
 
   // A typed value outside min/max is refused, never clamped: the numpad keeps
   // it on screen and says why. Only the ± steps stop at the bound.
-  function commit(raw: string) {
+  function commit(raw: string, parsed: number) {
     const exact = integerOf(raw);
-    const typed = exact !== null && !Number.isSafeInteger(Number(exact)) ? exact : parseFloat(raw);
+    const typed = exact !== null && !Number.isSafeInteger(Number(exact)) ? exact : parsed;
     if (typeof typed === 'number' && !Number.isFinite(typed)) return;
     if (typed < min || typed > max) return;
     setIsEditing(false);

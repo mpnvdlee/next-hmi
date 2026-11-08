@@ -88,6 +88,7 @@ import { bindingKey } from '@shared/types/config';
 import { parseVarKey } from '@shared/types/datasource';
 import { VirtualKeyboard } from '@shared/components/VirtualKeyboard';
 import { VirtualNumpad } from '@shared/components/VirtualNumpad';
+import { formatNumber } from '@shared/utils/formatNumber';
 import CloseButton from '@shared/components/CloseButton';
 import { renderWidget, renderSlotWidgets } from '@hmi/components/renderRegion';
 import { useComponentSlot, useIsComponentInstance } from '@hmi/context/ComponentSlotContext';
@@ -152,6 +153,7 @@ export const nextHmiSdk = {
   levelDotClass,
   formatAlarmTimeShort,
   formatAlarmDateTime,
+  formatNumber,
   ackAlarm,
   ackAllAlarms,
   AlarmDetailDialog,

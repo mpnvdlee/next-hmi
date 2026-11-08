@@ -40,7 +40,9 @@ export default function ButtonRow({ id, properties, layout }: HmiWidgetProps) {
   const label = usePropString(properties, 'label', '');
   const varKey = bindingKey(getPropBinding(properties, 'variable'));
   const boundValue = usePropVar(properties, 'variable');
-  const propSelectedValue = usePropString(properties, 'selectedValue', '');
+  // As stored, not usePropString's decimal comma: it is matched against option values.
+  const rawSelected = usePropVar(properties, 'selectedValue');
+  const propSelectedValue = rawSelected == null ? '' : String(rawSelected);
   const disabled = getPropBoolean(properties, 'disabled', false, evalCtx);
   const writeVariable = useWriteVariable(properties, 'variable');
 

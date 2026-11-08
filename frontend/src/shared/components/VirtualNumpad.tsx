@@ -3,16 +3,21 @@ import { createPortal } from 'react-dom';
 import CloseButton from './CloseButton';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { VirtualKeyIcon } from './VirtualKeyIcon';
+import { formatNumber } from '@shared/utils/formatNumber';
 
 // One flat grid so the theme's column count (hmi.css) can move Back/Clear/Enter beside the digits.
-const NUMPAD_KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.', '-'] as const;
+// The decimal key reads as a comma, as the HMI writes every number (formatNumber); the entry
+// itself keeps the point, so callers get machine text they can parseFloat.
+const NUMPAD_KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', ',', '-'] as const;
 
 interface VirtualNumpadProps {
   isOpen: boolean;
+  /** The entry, with a decimal point; the panel shows it with a comma. */
   value: string;
   onChange: (value: string) => void;
-  /** Called on Enter with a value that parses and sits inside min/max. */
-  onApply: (value: string) => void;
+  /** Called on Enter with a value that parses and sits inside min/max: the
+   *  entry (a decimal point) and the number it reads as. */
+  onApply: (value: string, parsed: number) => void;
   /** Called on ×, Escape, or a press outside the panel: the entry is dropped. */
   onCancel: () => void;
   /** Ref to the anchor element — clicks on it will not cancel. */
@@ -29,7 +34,7 @@ interface VirtualNumpadProps {
   rangeMessage?: string;
   /** The value being replaced: the entry field's placeholder while the entry is empty. */
   currentValue?: string;
-  /** Digits allowed after the point; 0 disables the point. Omit for no limit. */
+  /** Digits allowed after the comma; 0 disables the comma. Omit for no limit. */
   decimals?: number;
   /** Whether the minus key works. Default: true unless min is 0 or more. */
   allowNegative?: boolean;
@@ -51,8 +56,8 @@ function fitsRules(text: string, decimals: number | undefined, allowNegative: bo
 /** The bounds by name, `Min: 80 · Max: 200`; the names go through the dictionaries. */
 function rangeText(min: number | undefined, max: number | undefined, t: (key: string) => string) {
   const parts: string[] = [];
-  if (min !== undefined) parts.push(`${t('Min')}: ${min}`);
-  if (max !== undefined) parts.push(`${t('Max')}: ${max}`);
+  if (min !== undefined) parts.push(`${t('Min')}: ${formatNumber(min)}`);
+  if (max !== undefined) parts.push(`${t('Max')}: ${formatNumber(max)}`);
   return parts.join(' \u00b7 ');
 }
 
@@ -120,7 +125,8 @@ export function VirtualNumpad({
       onChange(value ? (value.startsWith('-') ? value.slice(1) : `-${value}`) : '-');
       return;
     }
-    const next = key === '.' && (!value || value === '-') ? `${value}0.` : `${value}${key}`;
+    const char = key === ',' ? '.' : key;
+    const next = char === '.' && (!value || value === '-') ? `${value}0.` : `${value}${char}`;
     if (fitsRules(next, decimals, allowNegative)) onChange(next);
   };
 
@@ -132,14 +138,14 @@ export function VirtualNumpad({
     !isNaN(parsed) && ((min !== undefined && parsed < min) || (max !== undefined && parsed > max));
   const canApply = !isNaN(parsed) && !isOutOfRange;
   const apply = () => {
-    if (canApply) onApply(value);
+    if (canApply) onApply(value, parsed);
   };
   const hasRange = showRange && (min !== undefined || max !== undefined);
   // The String Input's masking: CSS where supported, so no browser offers to
   // save the PIN, and a real password field where it is not.
   const maskedByCss = password && CSS.supports('-webkit-text-security', 'disc');
   const keyDisabled = (key: string) =>
-    (key === '-' && !allowNegative) || (key === '.' && decimals === 0);
+    (key === '-' && !allowNegative) || (key === ',' && decimals === 0);
 
   const panel = (
     <div
@@ -166,15 +172,19 @@ export function VirtualNumpad({
           type={password && !maskedByCss ? 'password' : 'text'}
           inputMode="none"
           autoFocus={autoFocus}
-          value={value}
+          value={value.replace('.', ',')}
           placeholder={currentValue || '0'}
           onChange={(e) => {
-            if (fitsRules(e.target.value, decimals, allowNegative)) onChange(e.target.value);
+            // The field shows a comma; a paste may carry either mark.
+            const text = e.target.value.replace(',', '.');
+            if (fitsRules(text, decimals, allowNegative)) onChange(text);
           }}
           onKeyDown={(e) => {
             if (e.ctrlKey || e.metaKey || e.altKey) return;
-            if (e.key === 'Enter') apply();
-            else if ((NUMPAD_KEYS as readonly string[]).includes(e.key)) applyKey(e.key);
+            // A keyboard's point key types the comma too.
+            const key = e.key === '.' ? ',' : e.key;
+            if (key === 'Enter') apply();
+            else if ((NUMPAD_KEYS as readonly string[]).includes(key)) applyKey(key);
             else return;
             e.preventDefault();
           }}

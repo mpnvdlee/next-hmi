@@ -9,6 +9,7 @@ import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySource
 import { useVariableStore } from '@hmi/store/variableStore';
 import { evaluatePropertyValue, resolveBoundIndex } from '@hmi/utils/propertySourceEval';
 import { toNumber } from '@hmi/utils/coercion';
+import { formatNumber } from '@shared/utils/formatNumber';
 import { substituteBoundIndexes } from '@hmi/utils/boundIndexResolution';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { resolveComponentPropValue } from '@hmi/utils/componentPropResolution';
@@ -250,9 +251,10 @@ export function executeWidgetActions(
         scope,
         ...address,
         // A sourced value (a dialog's `$componentProp`, a `$var`) is resolved
-        // here; the backend only coerces literals and rejects an object.
+        // here; the backend only coerces literals and rejects an object. A PLC
+        // reads the text, so a number in a `{n}` placeholder keeps its point.
         value: hasPropertySourceKey(action.value)
-          ? evaluatePropertyValue(action.value, evalCtx)
+          ? evaluatePropertyValue(action.value, { ...evalCtx, machineText: true })
           : action.value,
       });
       continue;
@@ -291,12 +293,7 @@ export function executeWidgetActions(
             ? undefined
             : Boolean(evaluatePropertyValue(negative, evalCtx)),
         position: action.position ?? 'center',
-        currentValue:
-          typeof previous === 'number'
-            ? decimals !== undefined
-              ? previous.toFixed(decimals)
-              : String(previous)
-            : undefined,
+        currentValue: typeof previous === 'number' ? formatNumber(previous, decimals) : undefined,
         apply: (value) => {
           const requestId = beginAsyncAction(action, scope, inputScopeProps, { value, previous });
           sendWsMessage({

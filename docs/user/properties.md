@@ -129,8 +129,10 @@ A placeholder may wrap its value in transform functions, applied inside-out:
 |---|---|
 | `ToLower` · `ToUpper` · `Capitalize` · `Trim` | Case and whitespace. |
 | `Round` · `Round1` · `Round2` · `Round3` · `Round4` | Nearest integer, or one to four decimals. |
-| `Thousands` | Digit grouping — `41280` → `41,280`. It keeps the decimals its input has: `{Thousands(Round1(1))}` → `41,280.0`. |
-| `Signed` | Always show the sign — `6` → `+6`, `-4` → `−4`, `0` stays `0`. Put it outermost so it keeps the decimals of an inner round: `{Signed(Round1(1))}` → `+6.0`. |
+| `Thousands` | Digit grouping with a point — `41280` → `41.280`. It keeps the decimals its input has: `{Thousands(Round1(1))}` → `41.280,0`. |
+| `Signed` | Always show the sign — `6` → `+6`, `-4` → `−4`, `0` stays `0`. Put it outermost so it keeps the decimals of an inner round: `{Signed(Round1(1))}` → `+6,0`. |
+
+A number goes into the text with a decimal comma and no thousands separator, as every widget shows one: `Tank {1} l` with 3.5 reads `Tank 3,5 l`. Text from a wildcard stays as it is. Text a machine reads is the exception, so a number keeps its decimal point there: an **API request**'s URL, headers and body, the value a **Write Data Variable** sends, and the URL or source of a Web Frame, Video or Image.
 
 A placeholder whose wildcard is missing is left in the text as-is, so a typo shows up on screen rather than silently blanking the label.
 
@@ -285,5 +287,5 @@ directly.
 - **A variable must match the field's type exactly.** A `Float` field takes no `Integer` tag and a `String` field no `Boolean` one; the binding picker will not confirm a tag that does not fit. A field that takes either lists both types.
 - **A field that writes back takes only a tag.** A value field that a control writes to — a Button Row's value, a Video's state variable — offers just the **Variable** source (or Repeat Item / an input property standing in for one): no fixed value, formula or condition, since the control would have nothing to write to.
 - **A widget reading a number** takes a number as-is, and text only when it is a clean decimal number (`"42"`, `"-1.5"`); anything else is *absent* and the field falls back. Nothing is rounded.
-- **A widget reading text** turns a number or a boolean into its plain text (`3.5`, `true`); decimals and units are the widget's own formatting.
+- **A widget reading text** shows a number with a decimal comma (`3.5` reads `3,5`) and a boolean as its plain text (`true`); fixed decimals and units are the widget's own formatting. A selection or a text a control writes back keeps the number as stored.
 - Impossible bindings (image → Float) are rejected by the editor at bind time — never at runtime.

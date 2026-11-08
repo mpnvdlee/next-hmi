@@ -46,7 +46,8 @@ interface ImageIndicator {
 
 export default function Image({ properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
-  const src = assetSrc(getPropString(properties, 'src', '', evalCtx));
+  // A browser fetches the source, so its numbers keep their point.
+  const src = assetSrc(getPropString(properties, 'src', '', { ...evalCtx, machineText: true }));
   const alt = getPropString(properties, 'alt', '', evalCtx);
   const fit = getPropString(properties, 'fit', 'contain', evalCtx) as ObjectFit;
   const rotation = getPropNumber(properties, 'rotation', 0, evalCtx);

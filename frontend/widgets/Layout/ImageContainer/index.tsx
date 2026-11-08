@@ -93,7 +93,8 @@ function markerLabel(entry: Placement | undefined, treeIndex: number): string {
 export default function ImageContainer({ properties, layout, childConfigs }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
 
-  const src = assetSrc(getPropString(properties, 'src', '', evalCtx));
+  // A browser fetches the source, so its numbers keep their point.
+  const src = assetSrc(getPropString(properties, 'src', '', { ...evalCtx, machineText: true }));
   const alt = getPropString(properties, 'alt', '', evalCtx);
   const fitRaw = getPropString(properties, 'fit', 'contain', evalCtx);
   const fit = VALID_FITS.includes(fitRaw) ? fitRaw : 'contain';

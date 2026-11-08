@@ -1191,6 +1191,16 @@ describe('propertySourceEval', () => {
       expect(seen[0].url).toBe('https://api/devices/42/status?mode=fast');
     });
 
+    it('keeps the decimal point a server reads', () => {
+      const seen: Seen[] = [];
+      const ctx = httpCtx({ ok: true }, seen);
+      evaluatePropertyValue(
+        { $http: { url: 'https://api/set?v={1}', wildcards: { '1': { $static: 2.5 } } } },
+        ctx,
+      );
+      expect(seen[0].url).toBe('https://api/set?v=2.5');
+    });
+
     it('templates header values and sends the body only for POST', () => {
       const seen: Seen[] = [];
       const ctx = httpCtx({ ok: true }, seen);
@@ -1301,8 +1311,8 @@ describe('propertySourceEval', () => {
     });
 
     it('keeps the decimals an inner rounding produced', () => {
-      expect(signed(6, '{Signed(Round1(1))} g')).toBe('+6.0 g');
-      expect(signed(-3.456, '{Signed(Round2(1))}')).toBe('\u22123.46');
+      expect(signed(6, '{Signed(Round1(1))} g')).toBe('+6,0 g');
+      expect(signed(-3.456, '{Signed(Round2(1))}')).toBe('\u22123,46');
     });
 
     it('passes non-numeric text through', () => {
@@ -1317,14 +1327,19 @@ describe('propertySourceEval', () => {
       );
 
     it('rounds to three and four decimals', () => {
-      expect(fill(1.23456, '{Round3(1)}')).toBe('1.235');
-      expect(fill(2, '{Round4(1)}')).toBe('2.0000');
+      expect(fill(1.23456, '{Round3(1)}')).toBe('1,235');
+      expect(fill(2, '{Round4(1)}')).toBe('2,0000');
     });
 
-    it('groups digits and keeps the decimals its input has', () => {
-      expect(fill(41280, '{Thousands(1)}')).toBe('41,280');
-      expect(fill(41280, '{Thousands(Round1(1))}')).toBe('41,280.0');
-      expect(fill(-1234567.891, '{Thousands(Round2(1))}')).toBe('-1,234,567.89');
+    it('writes a number with a decimal comma, and text as it is', () => {
+      expect(fill(1234.5, 'Tank {1} l')).toBe('Tank 1234,5 l');
+      expect(fill('v1.2', '{1}')).toBe('v1.2');
+    });
+
+    it('groups digits with a point beside the decimal comma, and keeps the decimals its input has', () => {
+      expect(fill(41280, '{Thousands(1)}')).toBe('41.280');
+      expect(fill(41280, '{Thousands(Round1(1))}')).toBe('41.280,0');
+      expect(fill(-1234567.891, '{Thousands(Round2(1))}')).toBe('-1.234.567,89');
       expect(fill('n/a', '{Thousands(1)}')).toBe('n/a');
     });
   });

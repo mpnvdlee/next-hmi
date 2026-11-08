@@ -81,6 +81,6 @@ describe('ProgressBar', () => {
     expect(low.container.querySelector('.hmi-progress-bar__value')?.textContent).toBe('12');
 
     const high = renderBar({ variable: 12.3456, decimals: 200, showValue: true });
-    expect(high.container.querySelector('.hmi-progress-bar__value')?.textContent).toBe('12.345600');
+    expect(high.container.querySelector('.hmi-progress-bar__value')?.textContent).toBe('12,345600');
   });
 });

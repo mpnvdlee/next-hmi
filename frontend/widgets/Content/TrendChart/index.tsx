@@ -356,7 +356,7 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
     (value: unknown, name: unknown) => {
       const idx = parseInt(String(name).replace('v', ''), 10);
       const label = activeSeries[idx]?.variable || String(name);
-      return [typeof value === 'number' ? value.toFixed(2) : String(value), label];
+      return [typeof value === 'number' ? formatNumber(value, 2) : String(value), label];
     },
     [activeSeries],
   );
@@ -459,6 +459,7 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
             // Wide enough for a 4-5 digit reading; 40px clipped the leading
             // digit off values like 1400 and rendered them as "400".
             width={56}
+            tickFormatter={(v: number) => formatNumber(v)}
             // Recharts defaults to [0, 'auto'], which flattens every process
             // value that lives far from zero — 1200 bph draws as a straight
             // line pinned to the top of the plot. Scale to the data instead.

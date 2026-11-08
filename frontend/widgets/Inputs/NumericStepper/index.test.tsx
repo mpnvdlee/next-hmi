@@ -225,7 +225,7 @@ describe('NumericStepper', () => {
     expect(frames()[0].value).toBe(7);
   });
 
-  it('disables the point for an Integer variable', async () => {
+  it('disables the comma for an Integer variable', async () => {
     useVariableStore.setState({
       values: { [VAR_KEY]: 3 },
       varMeta: {
@@ -236,7 +236,7 @@ describe('NumericStepper', () => {
     renderStepper({ variable: BINDING, decimals: 2 });
 
     await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
-    expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: ',' })).toBeDisabled();
   });
 
   it('marks the value invalid when it sits outside the widget range', () => {
@@ -288,7 +288,7 @@ describe('NumericStepper', () => {
 
     const high = renderStepper({ variable: { $static: 12.3456 }, decimals: 200 });
     expect(high.container.querySelector('.hmi-numeric-stepper__value')?.textContent).toBe(
-      '12.345600',
+      '12,345600',
     );
   });
 });

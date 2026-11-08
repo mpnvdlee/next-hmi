@@ -8,6 +8,7 @@ import {
 import type { CSSWithVars } from '@shared/types/style';
 import { getVarBinding, hasPropertySourceKey, isRecord } from '@shared/types/propertyValueGuards';
 import { DECIMAL_NUMBER_RE } from '@shared/utils/opcuaWriteCoercion';
+import { formatNumber } from '@shared/utils/formatNumber';
 import { evaluatePropertyValue, type EvaluationContext } from '../utils/propertySourceEval';
 import { extractVarKeys } from '../utils/extractVarKeys';
 import { resolveComponentPropValue, withDeclaredDefaults } from '../utils/componentPropResolution';
@@ -409,14 +410,16 @@ export function useResolvedLayout(raw?: LayoutConfig): LayoutConfig | undefined 
 // These replace verbose cast patterns in HMI components and are also exposed
 // via window.__nextHMI__ so custom components can use them too.
 
-/** A resolved value as text: a scalar through `String`, nothing for null or an object. */
+/** A resolved value as the operator reads it: a number through `formatNumber`
+ *  (a decimal comma), another scalar through `String`, nothing for null or an object. */
 function stringValue(value: unknown): string | undefined {
   if (value == null || typeof value === 'object') return undefined;
-  return String(value);
+  return typeof value === 'number' ? formatNumber(value) : String(value);
 }
 
 /**
- * Safely read a string property. Returns fallback (default '') when absent or wrong type.
+ * Safely read a string property, a number with its decimal comma (`3.5` → `3,5`).
+ * Returns fallback (default '') when absent or wrong type.
  *
  * Not a hook, so it cannot subscribe — inside a render, use `usePropString`.
  */
@@ -429,7 +432,11 @@ export function getPropString(
   const v = properties?.[key];
   if (v == null) return fallback;
   // If evaluation context provided, evaluate the value first
-  if (evalContext) return stringValue(evaluatePropertyValue(v, evalContext)) ?? fallback;
+  if (evalContext) {
+    const value = evaluatePropertyValue(v, evalContext);
+    if (evalContext.machineText && typeof value === 'number') return String(value);
+    return stringValue(value) ?? fallback;
+  }
   // Translation references are { $loc: 'key' } objects — treat as absent here;
   // components that render translated text should use the translation hook instead.
   return stringValue(v) ?? fallback;
@@ -572,7 +579,9 @@ export function usePropVar(properties: Record<string, unknown> | undefined, key:
  * source, or a `$var` binding, whose live value it subscribes to (as
  * `usePropVar` does) — as `getPropString` converts it: a number or boolean as
  * its text, an object as no value. Returns `fallback` (default '') when there
- * is no value; pass `null` to tell that apart from an empty string.
+ * is no value; pass `null` to tell that apart from an empty string. The text
+ * is for the operator: `3.5` reads `3,5`. A value matched against other
+ * values or written back reads `usePropVar` instead.
  * @example
  *   const label = usePropString(properties, 'label', '');
  *   const state = usePropString(properties, 'variable', null); // null → '---'

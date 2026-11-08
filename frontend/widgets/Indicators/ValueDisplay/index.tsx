@@ -23,14 +23,6 @@ export const description = 'Displays a numeric value with a label and unit.';
 export const category = 'Indicators';
 export const icon = { type: 'builtin', name: 'thermometer' } as const;
 
-// The schema's min/max on `decimals` are editor hints, and the property is
-// expression-capable: a binding can deliver anything, and toFixed throws a
-// RangeError outside 0–100.
-function formatValue(value: number, decimals: number): string {
-  if (!Number.isFinite(value)) return '---';
-  return value.toFixed(Math.min(6, Math.max(0, Math.trunc(decimals))));
-}
-
 export default function ValueDisplay({ properties, layout }: HmiWidgetProps) {
   const resolvedValue = usePropVar(properties, 'variable');
   const decimals = usePropNumber(properties, 'decimals', 1);
@@ -41,7 +33,7 @@ export default function ValueDisplay({ properties, layout }: HmiWidgetProps) {
     resolvedValue == null
       ? '---'
       : typeof resolvedValue === 'number'
-        ? formatValue(resolvedValue, decimals)
+        ? formatNumber(resolvedValue, decimals)
         : String(resolvedValue);
 
   return (

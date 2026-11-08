@@ -65,6 +65,6 @@ describe('RingGauge', () => {
     expect(low.container.querySelector('.hmi-ring-gauge__value')?.textContent).toBe('12%');
 
     const high = renderRing({ value: 12.3456, decimals: 200 });
-    expect(high.container.querySelector('.hmi-ring-gauge__value')?.textContent).toBe('12.346%');
+    expect(high.container.querySelector('.hmi-ring-gauge__value')?.textContent).toBe('12,346%');
   });
 });

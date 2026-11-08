@@ -302,7 +302,9 @@ export default function WebFrame({ properties, layout }: HmiWidgetProps) {
   const scope = useHmiScope();
   const evalCtx = useEvalContext();
 
-  const url = usePropString(properties, 'url', '');
+  // A browser loads the URL, so its numbers keep their point; usePropVar keeps a bound URL live.
+  usePropVar(properties, 'url');
+  const url = getPropString(properties, 'url', '', { ...evalCtx, machineText: true });
   const title = usePropString(properties, 'title', '');
 
   const showHeader = usePropBoolean(properties, 'showHeader', false);

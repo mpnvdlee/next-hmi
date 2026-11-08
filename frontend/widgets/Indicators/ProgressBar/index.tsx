@@ -58,14 +58,6 @@ export const description = 'A horizontal bar showing a percentage or progress va
 export const category = 'Indicators';
 export const icon = { type: 'builtin', name: 'chart-bar' } as const;
 
-// The schema's min/max on `decimals` are editor hints, and the property is
-// expression-capable: a binding can deliver anything, and toFixed throws a
-// RangeError outside 0–100.
-function formatValue(value: number, decimals: number): string {
-  if (!Number.isFinite(value)) return '---';
-  return value.toFixed(Math.min(6, Math.max(0, Math.trunc(decimals))));
-}
-
 export default function ProgressBar({ properties, layout }: HmiWidgetProps) {
   const rawValue = usePropVar(properties, 'variable');
   const numericValue = readNumberValue(rawValue);
@@ -92,7 +84,7 @@ export default function ProgressBar({ properties, layout }: HmiWidgetProps) {
     rawValue == null
       ? '---'
       : typeof rawValue === 'number'
-        ? formatValue(rawValue, decimals)
+        ? formatNumber(rawValue, decimals)
         : String(rawValue);
 
   const style: Record<string, string | number> = { ...selfLayoutStyle(layout) };

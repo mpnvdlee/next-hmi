@@ -164,6 +164,17 @@ server listed.
 
 ### Changed
 
+- **Numbers read with a decimal comma.** Every number the HMI shows — Value
+  Display, Gauge, Ring Gauge, Progress Bar, Trend, Trend Chart, Number Input,
+  Numeric Stepper, Data Grid cells, `{1}` in a Text Expression, a Localizable
+  Text or an alarm text, and any text bound straight to a number, such as a
+  Label's or a Stat Tile's — reads `1234,5`, and a Number Input no longer groups
+  digits. The numpad has a comma key instead of the point and still writes a
+  plain number, and a custom widget's numpad still hands it the entry with a
+  point; `Thousands` groups with a point. Saved projects, API requests,
+  the values sent to the PLC (a Write Data Variable's Text Expression too),
+  the URL or source of a Web Frame, Video or Image, a String Input's text and
+  the selection of a Dropdown, Button Row or Data Grid keep the decimal point.
 - **Every input is a Value or a Binding (breaking).** An input of a component
   or a dialog has a **Kind**; a page's is always a Value, and the warnings
   pill flags a Binding declared on one. A Value takes anything, is read once

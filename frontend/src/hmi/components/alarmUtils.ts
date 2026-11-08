@@ -42,7 +42,8 @@ export function formatAlarmValues(
   return fillPlaceholders(text, (key) => {
     const i = Number(key) - 1;
     const value = liveRefs ? evaluatePropertyValue(liveRefs[i], LIVE_CONTEXT) : stored?.[i];
-    return value == null ? '—' : String(value);
+    if (value == null) return '—';
+    return typeof value === 'number' ? value : String(value);
   });
 }
 

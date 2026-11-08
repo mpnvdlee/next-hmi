@@ -396,17 +396,19 @@ export default function Video({ properties, layout }: HmiWidgetProps) {
 
   const sourceMode = getPropString(properties, 'sourceMode', 'asset', evalCtx);
   const asset = getPropString(properties, 'asset', '', evalCtx);
-  const url = getPropString(properties, 'url', '', evalCtx);
+  // A browser fetches the URLs, so their numbers keep their point.
+  const urlCtx = { ...evalCtx, machineText: true };
+  const url = getPropString(properties, 'url', '', urlCtx);
   const codec = getPropString(properties, 'codec', 'auto', evalCtx) as Codec;
   const codecString = getPropString(properties, 'codecString', '', evalCtx);
 
   const fallbackMode = getPropString(properties, 'fallbackMode', 'asset', evalCtx);
   const fallbackAsset = getPropString(properties, 'fallbackAsset', '', evalCtx);
-  const fallbackUrl = getPropString(properties, 'fallbackUrl', '', evalCtx);
+  const fallbackUrl = getPropString(properties, 'fallbackUrl', '', urlCtx);
   const fallbackCodec = getPropString(properties, 'fallbackCodec', 'auto', evalCtx) as Codec;
   const fallbackCodecString = getPropString(properties, 'fallbackCodecString', '', evalCtx);
 
-  const poster = assetSrc(getPropString(properties, 'poster', '', evalCtx));
+  const poster = assetSrc(getPropString(properties, 'poster', '', urlCtx));
 
   const autoplay = getPropBoolean(properties, 'autoplay', false, evalCtx);
   const muted = getPropBoolean(properties, 'muted', true, evalCtx);

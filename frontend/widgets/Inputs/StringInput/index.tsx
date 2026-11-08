@@ -71,15 +71,20 @@ export const description =
 export const category = 'Inputs';
 export const icon = { type: 'builtin', name: 'text-t' } as const;
 
+function rawText(value: unknown): string {
+  return value == null || typeof value === 'object' ? '' : String(value);
+}
+
 export default function StringInput({ id, properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
   const isPreview = useIsPreview();
   const varKey = bindingKey(getPropBinding(properties, 'variable'));
-  const boundValue = usePropString(properties, 'variable', '');
+  // As stored, not usePropString's decimal comma: this text is edited and written back.
+  const boundValue = rawText(usePropVar(properties, 'variable'));
   const writeVariable = useWriteVariable(properties, 'variable');
   const writeOnKey = usePropString(properties, 'writeOn', 'commit') === 'change';
-  const initialValue = usePropString(properties, 'value', '');
+  const initialValue = rawText(usePropVar(properties, 'value'));
   const [localValue, setLocalValue] = useState<string>(initialValue);
   // What the operator is typing, until it is committed; null shows the stored
   // value, so a bound variable changing elsewhere shows up between edits.

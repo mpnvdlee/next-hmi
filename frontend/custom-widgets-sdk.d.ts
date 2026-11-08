@@ -176,6 +176,10 @@ interface EvaluationContext {
   /** Innermost input scope at the read site — drives `$componentProp` nested
    *  inside other sources and inside action payloads. */
   inputScopeProps?: Record<string, unknown>;
+  /** The text is for a machine — a URL, a value written to a PLC — not the
+   *  operator: a number read as text, or filled into a `{n}` placeholder,
+   *  keeps its decimal point. */
+  machineText?: boolean;
   /** Backend response exposed to onSuccess / onFailed / onSettled handlers via
    *  `$result`. Absent in every other context. */
   resultValue?: Record<string, unknown>;
@@ -741,6 +745,10 @@ declare function levelDotClass(level: AlarmLevel): string;
 declare function formatAlarmTimeShort(iso: string): string;
 /** ISO timestamp as a full local date and time; '—' when empty. */
 declare function formatAlarmDateTime(iso: string): string;
+/** A number as the operator reads it: a decimal comma, no thousands separator
+ *  (1234.5 → '1234,5'). `decimals` fixes the digits after the comma, clamped to
+ *  0–6; left out, the number keeps its own. '---' when not finite. */
+declare function formatNumber(value: number, decimals?: number): string;
 interface AckAlarmOptions {
   /**
    * How a refused acknowledgement is surfaced. `'toast'` (the default) shows one
@@ -1049,8 +1057,9 @@ declare function readNumberValue(value: unknown): number | undefined;
 declare function usePropVar(properties: Record<string, unknown> | undefined, key: string): unknown;
 
 /** A string property from any source — static, a property source, or a `$var`
- *  binding, read live — as `getPropString` converts it: a number or boolean as
- *  its text, an object as no value. Returns `fallback` (default `''`) when there
+ *  binding, read live — as `getPropString` converts it: a number as
+ *  `formatNumber` writes it (`3.5` → `'3,5'`), a boolean as its text, an object
+ *  as no value. A value matched or written back reads `usePropVar` instead. Returns `fallback` (default `''`) when there
  *  is no value; pass `null` to get `null` instead. */
 declare function usePropString(
   properties: Record<string, unknown> | undefined,
@@ -1177,10 +1186,12 @@ interface VirtualKeyboardProps {
 
 interface VirtualNumpadProps {
   isOpen: boolean;
+  /** The entry, with a decimal point; the panel shows it with a comma. */
   value: string;
   onChange: (value: string) => void;
-  /** Called on Enter with a value that parses and sits inside min/max. */
-  onApply: (value: string) => void;
+  /** Called on Enter with a value that parses and sits inside min/max: the
+   *  entry (a decimal point) and the number it reads as. */
+  onApply: (value: string, parsed: number) => void;
   /** Called on ×, Escape, or a press outside the panel: the entry is dropped. */
   onCancel: () => void;
   anchorRef?: { readonly current: Element | null };
@@ -1196,7 +1207,7 @@ interface VirtualNumpadProps {
   rangeMessage?: string;
   /** The value being replaced: the entry field's placeholder while the entry is empty. */
   currentValue?: string;
-  /** Digits allowed after the point; 0 disables the point. Omit for no limit. */
+  /** Digits allowed after the comma; 0 disables the comma. Omit for no limit. */
   decimals?: number;
   /** Whether the minus key works. Default: true unless min is 0 or more. */
   allowNegative?: boolean;
