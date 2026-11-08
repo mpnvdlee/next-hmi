@@ -22,6 +22,11 @@ server listed.
 
 ### Added
 
+- **A live Trend Chart keeps a fixed time base.** With **Data source: Live
+  buffer** the time axis always spans the last **Live window (s)** seconds up
+  to now, and a line whose value holds still runs on flat to now instead of
+  stopping at its last change. A change draws as a step, not as a ramp from
+  the change before it.
 - **Turn an Icon or an Image.** Both gain **Rotation (°)**, clockwise and
   bindable, so one asset shows in every orientation instead of a rotated copy
   per angle. An Icon turns its glyph inside the chip; an Image turns the
@@ -255,6 +260,9 @@ server listed.
   the dialog page declares, and validation warned about any other,
   so an input its page group declares could not be set. Both now include the
   inputs of every group the page sits in.
+- **Chart tooltips show on the HMI.** Hovering a Trend Chart showed no
+  tooltip at runtime; charts ignored the pointer everywhere, not only on the
+  editor canvas, where a click must select the widget.
 - **A Button reads what was just typed.** Pressing a Button while a String
   Input still held an unsaved edit ran the Button's actions before the edit
   was written, and a Button that closed the dialog lost the edit. The field

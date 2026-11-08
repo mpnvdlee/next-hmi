@@ -43,8 +43,10 @@
   opacity: 0.5;
 }
 
-/* Disable interactive chart elements in preview so clicks select the component */
-.hmi-preview-node .recharts-wrapper {
+/* Disable interactive chart elements on the editor canvas so clicks select the
+ * component. Every runtime widget sits in a .hmi-preview-node too, so without the
+ * config-mode root this would also kill chart tooltips at runtime. */
+.hmi-root--config-mode .hmi-preview-node .recharts-wrapper {
   pointer-events: none;
 }
 

@@ -20,8 +20,12 @@ import TrendChart, { schema } from './index';
       {children}
     </div>
   ),
-  Line: ({ dataKey }: { dataKey: string }) => <div data-testid={`line-${dataKey}`} />,
-  XAxis: () => null,
+  Line: ({ dataKey, type }: { dataKey: string; type: string }) => (
+    <div data-testid={`line-${dataKey}`} data-type={type} />
+  ),
+  XAxis: ({ domain }: { domain: unknown[] }) => (
+    <div data-testid="x-axis" data-domain={JSON.stringify(domain)} />
+  ),
   YAxis: () => null,
   Tooltip: () => null,
   CartesianGrid: () => null,
@@ -112,7 +116,7 @@ describe('TrendChart', () => {
 
     await waitFor(() => expect(screen.getByTestId('line-chart')).toBeInTheDocument());
     expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '2');
-    expect(screen.getByTestId('line-v0')).toBeInTheDocument();
+    expect(screen.getByTestId('line-v0')).toHaveAttribute('data-type', 'linear');
   });
 
   it('requests the configured variables and time range from the historian API', async () => {
@@ -196,7 +200,8 @@ describe('TrendChart', () => {
       renderLive();
 
       expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '1');
-      expect(screen.getByTestId('line-v0')).toBeInTheDocument();
+      // A PLC value holds until it changes: a step, not a ramp.
+      expect(screen.getByTestId('line-v0')).toHaveAttribute('data-type', 'stepAfter');
 
       act(() => {
         vi.setSystemTime(new Date('2026-01-01T00:00:01Z'));
@@ -246,7 +251,27 @@ describe('TrendChart', () => {
         vi.setSystemTime(new Date('2026-01-01T00:00:20Z'));
         useVariableStore.getState().setScalar('PLC:Temp', 3);
       });
+      // 0 s is gone; 5 s stays, the last point before the window, so the line
+      // enters from the left edge.
+      expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '2');
+    });
+
+    it('carries a value that holds still on to now, over a fixed window', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      useVariableStore.setState({ values: { 'PLC:Temp': 10 } });
+      renderLive({ liveWindow: 60 });
       expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '1');
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '2');
+      const end = Date.parse('2026-01-01T00:00:05Z');
+      expect(screen.getByTestId('x-axis')).toHaveAttribute(
+        'data-domain',
+        JSON.stringify([end - 60000, end]),
+      );
     });
 
     it('plots an integer beyond 2**53, which arrives as its decimal string', () => {
