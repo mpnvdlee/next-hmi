@@ -169,6 +169,58 @@
     "schemaError": null
   },
   {
+    "key": "Content/DataGrid",
+    "name": "DataGrid",
+    "group": "Content",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "8b20f790823c5e74",
+    "displayName": "Data Grid",
+    "hostsChildren": null,
+    "flowsChildren": null,
+    "repeatsChildren": null,
+    "category": "Content & controls",
+    "schema": {
+      "items": {
+        "type": "item-list"
+      },
+      "columns": {
+        "type": "item-list"
+      },
+      "sortMember": {
+        "type": "string"
+      },
+      "sortDirection": {
+        "type": "String"
+      },
+      "filterMember": {
+        "type": "string"
+      },
+      "filterValue": {
+        "type": "string"
+      },
+      "hideEmpty": {
+        "type": "string"
+      },
+      "valueMember": {
+        "type": "string"
+      },
+      "selectedValue": {
+        "type": [
+          "string",
+          "integer"
+        ]
+      },
+      "onSelect": {
+        "type": "actions"
+      }
+    },
+    "schemaError": null
+  },
+  {
     "key": "Content/Icon",
     "name": "Icon",
     "group": "Content",

@@ -689,6 +689,88 @@
         ]
       },
       {
+        "type": "DataGrid",
+        "name": "Data Grid",
+        "description": "A table of an array, one row per element, with sorting, a filter and a selection. Only the rows in view are drawn, so a list of hundreds stays fast.",
+        "props": [
+          {
+            "key": "items",
+            "label": "Items",
+            "type": "item-list",
+            "group": "Data"
+          },
+          {
+            "key": "columns",
+            "label": "Columns",
+            "type": "item-list",
+            "group": "Data"
+          },
+          {
+            "key": "sortMember",
+            "label": "Sort by",
+            "type": "String",
+            "group": "Sort & filter"
+          },
+          {
+            "key": "sortDirection",
+            "label": "Sort direction",
+            "type": "String",
+            "group": "Sort & filter",
+            "defaultValue": "ascending"
+          },
+          {
+            "key": "filterMember",
+            "label": "Filter member",
+            "type": "String",
+            "group": "Sort & filter"
+          },
+          {
+            "key": "filterValue",
+            "label": "Filter value",
+            "type": "String",
+            "group": "Sort & filter"
+          },
+          {
+            "key": "hideEmpty",
+            "label": "Hide empty",
+            "type": "String",
+            "group": "Sort & filter"
+          },
+          {
+            "key": "valueMember",
+            "label": "Value member",
+            "type": "String",
+            "group": "Selection"
+          },
+          {
+            "key": "selectedValue",
+            "label": "Selected value",
+            "type": "String | Integer",
+            "group": "Selection"
+          },
+          {
+            "key": "onSelect",
+            "label": "On Select",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
         "type": "Icon",
         "name": "Icon",
         "description": "A themeable Phosphor icon at any size and colour.",

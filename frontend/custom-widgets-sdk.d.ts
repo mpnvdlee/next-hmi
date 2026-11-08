@@ -462,6 +462,10 @@ interface SchemaField {
    *  `visibleWhen`. */
   recordedWhen?: unknown;
   event?: string;
+  /** For an `actions` field: the `item-list` property whose chosen element the
+   *  actions run with — `$repeatItem` inside them reads it (pass it as
+   *  `resolveRepeatItem` on the `evalCtx` you hand `executeWidgetActions`). */
+  repeatsOver?: string;
 }
 
 interface ExportedStructField {
@@ -848,6 +852,30 @@ declare function useAnchoredStyle(
   rect: AnchorRect | null | undefined,
   placement: OverlayPlacement | null | undefined,
 ): [{ current: HTMLDivElement | null }, Record<string, string | number>];
+
+/** One row the virtualizer keeps in the DOM: its position in the list and its
+ *  offset from the top of the scrolled content, in px. */
+interface VirtualItem {
+  key: string | number;
+  index: number;
+  start: number;
+  end: number;
+  size: number;
+}
+/** The subset of `@tanstack/react-virtual`'s `useVirtualizer` the SDK documents. */
+declare function useVirtualizer(options: {
+  count: number;
+  getScrollElement: () => HTMLElement | null;
+  estimateSize: (index: number) => number;
+  overscan?: number;
+  getItemKey?: (index: number) => string | number;
+  initialRect?: { width: number; height: number };
+}): {
+  getVirtualItems(): VirtualItem[];
+  getTotalSize(): number;
+  scrollToIndex(index: number, options?: { align?: 'start' | 'center' | 'end' | 'auto' }): void;
+  measure(): void;
+};
 
 interface PhosphorIconProps {
   size?: number | string;

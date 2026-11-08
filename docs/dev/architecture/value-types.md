@@ -513,6 +513,13 @@ filters and marks the pick by the same types.
 - **The editor draws the template, then ghosts.** On the canvas the first copy is
   the editable template; the rest are dimmed and select the template when
   clicked. With no elements at all the template is still drawn once.
+- **An action list can repeat over its own widget's items.** A schema field of
+  type `actions` that declares `repeatsOver: '<item-list prop>'` runs with one
+  element of that list — Data Grid's **On Select** with the picked row. The
+  editor offers Repeat item inside it and the validator types it against that
+  list, as if a Repeater enclosed it; at run time the widget passes
+  `repeatIndex` and `resolveRepeatItem` on the `evalCtx` it hands
+  `executeWidgetActions`, which reads the element's value (read-only).
 - **Outside a Repeater** `$repeatItem` resolves to *absent* and a `repeatIndex`
   binding reads the whole array. The warnings pill flags both
   (`repeatitem-no-scope`), except inside a component definition, whose

@@ -75,41 +75,15 @@ function literalListScope(list: unknown[]): RepeatEditorScope {
   return { members: element.fields, writable: false, elementType: 'Struct', memberTypes };
 }
 
-export default function RepeatEditorScopeProvider({
-  roots,
-  rev,
-  fallback,
-  widgetId,
-  children,
-}: {
-  roots: unknown;
-  /** Changes only when the tree's shape does. When given, the walk repeats on
-   *  it instead of on every property write — the Repeater's own `items` then
-   *  refresh on the next selection, which is when a child is picked anyway. */
-  rev?: unknown;
-  /** Scope to offer when no Repeater encloses the widget — a component
-   *  definition, whose instances may each be placed inside one. */
-  fallback?: RepeatEditorScope;
-  widgetId: string;
-  children: ReactNode;
-}) {
-  const rootsRef = useRef(roots);
-  rootsRef.current = roots;
-  const repeater = useMemo(
-    () => findRepeaterAncestor(rootsRef.current, widgetId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- rev stands for the tree the ref reads
-    [rev === undefined ? roots : rev, widgetId],
-  );
-  const itemsKey = repeater ? repeatItemsKey(String(repeater.type)) : null;
-  const items =
-    itemsKey && isRecord(repeater?.properties) ? repeater.properties[itemsKey] : undefined;
+/** The scope `$repeatItem` reads against when its elements come from `items`,
+ *  an `item-list` property's value. */
+function useItemsScope(items: unknown): RepeatEditorScope {
   const arrayKey = getVarBinding(items)?.path ?? '';
   // A static or user list never reads the metadata; it must not rebuild the scope on it.
   const varMeta = useVariableStore((s) => (arrayKey ? s.varMeta : NO_META));
   const type = arrayKey ? varMeta[arrayKey]?.type : undefined;
 
-  const value = useMemo((): RepeatEditorScope | null => {
-    if (!repeater) return fallback ?? null;
+  return useMemo((): RepeatEditorScope => {
     if (arrayKey) {
       if (type?.kind !== 'struct') {
         const meta = varMeta[arrayKey];
@@ -145,9 +119,50 @@ export default function RepeatEditorScopeProvider({
           memberTypes: STRING_RECORD,
         }
       : { members: null, writable: false };
-  }, [repeater, arrayKey, type, varMeta, items, fallback]);
+  }, [arrayKey, type, varMeta, items]);
+}
 
+/** Offers `$repeatItem` over `items` directly — for an action list declared
+ *  `repeatsOver` its own widget's item-list, which no Repeater encloses. */
+export function RepeatItemsScope({ items, children }: { items: unknown; children: ReactNode }) {
+  const value = useItemsScope(items);
   return (
     <RepeatEditorScopeContext.Provider value={value}>{children}</RepeatEditorScopeContext.Provider>
+  );
+}
+
+export default function RepeatEditorScopeProvider({
+  roots,
+  rev,
+  fallback,
+  widgetId,
+  children,
+}: {
+  roots: unknown;
+  /** Changes only when the tree's shape does. When given, the walk repeats on
+   *  it instead of on every property write — the Repeater's own `items` then
+   *  refresh on the next selection, which is when a child is picked anyway. */
+  rev?: unknown;
+  /** Scope to offer when no Repeater encloses the widget — a component
+   *  definition, whose instances may each be placed inside one. */
+  fallback?: RepeatEditorScope;
+  widgetId: string;
+  children: ReactNode;
+}) {
+  const rootsRef = useRef(roots);
+  rootsRef.current = roots;
+  const repeater = useMemo(
+    () => findRepeaterAncestor(rootsRef.current, widgetId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rev stands for the tree the ref reads
+    [rev === undefined ? roots : rev, widgetId],
+  );
+  const itemsKey = repeater ? repeatItemsKey(String(repeater.type)) : null;
+  const items =
+    itemsKey && isRecord(repeater?.properties) ? repeater.properties[itemsKey] : undefined;
+  const scope = useItemsScope(items);
+  return (
+    <RepeatEditorScopeContext.Provider value={repeater ? scope : (fallback ?? null)}>
+      {children}
+    </RepeatEditorScopeContext.Provider>
   );
 }

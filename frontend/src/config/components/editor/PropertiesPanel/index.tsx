@@ -197,8 +197,9 @@ function deriveStructFields(properties: Record<string, unknown> | undefined): st
   if (!Array.isArray(columns)) return [];
   const fields: string[] = [];
   for (const col of columns) {
-    const value =
-      col && typeof col === 'object' ? (col as Record<string, unknown>).value : undefined;
+    const rec = col && typeof col === 'object' ? (col as Record<string, unknown>) : undefined;
+    // A Data Grid column names its field `member`.
+    const value = rec?.member ?? rec?.value;
     if (typeof value === 'string' && value && !fields.includes(value)) fields.push(value);
   }
   return fields;

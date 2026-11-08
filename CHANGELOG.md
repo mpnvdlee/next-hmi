@@ -22,6 +22,19 @@ server listed.
 
 ### Added
 
+- **A Data Grid shows an array as a table.** Bind **Items** to a struct array
+  from the PLC — a recipe list, an event log — and list the **Columns**, one
+  line each in the panel and one row each in its drawer: a member picked from
+  the struct, a title from any source (text, a translation, a tag, a formula),
+  a width that fills or is fixed in px, and an alignment. Only the rows in
+  view are drawn, so a list of 500 scrolls smoothly; the header stays put. A
+  click on a header sorts on that column. **Filter member** and **Filter
+  value** show the rows that contain a text, and **Hide empty** drops the
+  unused slots of a fixed array. A picked row is published as **Selected
+  Item**, **Index** and **Value** — the Value member as the row holds it, so a
+  number id writes to an Integer tag — a bound **Selected value** picks and
+  scrolls to its row, and **On Select** reads the picked row through Repeat
+  Item.
 - **The LED Indicator's colours can be changed.** It was always green when on
   and grey when off. Two new properties, **On color** and **Off color**, take
   a theme colour or any other colour; left unset they follow the theme's OK

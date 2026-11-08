@@ -2,25 +2,31 @@ import { useState } from 'react';
 import { isRecord } from '@shared/types/propertyValueGuards';
 import { FieldHeaderActions } from '@config/components/ui/FieldGroup';
 import ItemsInput, { type ItemEntry } from './index';
+import ColumnsInput, { type ColumnEntry } from './ColumnsInput';
 
 interface Props {
   value: unknown;
   onChange: (v: unknown[]) => void;
+  /** Rows of Data Grid columns instead of label / value pairs. */
+  columns?: boolean;
 }
 
-function isLabelValue(item: unknown): boolean {
-  return isRecord(item) && Object.keys(item).every((k) => k === 'label' || k === 'value');
-}
+const LABEL_VALUE_KEYS = ['label', 'value'];
+const COLUMN_KEYS = ['member', 'title', 'width', 'align'];
 
 /**
- * The static value of an `item-list` field: label / value rows, or the whole
- * list as JSON — what a list of records with fields of their own (a Repeater's
+ * The static value of an `item-list` field: label / value rows (column rows
+ * for `format: 'columns'`), or the whole list as JSON — what a list of records with fields of their own (a Repeater's
  * x / y / side) needs. Opens as JSON when any element is more than a
  * label / value pair, so no field is hidden.
  */
-export default function ItemListInput({ value, onChange }: Props) {
+export default function ItemListInput({ value, onChange, columns = false }: Props) {
   const items = Array.isArray(value) ? value : [];
-  const [asJson, setAsJson] = useState(() => !items.every(isLabelValue));
+  const keys = columns ? COLUMN_KEYS : LABEL_VALUE_KEYS;
+  const [asJson, setAsJson] = useState(
+    () =>
+      !items.every((item) => isRecord(item) && Object.keys(item).every((k) => keys.includes(k))),
+  );
   // The text being typed, kept while it does not parse so the author's
   // formatting survives every keystroke.
   const [draft, setDraft] = useState<string | null>(null);
@@ -71,6 +77,8 @@ export default function ItemListInput({ value, onChange }: Props) {
             </p>
           )}
         </>
+      ) : columns ? (
+        <ColumnsInput value={items as ColumnEntry[]} onChange={onChange} />
       ) : (
         <ItemsInput value={items as ItemEntry[]} onChange={onChange} />
       )}

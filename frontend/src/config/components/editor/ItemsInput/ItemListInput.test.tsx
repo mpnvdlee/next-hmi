@@ -35,4 +35,25 @@ describe('ItemListInput', () => {
       JSON.stringify([{ label: 'Auto', value: 'auto' }], null, 2),
     );
   });
+
+  it('edits Data Grid columns as rows of member, title, width and alignment', () => {
+    const onChange = vi.fn();
+    const columns = [
+      { member: 'nId', title: 'Id', width: '60px', align: 'right' },
+      { member: 'sName', title: { $loc: 'recipe.name' } },
+    ];
+    render(<ItemListInput columns value={columns} onChange={onChange} />);
+
+    expect(
+      screen.getAllByLabelText('Member').map((input) => (input as HTMLInputElement).value),
+    ).toEqual(['nId', 'sName']);
+    expect(screen.getByDisplayValue('60px')).toBeInTheDocument();
+    expect(screen.getByText('recipe.name')).toBeInTheDocument();
+
+    fireEvent.change(screen.getAllByLabelText('Width')[1], { target: { value: 'fill' } });
+    expect(onChange).toHaveBeenLastCalledWith([columns[0], { ...columns[1], width: 'fill' }]);
+
+    fireEvent.click(screen.getByTitle('Add item'));
+    expect(onChange).toHaveBeenLastCalledWith([...columns, { member: '' }]);
+  });
 });

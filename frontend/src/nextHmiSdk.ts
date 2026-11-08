@@ -17,6 +17,7 @@
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ensureRecharts } from '@shared/utils/rechartsLoader';
 
 import { useStructVariable } from '@hmi/hooks/useStructVariable';
@@ -184,6 +185,7 @@ export const nextHmiSdk = {
   useIsPreview,
   useActivePage,
   useAnchoredStyle,
+  useVirtualizer,
 };
 
 declare global {

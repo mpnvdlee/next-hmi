@@ -131,6 +131,7 @@ SDK_NAMES: tuple[str, ...] = (
     "useIsPreview",
     "useActivePage",
     "useAnchoredStyle",
+    "useVirtualizer",
 )
 
 BUILD_STATUS_VERSION = 2

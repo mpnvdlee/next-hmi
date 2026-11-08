@@ -346,6 +346,100 @@
       }
     }
   },
+  "Content/DataGrid": {
+    "description": "A table of an array, one row per element, with sorting, a filter and a selection. Only the rows in view are drawn, so a list of hundreds stays fast.",
+    "icon": {
+      "type": "builtin",
+      "name": "table"
+    },
+    "exportedProperties": [
+      {
+        "key": "selectedItem",
+        "label": "Selected Item",
+        "type": "Struct"
+      },
+      {
+        "key": "selectedIndex",
+        "label": "Selected Index",
+        "type": "integer"
+      },
+      {
+        "key": "selectedValue",
+        "label": "Selected Value",
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
+      }
+    ],
+    "schema": {
+      "items": {
+        "label": "Items",
+        "group": "Data",
+        "description": "The array shown, one row per element — a struct array from the PLC, say."
+      },
+      "columns": {
+        "format": "columns",
+        "label": "Columns",
+        "group": "Data",
+        "description": "One row per column: the member it shows, its title (plain or a translation), a width — a length such as 60px, or \"fill\", which shares the free space — and its alignment. Empty shows a column per member of the first row."
+      },
+      "sortMember": {
+        "label": "Sort by",
+        "group": "Sort & filter",
+        "description": "The member the rows are sorted on at first. A click on a column header sorts on that column instead, and a second click reverses it."
+      },
+      "sortDirection": {
+        "format": "select",
+        "label": "Sort direction",
+        "group": "Sort & filter",
+        "defaultValue": "ascending",
+        "options": [
+          {
+            "label": "Ascending",
+            "value": "ascending"
+          },
+          {
+            "label": "Descending",
+            "value": "descending"
+          }
+        ]
+      },
+      "filterMember": {
+        "label": "Filter member",
+        "group": "Sort & filter",
+        "description": "Shows only the rows whose value for this member contains Filter value, ignoring case."
+      },
+      "filterValue": {
+        "label": "Filter value",
+        "group": "Sort & filter",
+        "description": "The text Filter member must contain — bind it to a search field. Empty shows every row."
+      },
+      "hideEmpty": {
+        "label": "Hide empty",
+        "group": "Sort & filter",
+        "description": "Hides the rows whose value for this member is empty, such as the unused slots of a fixed PLC array."
+      },
+      "valueMember": {
+        "label": "Value member",
+        "group": "Selection",
+        "description": "The member whose value is the Selected value. Empty uses the row's index."
+      },
+      "selectedValue": {
+        "label": "Selected value",
+        "group": "Selection",
+        "description": "Selects the row whose Value member equals this and scrolls it into view; re-selects when a bound value changes."
+      },
+      "onSelect": {
+        "label": "On Select",
+        "group": "Actions",
+        "event": "onSelect",
+        "repeatsOver": "items",
+        "description": "Runs when the operator picks a row. Repeat item reads that row."
+      }
+    }
+  },
   "Content/Icon": {
     "description": "A themeable Phosphor icon at any size and colour.",
     "icon": {

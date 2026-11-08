@@ -1,0 +1,124 @@
+/* Chained with .hmi-component: this rule re-states `color`, which the base
+   class also sets, and a runtime-injected sheet cannot rely on order. The
+   widget measures the header to size every row, so this one token sets the
+   height of both. */
+.hmi-component.hmi-datagrid {
+  --hmi-datagrid-row-height: 40px;
+  width: 100%;
+  height: 320px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--hmi-surface);
+  color: var(--hmi-text);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+}
+
+.hmi-datagrid__head,
+.hmi-datagrid__row {
+  display: grid;
+  grid-template-columns: var(--hmi-datagrid-columns);
+  height: var(--hmi-datagrid-row-height);
+  box-sizing: border-box;
+}
+
+/* The header stays put while the body scrolls; reserving the same scrollbar
+   gutter keeps its columns over the body's. */
+.hmi-datagrid__head {
+  flex: none;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+  background: var(--hmi-surface-2);
+  box-shadow: inset 0 -1px 0 var(--hmi-border);
+}
+
+.hmi-datagrid__sort {
+  appearance: none;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--hmi-space-sm);
+  background: none;
+  border: 0;
+  color: var(--hmi-text-muted);
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  text-align: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.hmi-datagrid__sort:focus-visible {
+  outline: var(--hmi-accent-outline);
+  outline-offset: -2px;
+}
+
+.hmi-datagrid__arrow {
+  margin-left: var(--hmi-space-tight);
+}
+
+.hmi-datagrid__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.hmi-datagrid__body:focus-visible {
+  outline: var(--hmi-accent-outline);
+  outline-offset: -2px;
+}
+
+.hmi-datagrid__rows {
+  position: relative;
+  height: var(--hmi-datagrid-total);
+}
+
+.hmi-datagrid__row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  transform: translateY(var(--hmi-datagrid-row-y));
+  box-shadow: inset 0 -1px 0 var(--hmi-border);
+  cursor: pointer;
+}
+
+.hmi-datagrid__row:hover {
+  background: var(--hmi-surface-2);
+}
+
+.hmi-datagrid__row[aria-selected='true'] {
+  background: var(--hmi-accent-soft);
+}
+
+/* A cell never grows the row: text that does not fit is cut off. */
+.hmi-datagrid__cell {
+  min-width: 0;
+  padding: 0 var(--hmi-space-sm);
+  line-height: var(--hmi-datagrid-row-height);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hmi-datagrid__th[data-align='center'],
+.hmi-datagrid__cell[data-align='center'] {
+  text-align: center;
+}
+
+.hmi-datagrid__th[data-align='right'],
+.hmi-datagrid__cell[data-align='right'] {
+  text-align: right;
+}

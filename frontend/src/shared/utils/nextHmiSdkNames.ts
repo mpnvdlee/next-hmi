@@ -118,4 +118,5 @@ export const SDK_NAMES = [
   'useIsPreview',
   'useActivePage',
   'useAnchoredStyle',
+  'useVirtualizer',
 ] as const;

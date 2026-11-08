@@ -192,6 +192,25 @@ A live clock, formatted with the same patterns as the $time source.
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
+### Data Grid
+
+A table of an array, one row per element, with sorting, a filter and a selection. Only the rows in view are drawn, so a list of hundreds stays fast.
+
+| Property | Label | Type |
+|---|---|---|
+| `items` | Items | `item-list` |
+| `columns` | Columns | `item-list` |
+| `sortMember` | Sort by | `String` |
+| `sortDirection` | Sort direction | `String` |
+| `filterMember` | Filter member | `String` |
+| `filterValue` | Filter value | `String` |
+| `hideEmpty` | Hide empty | `String` |
+| `valueMember` | Value member | `String` |
+| `selectedValue` | Selected value | `String | Integer` |
+| `onSelect` | On Select | `actions` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
 ### Icon
 
 A themeable Phosphor icon at any size and colour.

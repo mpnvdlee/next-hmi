@@ -3293,16 +3293,21 @@ def validate_widget_node(
                     _warn_unknown_property(report, f"{path}/properties/{key}", key, target)
                 field_schema = schema.get(key) if isinstance(schema, dict) else None
                 prop_path = f"{path}/properties/{key}"
-                _validate_property_value(value, field_schema, prop_ctx, prop_path, report)
+                field_ctx = prop_ctx
+                repeats_over = field_schema.get("repeatsOver") if isinstance(field_schema, dict) else None
+                if isinstance(repeats_over, str) and repeats_over:
+                    # The actions run with the widget's chosen element of that list.
+                    field_ctx = replace(prop_ctx, repeat_scope=True, repeat_items=properties.get(repeats_over))
+                _validate_property_value(value, field_schema, field_ctx, prop_path, report)
                 if is_instance:
                     decl = (ctx.component_properties.get(_component_id(wtype)) or {}).get(key)
                     _check_read_once(value, decl, "when the instance appears", prop_path, report)
                 if key == "actions" or (not is_instance and _is_actions_field(field_schema)):
-                    validate_action_targets(value, prop_ctx, prop_path, report)
+                    validate_action_targets(value, field_ctx, prop_path, report)
                 elif _is_actions_field(field_schema):
                     # Typed as actions only by the component's declaration, which
                     # nothing walked before: a missing page is a diagnostic here.
-                    _validate_actions_softly(value, prop_ctx, prop_path, report)
+                    _validate_actions_softly(value, field_ctx, prop_path, report)
     if wtype == "Repeater" and isinstance(properties, dict):
         _validate_placed_items(properties, f"{path}/properties", report)
     # Walk children

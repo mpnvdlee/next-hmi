@@ -78,6 +78,9 @@ export interface SchemaField {
   recordedWhen?: VisibilityCondition | VisibilityCondition[];
   /** For 'actions' type: the ActionsConfig event key this field edits (defaults to 'onPress'). */
   event?: string;
+  /** For 'actions' type: the `item-list` property whose chosen element the
+   *  actions run with — `$repeatItem` inside them reads that element. */
+  repeatsOver?: string;
   /** Conditional visibility: field only shown when condition(s) pass.
    *  Conditions reference other properties in the same component schema.
    *  All conditions in an array must pass (AND logic). */
