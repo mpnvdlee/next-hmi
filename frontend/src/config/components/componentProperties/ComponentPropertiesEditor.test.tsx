@@ -86,7 +86,7 @@ describe('ComponentPropertiesEditor', () => {
     await user.click(screen.getByText('Choices'));
     expect(screen.getByText('Options')).toBeInTheDocument();
     expect(screen.queryByText('Kind')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Add item/ }));
+    await user.click(screen.getByTitle('Add option'));
 
     expect(onChange).toHaveBeenCalledWith({
       options: { type: 'option-list', label: 'Choices', defaultValue: [{ label: '', value: '' }] },
@@ -297,7 +297,8 @@ describe('ComponentPropertiesEditor — select option values', () => {
 
     await user.click(screen.getByText('Mode'));
     const row = screen.getByText('Options').closest('.cfg-field-group') as HTMLElement;
+    await user.click(within(row).getByTitle('Edit option'));
 
-    expect(within(row).getByRole('spinbutton')).toHaveValue(10);
+    expect(screen.getByRole('spinbutton')).toHaveValue(10);
   });
 });

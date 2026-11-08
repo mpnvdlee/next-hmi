@@ -94,7 +94,8 @@ interface Props {
   sourceless?: boolean;
   /** Badge slot — e.g. `<PropertySourceBadge>` or the mode-pill trigger. */
   badge?: ReactNode;
-  /** Trailing row actions — reset `×`, binding picker `✎`, drawer `⤢`. */
+  /** Trailing row actions — a list entry's remove `×`. They end the row, after
+   *  the buttons its editor portals in through `FieldActions`. */
   actions?: ReactNode;
   /** Drops the clear / revert `×` the value's editor would add (`FieldActions
    *  clear`) — for a row whose own `actions` already remove the whole entry. */
@@ -238,12 +239,14 @@ export default function FieldGroup({
       // below then blocks focus-on-mousedown for click-1 so an inner editable
       // control doesn't become the active element — keeps detectCopyPasteKey()
       // seeing a non-editable target right after selecting, so Ctrl+C still
-      // copies the param.
+      // copies the param. A draggable row inside is exempt: preventing its
+      // mousedown cancels the native drag, and the row itself is no editable
+      // control to guard against.
       const active = document.activeElement;
       if (active instanceof HTMLElement && !e.currentTarget.contains(active)) {
         active.blur();
       }
-      e.preventDefault();
+      if (!(e.target as Element).closest('[draggable="true"]')) e.preventDefault();
     }
   }
 
@@ -315,14 +318,6 @@ export default function FieldGroup({
         <ExpandIcon />
       </button>
     ) : null;
-  const rowActions =
-    chevronButton || drawerButton || actions ? (
-      <>
-        {chevronButton}
-        {drawerButton}
-        {actions}
-      </>
-    ) : null;
 
   return (
     <FieldActionsSlotContext.Provider value={{ el: actionsEl, clearHidden: hideClear }}>
@@ -374,8 +369,20 @@ export default function FieldGroup({
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {rowActions}
+                    {chevronButton}
+                    {drawerButton}
                   </div>
+                  {/* The row's own actions (a list entry's remove ×) close the row,
+                after any button its editor portals in. */}
+                  {actions && (
+                    <div
+                      className="cfg-field-group__actions"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {actions}
+                    </div>
+                  )}
                 </div>
                 {/* While the drawer hosts the live editor, keep the inline body as the
               collapsed summary so only one editor instance is mounted at a time. */}

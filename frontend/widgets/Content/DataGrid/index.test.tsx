@@ -95,6 +95,25 @@ describe('DataGrid', () => {
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['nId', 'sName']);
   });
 
+  it('leaves the cells of a listed column with no member yet empty', () => {
+    renderGrid({ items: RECIPES.slice(3, 5), columns: [{ member: 'nId' }, { member: '' }] });
+    expect(cellTexts(0)).toEqual(['3', '4']);
+    expect(cellTexts(1)).toEqual(['', '']);
+  });
+
+  it('reads a bound column title live', () => {
+    useVariableStore.setState({ values: { 'PLC:Title': 'Batch' } });
+    renderGrid({
+      items: RECIPES.slice(0, 2),
+      columns: [{ member: 'nId', title: { $var: { path: 'PLC:Title' } } }],
+    });
+    expect(screen.getByRole('columnheader')).toHaveTextContent('Batch');
+
+    act(() => useVariableStore.setState({ values: { 'PLC:Title': 'Lot' } }));
+
+    expect(screen.getByRole('columnheader')).toHaveTextContent('Lot');
+  });
+
   it('filters on contains, ignoring case, and hides the rows with an empty member', () => {
     renderGrid({
       items: RECIPES.slice(0, 40),

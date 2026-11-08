@@ -12,7 +12,7 @@ export const schema = {
     label: 'Columns',
     group: 'Data',
     description:
-      'One row per column: the member it shows, its title (plain or a translation), a width — a length such as 60px, or "fill", which shares the free space — and its alignment. Empty shows a column per member of the first row.',
+      'One entry per column: the member it shows, its title from any source, a width — Fill shares the free space, Fixed is a length such as 60px — and its alignment. Empty shows a column per member of the first row.',
   },
   sortMember: {
     type: 'string' as const,
@@ -97,9 +97,12 @@ interface Row {
 
 interface Column {
   member: string;
-  title: string;
+  /** The column as stored, whose title the header reads live. */
+  source: Record<string, unknown>;
   track: string;
   align: string;
+  /** A listed column with no member yet: its cells stay empty, not the whole row. */
+  blank: boolean;
 }
 
 const ALIGN = /^(left|center|right)$/;
@@ -144,6 +147,11 @@ function track(width: unknown): string {
   return /\d$/.test(w) ? `${w}px` : w;
 }
 
+/** A header's title from any source, a `$var` one read live; the member when unset. */
+function ColumnTitle({ column, member }: { column: Record<string, unknown>; member: string }) {
+  return <>{usePropString(column, 'title', member)}</>;
+}
+
 export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
@@ -183,12 +191,13 @@ export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
       const member = typeof c.member === 'string' ? c.member : '';
       return {
         member,
-        title: getPropString(c, 'title', member, evalCtx),
+        source: c,
         track: track(c.width),
+        blank: listed.length > 0 && !member,
         align: typeof c.align === 'string' && ALIGN.test(c.align) ? c.align : 'left',
       };
     });
-  }, [columnList, items, evalCtx]);
+  }, [columnList, items]);
 
   const rows = useMemo((): Row[] => {
     const needle = filterValue.toLowerCase();
@@ -320,7 +329,7 @@ export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
               aria-sort={sorted ? (sort.desc ? 'descending' : 'ascending') : 'none'}
             >
               <button type="button" className="hmi-datagrid__sort" onClick={() => sortOn(c.member)}>
-                {c.title}
+                <ColumnTitle column={c.source} member={c.member} />
                 {sorted && (
                   <span className="hmi-datagrid__arrow" aria-hidden="true">
                     {sort.desc ? '▼' : '▲'}
@@ -361,7 +370,7 @@ export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
                     className="hmi-datagrid__cell"
                     data-align={c.align}
                   >
-                    {text(cell(row.item, c.member))}
+                    {c.blank ? '' : text(cell(row.item, c.member))}
                   </div>
                 ))}
               </div>

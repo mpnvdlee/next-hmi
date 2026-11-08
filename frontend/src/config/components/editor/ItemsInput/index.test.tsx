@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTranslationStore } from '@shared/store/translationStore';
 import ItemsInput from './index';
 
+/** Opens the drawer on an option, as a click on its line in the panel does. */
+const open = (idx = 0) => fireEvent.click(screen.getAllByTitle('Edit option')[idx]);
+
 describe('ItemsInput — string values (the default)', () => {
   it('edits a value through the plain text cell', () => {
     const onChange = vi.fn();
     render(<ItemsInput value={[{ label: 'Auto', value: 'auto' }]} onChange={onChange} />);
+    open();
 
     fireEvent.change(screen.getByDisplayValue('auto'), { target: { value: 'manual' } });
 
@@ -17,7 +21,7 @@ describe('ItemsInput — string values (the default)', () => {
     const onChange = vi.fn();
     render(<ItemsInput value={[]} onChange={onChange} />);
 
-    fireEvent.click(screen.getByTitle('Add item'));
+    fireEvent.click(screen.getByTitle('Add option'));
 
     expect(onChange).toHaveBeenCalledWith([{ label: '', value: '' }]);
   });
@@ -29,6 +33,7 @@ describe('ItemsInput — number values', () => {
     render(
       <ItemsInput valueType="integer" value={[{ label: 'Small', value: 0 }]} onChange={onChange} />,
     );
+    open();
 
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '10' } });
 
@@ -39,10 +44,12 @@ describe('ItemsInput — number values', () => {
     const { unmount } = render(
       <ItemsInput valueType="integer" value={[{ label: 'A', value: 1 }]} onChange={vi.fn()} />,
     );
+    open();
     expect(screen.getByRole('spinbutton')).toHaveAttribute('step', '1');
     unmount();
 
     render(<ItemsInput valueType="float" value={[{ label: 'A', value: 1 }]} onChange={vi.fn()} />);
+    open();
     expect(screen.getByRole('spinbutton')).toHaveAttribute('step', 'any');
   });
 
@@ -51,6 +58,7 @@ describe('ItemsInput — number values', () => {
     render(
       <ItemsInput valueType="float" value={[{ label: 'Slow', value: 0 }]} onChange={onChange} />,
     );
+    open();
 
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '0.25' } });
 
@@ -68,6 +76,7 @@ describe('ItemsInput — number values', () => {
         onChange={onChange}
       />,
     );
+    open();
 
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '' } });
 
@@ -78,7 +87,7 @@ describe('ItemsInput — number values', () => {
     const onChange = vi.fn();
     render(<ItemsInput valueType="integer" value={[]} onChange={onChange} />);
 
-    fireEvent.click(screen.getByTitle('Add item'));
+    fireEvent.click(screen.getByTitle('Add option'));
 
     expect(onChange).toHaveBeenCalledWith([{ label: '', value: 0 }]);
   });
@@ -94,6 +103,7 @@ describe('ItemsInput — boolean values', () => {
         onChange={onChange}
       />,
     );
+    open();
 
     fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
 
@@ -104,7 +114,7 @@ describe('ItemsInput — boolean values', () => {
     const onChange = vi.fn();
     render(<ItemsInput valueType="boolean" value={[]} onChange={onChange} />);
 
-    fireEvent.click(screen.getByTitle('Add item'));
+    fireEvent.click(screen.getByTitle('Add option'));
 
     expect(onChange).toHaveBeenCalledWith([{ label: '', value: false }]);
   });
@@ -130,6 +140,7 @@ describe('ItemsInput — localisable values', () => {
         onChange={onChange}
       />,
     );
+    open();
 
     fireEvent.change(screen.getByPlaceholderText('Search translations…'), {
       target: { value: 'motor' },
@@ -143,7 +154,7 @@ describe('ItemsInput — localisable values', () => {
     const onChange = vi.fn();
     render(<ItemsInput valueType="loc" value={[]} onChange={onChange} />);
 
-    fireEvent.click(screen.getByTitle('Add item'));
+    fireEvent.click(screen.getByTitle('Add option'));
 
     expect(onChange).toHaveBeenCalledWith([{ label: '', value: undefined }]);
   });
@@ -156,6 +167,7 @@ describe('ItemsInput — localisable values', () => {
         onChange={vi.fn()}
       />,
     );
+    open();
 
     expect(screen.queryByPlaceholderText('Value')).not.toBeInTheDocument();
   });
@@ -169,36 +181,79 @@ describe('ItemsInput — a widget Options list', () => {
     });
   });
 
-  it('shows a translated label as its key and can pick one', () => {
-    const onChange = vi.fn();
+  it('lists one line per option, value first, with no source mark on a translated label', () => {
     render(
       <ItemsInput
         value={[
           { label: { $loc: 'pack.tray' }, value: 'tray' },
           { label: 'Box', value: 'box' },
         ]}
-        onChange={onChange}
+        onChange={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('pack.tray')).toBeInTheDocument();
-    expect(screen.queryByDisplayValue('[object Object]')).not.toBeInTheDocument();
+    const rows = screen.getAllByTitle('Edit option');
+    expect(rows.map((r) => r.textContent)).toEqual(['traypack.tray', 'boxBox']);
+    expect(rows[0].querySelector('[title="Localizable Text"]')).toBeNull();
+  });
 
-    fireEvent.click(screen.getAllByTitle('Plain text — click for Translation')[0]);
-    fireEvent.change(screen.getByPlaceholderText('Search translations…'), {
-      target: { value: 'pack' },
-    });
-    fireEvent.click(screen.getByRole('option', { name: /pack\.tray/ }));
+  it('opens the drawer on the clicked option, its label a Static or Localizable Text field', () => {
+    render(
+      <ItemsInput
+        value={[
+          { label: 'Tray', value: 'tray' },
+          { label: 'Box', value: 'box' },
+        ]}
+        onChange={vi.fn()}
+      />,
+    );
+    open(1);
 
-    expect(onChange).toHaveBeenLastCalledWith([
-      { label: { $loc: 'pack.tray' }, value: 'tray' },
-      { label: { $loc: 'pack.tray' }, value: 'box' },
-    ]);
+    const expanded = document.querySelectorAll(
+      '.cfg-list-drawer .cfg-sortable-row__body > .cfg-field-group > .cfg-field-group__box > .cfg-field-group__nest',
+    );
+    expect(expanded).toHaveLength(1);
+    expect(expanded[0].querySelector('input')).toHaveValue('box');
+    expect(screen.queryByTitle('Plain text — click for Translation')).not.toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('Box')).toHaveLength(1);
+  });
+
+  it('opens every option expanded from the ⤢', () => {
+    render(
+      <ItemsInput
+        value={[
+          { label: 'Tray', value: 'tray' },
+          { label: 'Box', value: 'box' },
+        ]}
+        onChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTitle('Expand in drawer'));
+    expect(document.querySelectorAll('.cfg-list-drawer .cfg-field-group__nest')).toHaveLength(2);
+  });
+
+  it('gives every option a ⋮⋮ grip to reorder it by, which does not open the drawer', () => {
+    render(
+      <ItemsInput
+        value={[
+          { label: 'A', value: 'a' },
+          { label: 'B', value: 'b' },
+        ]}
+        onChange={vi.fn()}
+      />,
+    );
+
+    const grips = screen.getAllByTitle('Drag to reorder');
+    expect(grips).toHaveLength(2);
+    fireEvent.click(grips[1]);
+    expect(document.querySelector('.cfg-list-drawer')).toBeNull();
   });
 
   it('shows and keeps numeric values when no value kind is declared', () => {
     const onChange = vi.fn();
     render(<ItemsInput value={[{ label: 'One', value: 1 }]} onChange={onChange} />);
+    expect(screen.getByText('1')).toBeInTheDocument();
+    open();
 
     expect(screen.getByRole('spinbutton')).toHaveValue(1);
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2' } });

@@ -6,6 +6,8 @@ import { allPageRootNodes, flattenPages, resolvePageTitle } from '@shared/utils/
 import Select from '@config/components/ui/Select';
 import PropRow from '@config/components/ui/PropRow';
 import FieldGroup from '@config/components/ui/FieldGroup';
+import SortableList, { SortableRow } from '@config/components/ui/SortableList';
+import { arrayMove } from '@dnd-kit/sortable';
 import { ClearIcon } from '@config/components/ui/actionIcons';
 import { renderSchemaField } from '@config/utils/renderSchemaField';
 import { KindLabel, Kw, PreviewText } from '../PropertySourceEditor/editors/shared';
@@ -142,6 +144,19 @@ export default function MenuItemsInput({ value, onChange, title, description, pa
     setExpandedIdx(null);
   }
 
+  function moveItem(from: number, to: number) {
+    onChange(arrayMove(items, from, to));
+    // The open item stays open wherever it lands.
+    if (expandedIdx !== null)
+      setExpandedIdx(
+        arrayMove(
+          items.map((_, i) => i),
+          from,
+          to,
+        ).indexOf(expandedIdx),
+      );
+  }
+
   function patchItem(idx: number, patch: Record<string, unknown>) {
     onChange(items.map((it, i) => (i === idx ? ({ ...it, ...patch } as MenuItemConfig) : it)));
   }
@@ -171,18 +186,21 @@ export default function MenuItemsInput({ value, onChange, title, description, pa
       {items.length === 0 ? (
         <div className="cfg-menu-items__empty">No items yet</div>
       ) : (
-        items.map((item, idx) => (
-          <MenuItemRow
-            key={idx}
-            item={item}
-            path={[...(pathPrefix ?? []), String(idx)]}
-            pageTitles={pageTitles}
-            expanded={expandedIdx === idx}
-            onExpandedChange={(next) => setExpandedIdx(next ? idx : null)}
-            onPatch={(patch) => patchItem(idx, patch)}
-            onRemove={() => removeItem(idx)}
-          />
-        ))
+        <SortableList ids={items.map((_, idx) => String(idx))} onMove={moveItem}>
+          {items.map((item, idx) => (
+            <SortableRow key={idx} id={String(idx)}>
+              <MenuItemRow
+                item={item}
+                path={[...(pathPrefix ?? []), String(idx)]}
+                pageTitles={pageTitles}
+                expanded={expandedIdx === idx}
+                onExpandedChange={(next) => setExpandedIdx(next ? idx : null)}
+                onPatch={(patch) => patchItem(idx, patch)}
+                onRemove={() => removeItem(idx)}
+              />
+            </SortableRow>
+          ))}
+        </SortableList>
       )}
     </div>
   );

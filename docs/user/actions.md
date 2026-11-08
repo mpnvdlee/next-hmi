@@ -9,6 +9,8 @@ A property answers *what a widget shows*. An **action** answers *what happens wh
 - **On the project** — the **Global Events** node in the editor tree runs actions at lifecycle moments rather than on a press. See [Global events](#global-events).
 - **On a page or page group** — an **Events** section in the node's properties runs actions as the operator arrives and leaves. See [Page events](#page-events).
 
+To change the order of a list, drag an action by the **⋮⋮** grip at the start of its row — or focus the grip, press **Space**, move it with the arrow keys and press **Space** again. The same grip moves a **Switch / Case** case, a value map case, a Navigation Menu item, a Trend Chart variable, a recipe parameter and a Dropdown option or Data Grid column.
+
 Custom widgets fire the same lists through the SDK's `executeWidgetActions`, so a hand-built control behaves exactly like a Button.
 
 ## The action catalog

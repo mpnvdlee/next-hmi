@@ -1,0 +1,48 @@
+/* The element a grip moves: shifted while a drag is under way, lifted while it
+   is the one being dragged. Its grip hangs in the gutter to its left, so the row
+   keeps the place and width it has without one.
+   A row that places its grip itself adds `cfg-sortable-item`. */
+.cfg-sortable-row,
+.cfg-sortable-item {
+  position: relative;
+  transform: var(--sortable-transform, none);
+  transition: var(--sortable-transition, none);
+}
+
+[data-dragging] {
+  z-index: 1;
+  box-shadow: var(--cfg-shadow-md);
+  border-radius: var(--cfg-field-group-radius);
+  background: var(--cfg-surface);
+}
+
+/* The `⋮⋮` grip: quiet until hovered or focused; tall as one input line so it
+   sits beside a row's first line however far the row opens below it. */
+.cfg-sortable-grip {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cfg-sortable-grip-width);
+  height: var(--cfg-input-height);
+  padding: 0;
+  border: none;
+  border-radius: var(--cfg-radius);
+  background: none;
+  color: var(--cfg-text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.cfg-sortable-grip:hover,
+.cfg-sortable-grip:focus-visible {
+  background: var(--cfg-surface-dark);
+  color: var(--cfg-text);
+}
+
+[data-dragging] .cfg-sortable-grip {
+  cursor: grabbing;
+  color: var(--cfg-accent);
+}

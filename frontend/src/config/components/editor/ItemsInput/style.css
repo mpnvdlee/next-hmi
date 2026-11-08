@@ -1,47 +1,80 @@
-.cfg-items-input {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cfg-space-1);
-}
-
 .cfg-items-input__empty {
   font-size: var(--cfg-text-sm);
   color: var(--cfg-text-muted);
   padding: var(--cfg-space-1) 0;
 }
 
-.cfg-items-input__row {
-  display: flex;
-  align-items: center;
-  gap: var(--cfg-space-1);
-}
-
-.cfg-items-input__reorder {
+/* A list in the panel (PanelList): one line per element; a click opens it in
+   the list drawer. */
+.cfg-panel-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  width: 100%;
+  min-width: 0;
 }
 
-.cfg-items-input__reorder-btn {
-  background: none;
-  border: none;
+.cfg-panel-list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  min-height: var(--cfg-btn-height-sm);
+  padding: 0 var(--cfg-space-2) 0 var(--cfg-space-1);
+  border-radius: var(--cfg-radius);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
   cursor: pointer;
+}
+
+/* The field's content padding is narrower than the grip, so the grip also takes
+   the row's own start padding; the row's text stays where it is without one. */
+.cfg-panel-list__row > .cfg-sortable-grip {
+  right: calc(100% - var(--cfg-space-1));
+  height: 100%;
+  opacity: 0;
+}
+
+/* One-line rows are many and short, so their grip shows only on the row under
+   the pointer, the one being dragged, or under keyboard focus — still in the
+   tab order while hidden, so Tab reaches it and it appears. */
+.cfg-panel-list__row:hover > .cfg-sortable-grip,
+.cfg-panel-list__row:focus-visible > .cfg-sortable-grip,
+.cfg-panel-list__row[data-dragging] > .cfg-sortable-grip,
+.cfg-panel-list__row > .cfg-sortable-grip:focus-visible {
+  opacity: 1;
+}
+
+.cfg-panel-list__row:hover,
+.cfg-panel-list__row:focus-visible {
+  background: var(--cfg-bg-hover);
+}
+
+.cfg-option-list__value {
+  flex: 0 0 auto;
+  min-width: var(--cfg-option-value-min);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--cfg-font-mono);
   color: var(--cfg-text-muted);
-  font-size: 0.6rem;
-  padding: 0 2px;
-  line-height: 1;
 }
 
-.cfg-items-input__reorder-btn:hover:not(:disabled) {
-  color: var(--cfg-accent);
-}
-
-.cfg-items-input__reorder-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-.cfg-items-input__field {
+.cfg-panel-list__text {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A drawer row's summary: what follows the element's name reads quieter. */
+.cfg-list-drawer__meta {
+  color: var(--cfg-text-muted);
+}
+
+/* An option's or column's fields stack at the nest's own gap, the panel's
+   field rhythm: their properties-panel bottom margin on top of it doubled
+   the space between fields and under the last one. */
+.cfg-list-drawer .cfg-field-group__nest > .cfg-field-group {
+  margin-bottom: 0;
 }

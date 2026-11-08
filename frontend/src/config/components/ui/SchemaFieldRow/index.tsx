@@ -384,6 +384,8 @@ export default function SchemaFieldRow({
                 value={effectiveValue}
                 onChange={onChange}
                 columns={schema.format === 'columns'}
+                // A columns list reads the elements of its own widget's `items`.
+                rows={allProperties.items}
               />
             ) : fieldType === 'option-list' ? (
               <ItemsInput

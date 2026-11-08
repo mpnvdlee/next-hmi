@@ -9,6 +9,8 @@ import PropRow from '../../ui/PropRow';
 import Select from '../../ui/Select';
 import TextField from '../../ui/TextField';
 import AddButton from '../../ui/AddButton';
+import SortableList, { SortableRow } from '../../ui/SortableList';
+import { arrayMove } from '@dnd-kit/sortable';
 import { ClearIcon } from '../../ui/actionIcons';
 import { CollapsiblePropertyCard } from '../PropertySourceEditor/editors/shared';
 import { COMPARE_OPERAND_SCHEMA } from '../PropertySourceEditor/editors/utils';
@@ -70,48 +72,55 @@ export default function ValueMapPanel({ mapId }: { mapId: string }) {
             </AddButton>
           </div>
           {map.cases.length === 0 && <div className="cfg-switch-empty">No cases yet</div>}
-          {map.cases.map((c, i) => (
-            // One line per case: what it matches, the arrow, what it gives, and its `×`.
-            <div key={i} className="cfg-value-map-case">
-              <div className="cfg-value-map-case__when">
-                <CollapsiblePropertyCard
-                  title="When"
-                  hideLabel
-                  value={c.when}
-                  // The model takes a literal; a cleared input is the empty string.
-                  onChange={(v) => setCase(i, { when: (v ?? '') as string })}
-                  schema={COMPARE_OPERAND_SCHEMA}
-                  sourceless
-                />
-              </div>
-              <span className="cfg-value-map-case__arrow" aria-hidden="true">
-                →
-              </span>
-              <div className="cfg-value-map-case__then">
-                <CollapsiblePropertyCard
-                  title="Then"
-                  hideLabel
-                  value={c.then}
-                  onChange={(v) => setCase(i, { then: v })}
-                  schema={thenSchema}
-                  forcedSources={thenSources}
-                  sourceless={!thenSources}
-                  // The row's own × removes the whole case; a second one beside it would only confuse.
-                  hideClear
-                  actions={
-                    <button
-                      type="button"
-                      className="cfg-row-action-btn cfg-row-action-btn--stretch"
-                      title="Remove case"
-                      onClick={() => patch({ cases: map.cases.filter((_, j) => j !== i) })}
-                    >
-                      <ClearIcon />
-                    </button>
-                  }
-                />
-              </div>
-            </div>
-          ))}
+          <SortableList
+            ids={map.cases.map((_, i) => String(i))}
+            onMove={(from, to) => patch({ cases: arrayMove(map.cases, from, to) })}
+          >
+            {map.cases.map((c, i) => (
+              // One line per case: what it matches, the arrow, what it gives, and its `×`.
+              <SortableRow key={i} id={String(i)}>
+                <div className="cfg-value-map-case">
+                  <div className="cfg-value-map-case__when">
+                    <CollapsiblePropertyCard
+                      title="When"
+                      hideLabel
+                      value={c.when}
+                      // The model takes a literal; a cleared input is the empty string.
+                      onChange={(v) => setCase(i, { when: (v ?? '') as string })}
+                      schema={COMPARE_OPERAND_SCHEMA}
+                      sourceless
+                    />
+                  </div>
+                  <span className="cfg-value-map-case__arrow" aria-hidden="true">
+                    →
+                  </span>
+                  <div className="cfg-value-map-case__then">
+                    <CollapsiblePropertyCard
+                      title="Then"
+                      hideLabel
+                      value={c.then}
+                      onChange={(v) => setCase(i, { then: v })}
+                      schema={thenSchema}
+                      forcedSources={thenSources}
+                      sourceless={!thenSources}
+                      // The row's own × removes the whole case; a second one beside it would only confuse.
+                      hideClear
+                      actions={
+                        <button
+                          type="button"
+                          className="cfg-row-action-btn cfg-row-action-btn--stretch"
+                          title="Remove case"
+                          onClick={() => patch({ cases: map.cases.filter((_, j) => j !== i) })}
+                        >
+                          <ClearIcon />
+                        </button>
+                      }
+                    />
+                  </div>
+                </div>
+              </SortableRow>
+            ))}
+          </SortableList>
         </div>
       </div>
 

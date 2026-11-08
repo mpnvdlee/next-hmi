@@ -2,6 +2,8 @@ import { useState } from 'react';
 import AddButton from '../../../ui/AddButton';
 import FieldGroup from '../../../ui/FieldGroup';
 import { ClearIcon } from '../../../ui/actionIcons';
+import SortableList, { SortableRow } from '@config/components/ui/SortableList';
+import { arrayMove } from '@dnd-kit/sortable';
 import { BranchEditor, CompareFields, KindLabel, PreviewText, SwitchCasePreview } from './shared';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
 import {
@@ -331,6 +333,19 @@ export function SwitchEditor({
     switchObj.value,
   );
 
+  function moveCase(from: number, to: number) {
+    onChange({ $switch: { ...switchObj, cases: arrayMove(switchObj.cases, from, to) } });
+    // The open case stays open wherever it lands.
+    if (expandedIdx !== null)
+      setExpandedIdx(
+        arrayMove(
+          switchObj.cases.map((_, i) => i),
+          from,
+          to,
+        ).indexOf(expandedIdx),
+      );
+  }
+
   function addCase() {
     const cases = [...switchObj.cases, { when: '', then: '' }];
     onChange({ $switch: { ...switchObj, cases } });
@@ -375,20 +390,23 @@ export function SwitchEditor({
         {switchObj.cases.length === 0 ? (
           <div className="cfg-switch-empty">No cases yet</div>
         ) : (
-          switchObj.cases.map((c, idx) => (
-            <SwitchCaseRow
-              key={idx}
-              index={idx}
-              entry={c}
-              parent={parent}
-              schema={schema}
-              expanded={expandedIdx === idx}
-              onExpandedChange={(next) => setExpandedIdx(next ? idx : null)}
-              onPatch={(patch) => patchCase(idx, patch)}
-              onRemove={() => removeCase(idx)}
-              onOpenBindingPicker={onOpenBindingPicker}
-            />
-          ))
+          <SortableList ids={switchObj.cases.map((_, idx) => String(idx))} onMove={moveCase}>
+            {switchObj.cases.map((c, idx) => (
+              <SortableRow key={idx} id={String(idx)}>
+                <SwitchCaseRow
+                  index={idx}
+                  entry={c}
+                  parent={parent}
+                  schema={schema}
+                  expanded={expandedIdx === idx}
+                  onExpandedChange={(next) => setExpandedIdx(next ? idx : null)}
+                  onPatch={(patch) => patchCase(idx, patch)}
+                  onRemove={() => removeCase(idx)}
+                  onOpenBindingPicker={onOpenBindingPicker}
+                />
+              </SortableRow>
+            ))}
+          </SortableList>
         )}
       </div>
 

@@ -24,11 +24,6 @@
   width: 7rem;
 }
 
-.cfg-recipe-th--move {
-  width: 3.5rem;
-  padding: 0 0.25rem;
-}
-
 .cfg-recipe-th--live {
   width: 10rem;
 }
@@ -42,7 +37,9 @@
   padding-bottom: 0.25rem;
 }
 
+/* Holds the row's grip, which hangs in the cell's start padding. */
 .cfg-recipe-label-cell {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -110,24 +107,6 @@
   color: var(--cfg-text-muted);
   font-family: var(--cfg-font-mono);
   font-size: var(--cfg-text-sm);
-}
-
-.cfg-recipe-td--move {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 2rem;
-  padding: 0 0.25rem;
-}
-
-.cfg-recipe-td--move .cfg-row-action-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.cfg-recipe-td--move .cfg-row-action-btn:disabled:hover {
-  background: none;
-  color: var(--cfg-text-muted);
 }
 
 .cfg-recipe-td--actions {

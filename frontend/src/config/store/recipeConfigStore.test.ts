@@ -95,7 +95,7 @@ describe('mutations', () => {
       ],
     };
     useRecipeConfigStore.setState({ config: cfg, loaded: true });
-    useRecipeConfigStore.getState().moveParameter('t1', 'b', -1);
+    useRecipeConfigStore.getState().moveParameter('t1', 'b', 0);
     expect(
       useRecipeConfigStore.getState().config!.datasetTypes[0].parameters.map((p) => p.id),
     ).toEqual(['b', 'a']);

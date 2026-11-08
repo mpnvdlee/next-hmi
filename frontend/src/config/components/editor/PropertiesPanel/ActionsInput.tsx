@@ -23,6 +23,8 @@ import type { SchemaField } from '@shared/types/widgetSchema';
 import AddButton from '@config/components/ui/AddButton';
 import { ClearIcon } from '@config/components/ui/actionIcons';
 import FieldGroup from '@config/components/ui/FieldGroup';
+import SortableList, { SortableRow } from '@config/components/ui/SortableList';
+import { arrayMove } from '@dnd-kit/sortable';
 import { PanelScopeContext, usePanelExpansionStore } from '@config/store/panelExpansionStore';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { BreakableToken, Kw, KindLabel, PreviewText } from '../PropertySourceEditor/editors/shared';
@@ -110,6 +112,22 @@ export default function ActionsInput({
     // they can edit it immediately (its FieldGroup reads this session key).
     const path = [...(pathPrefix ?? []), eventKey, String(idx)];
     setPanelExpanded(`${scope}::${path.join('/')}`, true);
+  }
+
+  function moveAction(from: number, to: number) {
+    update(arrayMove(actions, from, to));
+    // A row's open state travels with it, not with its position.
+    const keyOf = (i: number) =>
+      `${scope}::${[...(pathPrefix ?? []), eventKey, String(i)].join('/')}`;
+    const { expanded } = usePanelExpansionStore.getState();
+    const open = arrayMove(
+      actions.map((_, i) => expanded[keyOf(i)]),
+      from,
+      to,
+    );
+    open.forEach((isOpen, i) => {
+      if (isOpen !== undefined) setPanelExpanded(keyOf(i), isOpen);
+    });
   }
 
   function removeAction(idx: number) {
@@ -267,22 +285,25 @@ export default function ActionsInput({
         !hideHeader && <div className="cfg-editor-actions__header">{eventLabel}</div>
       )}
       {description && <p className="cfg-field-group__desc">{description}</p>}
-      {actions.map((action, idx) => (
-        <ActionRow
-          key={idx}
-          action={action}
-          idx={idx}
-          pathPrefix={effectivePathPrefix}
-          eventKey={eventKey}
-          overlayTargets={overlayTargets}
-          dataTypes={dataTypes}
-          openBindingPicker={openBindingPicker}
-          onUpdate={(patch) => updateAction(idx, patch)}
-          onRemove={() => removeAction(idx)}
-          onOpenWriteVarPicker={() => openWriteVarPicker(idx)}
-          resultFields={resultFields}
-        />
-      ))}
+      <SortableList ids={actions.map((_, idx) => String(idx))} onMove={moveAction}>
+        {actions.map((action, idx) => (
+          <SortableRow key={idx} id={String(idx)}>
+            <ActionRow
+              action={action}
+              idx={idx}
+              pathPrefix={effectivePathPrefix}
+              eventKey={eventKey}
+              overlayTargets={overlayTargets}
+              dataTypes={dataTypes}
+              openBindingPicker={openBindingPicker}
+              onUpdate={(patch) => updateAction(idx, patch)}
+              onRemove={() => removeAction(idx)}
+              onOpenWriteVarPicker={() => openWriteVarPicker(idx)}
+              resultFields={resultFields}
+            />
+          </SortableRow>
+        ))}
+      </SortableList>
       {headerTitle === undefined && addControl}
       {drawerOpen && (
         <ActionTypeDrawer

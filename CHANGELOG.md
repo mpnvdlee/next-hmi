@@ -37,6 +37,14 @@ server listed.
   or on every key with **Write on** › **Every key** — a search field that
   filters a Data Grid as the operator types. **Value** sets what an unbound
   field starts with.
+- **Drag a list's rows by their ⋮⋮ grip.** Every list whose order matters —
+  actions, Switch / Case cases, value map cases, Navigation Menu items, Trend
+  Chart variables, recipe parameters, Dropdown options and Data Grid columns
+  — now has a grip in the margin before each row, so the row itself keeps
+  its place and width; in the panel's one-line option and column lists it
+  shows on the row under the pointer or with keyboard focus. Drag it, or
+  focus it and use Space and the arrow keys. Actions, cases and menu items
+  could not be reordered before; the others lose their up and down buttons.
 - **A Data Grid shows an array as a table.** Bind **Items** to a struct array
   from the PLC — a recipe list, an event log — and list the **Columns**, one
   line each in the panel and one row each in its drawer: a member picked from

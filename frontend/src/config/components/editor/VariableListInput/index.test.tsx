@@ -155,11 +155,10 @@ describe('VariableListInput', () => {
     expect(onChange).toHaveBeenCalledWith('Brew:Mash/Temp');
   });
 
-  it('reorders rows, because line colors follow the variable order', async () => {
-    const onChange = renderList('Brew:Boiler/Temp, Brew:Pump/Pressure');
+  it('gives every row a ⋮⋮ grip, because line colors follow the variable order', () => {
+    renderList('Brew:Boiler/Temp, Brew:Pump/Pressure');
 
-    await userEvent.click(screen.getAllByTitle('Move down')[0]);
-    expect(onChange).toHaveBeenCalledWith('Brew:Pump/Pressure, Brew:Boiler/Temp');
+    expect(screen.getAllByTitle('Drag to reorder')).toHaveLength(2);
   });
 
   it('clears the property when the last row is removed', async () => {

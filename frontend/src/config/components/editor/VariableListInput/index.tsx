@@ -12,7 +12,9 @@ import AddButton from '@config/components/ui/AddButton';
 import FieldGroup from '@config/components/ui/FieldGroup';
 import PropertySourceBadge from '@config/components/editor/PropertySourceSelector/PropertySourceBadge';
 import Select from '@config/components/ui/Select';
-import { ChevronDownIcon, ClearIcon, EditIcon } from '@config/components/ui/actionIcons';
+import { ClearIcon, EditIcon } from '@config/components/ui/actionIcons';
+import SortableList, { SortableRow } from '@config/components/ui/SortableList';
+import { arrayMove } from '@dnd-kit/sortable';
 
 /** A chart plots numbers, and the historian stores every sample as a REAL — so
  *  both halves of the picker offer the same coercible set. */
@@ -52,8 +54,8 @@ interface Props {
  * carries follows the chart's mode, so it can only ever name a variable the
  * chart could actually draw.
  *
- * Order is part of the value (`seriesColors` is positional), hence the reorder
- * pair an action row has no use for.
+ * Order is part of the value (`seriesColors` is positional), so each row
+ * carries the `⋮⋮` grip every reorderable list has.
  */
 export default function VariableListInput({
   value,
@@ -109,14 +111,6 @@ export default function VariableListInput({
 
   function removeAt(idx: number) {
     commit(rows.filter((_, i) => i !== idx));
-  }
-
-  function move(idx: number, delta: number) {
-    const target = idx + delta;
-    if (target < 0 || target >= rows.length) return;
-    const next = [...rows];
-    [next[idx], next[target]] = [next[target], next[idx]];
-    commit(next);
   }
 
   // `base` is the row list the picker was opened against — the one `addRow`
@@ -176,91 +170,79 @@ export default function VariableListInput({
       {description && <p className="cfg-field-group__desc">{description}</p>}
 
       {rows.length === 0 && <div className="cfg-prop-hint">No variables yet</div>}
-      {rows.map((key, idx) => (
-        // No label: a line's only identity is the variable it names, the same
-        // way an action row is titled by its own kind rather than its position.
-        <FieldGroup
-          key={idx}
-          tier={recordedOnly ? 2 : 1}
-          badge={<PropertySourceBadge source="static" variant="cap" />}
-          actions={
-            <>
-              {/* Recorded rows carry the Select's own chevron; a live row's box
+      <SortableList
+        ids={rows.map((_, idx) => String(idx))}
+        onMove={(from, to) => commit(arrayMove(rows, from, to))}
+      >
+        {rows.map((key, idx) => (
+          // No label: a line's only identity is the variable it names, the same
+          // way an action row is titled by its own kind rather than its position.
+          <SortableRow key={idx} id={String(idx)}>
+            <FieldGroup
+              tier={recordedOnly ? 2 : 1}
+              badge={<PropertySourceBadge source="static" variant="cap" />}
+              actions={
+                <>
+                  {/* Recorded rows carry the Select's own chevron; a live row's box
                   needs the `✎` every other binding field opens its picker with. */}
-              {!recordedOnly && (
+                  {!recordedOnly && (
+                    <button
+                      type="button"
+                      className="cfg-row-action-btn cfg-row-action-btn--stretch"
+                      title="Select variable"
+                      onClick={() => pickInto(idx)}
+                    >
+                      <EditIcon />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="cfg-row-action-btn cfg-row-action-btn--stretch"
+                    title="Remove variable"
+                    onClick={() => removeAt(idx)}
+                  >
+                    <ClearIcon />
+                  </button>
+                </>
+              }
+            >
+              {recordedOnly ? (
+                <Select
+                  popupClassName="cfg-var-list__popup"
+                  value={key}
+                  placeholder="Select variable…"
+                  onChange={(next) => setAt(rows, idx, next)}
+                >
+                  {optionsFor(idx).map((opt) => (
+                    <option key={opt.key} value={opt.key}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                // The `.cfg-var-field` box a bound path always renders in, made the
+                // click target itself. `PickerField` cannot serve here: its trailing
+                // buttons portal into the enclosing row's action slot, landing beside
+                // this row's own.
                 <button
                   type="button"
-                  className="cfg-row-action-btn cfg-row-action-btn--stretch"
-                  title="Select variable"
+                  className="cfg-var-field cfg-var-list__pick"
+                  title={key || 'Select variable'}
                   onClick={() => pickInto(idx)}
                 >
-                  <EditIcon />
+                  <span
+                    className={`cfg-var-field__text cfg-var-field__path${
+                      key ? '' : ' cfg-var-field__text--empty'
+                    }`}
+                  >
+                    <bdi>{key || 'Select variable…'}</bdi>
+                  </span>
                 </button>
               )}
-              <button
-                type="button"
-                className="cfg-row-action-btn cfg-row-action-btn--stretch"
-                title="Move up"
-                disabled={idx === 0}
-                onClick={() => move(idx, -1)}
-              >
-                <ChevronDownIcon className="cfg-var-list__up" />
-              </button>
-              <button
-                type="button"
-                className="cfg-row-action-btn cfg-row-action-btn--stretch"
-                title="Move down"
-                disabled={idx >= rows.length - 1}
-                onClick={() => move(idx, 1)}
-              >
-                <ChevronDownIcon />
-              </button>
-              <button
-                type="button"
-                className="cfg-row-action-btn cfg-row-action-btn--stretch"
-                title="Remove variable"
-                onClick={() => removeAt(idx)}
-              >
-                <ClearIcon />
-              </button>
-            </>
-          }
-        >
-          {recordedOnly ? (
-            <Select
-              popupClassName="cfg-var-list__popup"
-              value={key}
-              placeholder="Select variable…"
-              onChange={(next) => setAt(rows, idx, next)}
-            >
-              {optionsFor(idx).map((opt) => (
-                <option key={opt.key} value={opt.key}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            // The `.cfg-var-field` box a bound path always renders in, made the
-            // click target itself. `PickerField` cannot serve here: its trailing
-            // buttons portal into the enclosing row's action slot, landing beside
-            // this row's own.
-            <button
-              type="button"
-              className="cfg-var-field cfg-var-list__pick"
-              title={key || 'Select variable'}
-              onClick={() => pickInto(idx)}
-            >
-              <span
-                className={`cfg-var-field__text cfg-var-field__path${
-                  key ? '' : ' cfg-var-field__text--empty'
-                }`}
-              >
-                <bdi>{key || 'Select variable…'}</bdi>
-              </span>
-            </button>
-          )}
-        </FieldGroup>
-      ))}
+            </FieldGroup>
+          </SortableRow>
+        ))}
+      </SortableList>
 
       {recordedOnly && tracked && tracked.length === 0 && (
         <div className="cfg-prop-hint">

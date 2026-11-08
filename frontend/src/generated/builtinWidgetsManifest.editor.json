@@ -383,7 +383,7 @@
         "format": "columns",
         "label": "Columns",
         "group": "Data",
-        "description": "One row per column: the member it shows, its title (plain or a translation), a width — a length such as 60px, or \"fill\", which shares the free space — and its alignment. Empty shows a column per member of the first row."
+        "description": "One entry per column: the member it shows, its title from any source, a width — Fill shares the free space, Fixed is a length such as 60px — and its alignment. Empty shows a column per member of the first row."
       },
       "sortMember": {
         "label": "Sort by",

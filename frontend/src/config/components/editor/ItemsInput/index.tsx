@@ -1,10 +1,20 @@
 import BoolButtonGroup from '@config/components/ui/BoolButtonGroup';
-import RowList from './RowList';
+import PropRow from '@config/components/ui/PropRow';
 import TranslationInput from '@config/components/editor/TranslationInput';
+import { CollapsiblePropertyCard } from '@config/components/editor/PropertySourceEditor/editors/shared';
+import {
+  ParentPathContext,
+  useParentPath,
+  withSegs,
+} from '@config/components/editor/PropertySourceEditor/parentPathContext';
+import { isLocSource } from '@shared/types/propertyValueGuards';
+import type { SchemaField } from '@shared/types/widgetSchema';
 import {
   OPTION_TYPE_EMPTY_VALUE,
   type ComponentPropertyOptionType,
 } from '@shared/types/componentProperty';
+import PanelList from './PanelList';
+import './style.css';
 
 /** What one row's value may hold. It is absent while the row is still being
  *  authored — a translation nobody picked yet, a number cell the author
@@ -29,13 +39,23 @@ interface Props {
   plainLabels?: boolean;
 }
 
+const LABEL_SCHEMA: SchemaField = { type: 'String', label: 'Label' };
+
+/** A value or label as one line of the list shows it. */
+function shown(v: unknown): string {
+  if (isLocSource(v)) return v.$loc || '—';
+  if (typeof v === 'boolean') return v ? 'True' : 'False';
+  return v === undefined || v === '' ? '—' : String(v);
+}
+
 /**
  * ItemsInput — generic editor for an ordered list of { label, value } pairs.
  *
  * Used by any schema field declared with type: 'option-list', and by the
- * component-property editor for a `select` property's options. `valueType`
- * decides the value cell: text, a number input, a Yes/No group or a
- * translation picker. A label is plain text or a translation.
+ * component-property editor for a `select` property's options. The panel
+ * shows one line per option, value first, then the label (see `PanelList`).
+ * `valueType` decides the drawer's value field: text, a number input, a Yes/No
+ * group or a translation picker.
  */
 export default function ItemsInput({
   value,
@@ -46,14 +66,17 @@ export default function ItemsInput({
   const items: ItemEntry[] = Array.isArray(value) ? value : [];
   const valueType =
     declaredType ?? (items.some((item) => typeof item.value === 'number') ? 'float' : 'string');
+  const path = useParentPath();
 
-  function valueCell(item: ItemEntry, updateItem: (patch: Partial<ItemEntry>) => void) {
+  const newItem = (): ItemEntry => ({ label: '', value: OPTION_TYPE_EMPTY_VALUE[valueType] });
+
+  function valueField(item: ItemEntry, updateItem: (patch: Partial<ItemEntry>) => void) {
     if (valueType === 'integer' || valueType === 'float') {
       const isInteger = valueType === 'integer';
       return (
         <input
           type="number"
-          className="cfg-items-input__field cfg-prop-input"
+          className="cfg-prop-input"
           placeholder="Value"
           step={isInteger ? 1 : 'any'}
           value={typeof item.value === 'number' ? item.value : ''}
@@ -68,29 +91,25 @@ export default function ItemsInput({
     }
     if (valueType === 'boolean') {
       return (
-        <div className="cfg-items-input__field">
-          <BoolButtonGroup
-            value={typeof item.value === 'boolean' ? item.value : undefined}
-            onChange={(next) => updateItem({ value: next })}
-          />
-        </div>
+        <BoolButtonGroup
+          value={typeof item.value === 'boolean' ? item.value : undefined}
+          onChange={(next) => updateItem({ value: next })}
+        />
       );
     }
     if (valueType === 'loc') {
       return (
-        <div className="cfg-items-input__field">
-          <TranslationInput
-            value={item.value}
-            onChange={(next) => updateItem({ value: next as ItemValue })}
-            translationOnly
-          />
-        </div>
+        <TranslationInput
+          value={item.value}
+          onChange={(next) => updateItem({ value: next as ItemValue })}
+          translationOnly
+        />
       );
     }
     return (
       <input
         type="text"
-        className="cfg-items-input__field cfg-prop-input"
+        className="cfg-prop-input"
         placeholder="Value"
         value={typeof item.value === 'string' ? item.value : ''}
         onChange={(e) => updateItem({ value: e.target.value })}
@@ -99,29 +118,51 @@ export default function ItemsInput({
   }
 
   return (
-    <RowList
+    <PanelList
+      title="Options"
+      noun="option"
       items={items}
       onChange={onChange}
-      newItem={() => ({ label: '', value: OPTION_TYPE_EMPTY_VALUE[valueType] })}
-      cells={(item, updateItem) => (
+      newItem={newItem}
+      empty="No options yet"
+      line={(item) => (
         <>
+          <span className="cfg-option-list__value">{shown(item.value)}</span>
+          <span className="cfg-panel-list__text">{shown(item.label)}</span>
+        </>
+      )}
+      itemTitle={(item) => (
+        <>
+          <span className="cfg-option-list__value">{shown(item.value)}</span> {shown(item.label)}
+        </>
+      )}
+      renderItem={(item, updateItem, idx) => (
+        <>
+          <PropRow label="Value" block={valueType === 'loc'}>
+            {valueField(item, updateItem)}
+          </PropRow>
           {plainLabels ? (
-            <input
-              type="text"
-              className="cfg-items-input__field cfg-prop-input"
-              placeholder="Label"
-              value={typeof item.label === 'string' ? item.label : ''}
-              onChange={(e) => updateItem({ label: e.target.value })}
-            />
-          ) : (
-            <div className="cfg-items-input__field">
-              <TranslationInput
-                value={item.label}
-                onChange={(next) => updateItem({ label: next as ItemEntry['label'] })}
+            <PropRow label="Label">
+              <input
+                type="text"
+                className="cfg-prop-input"
+                placeholder="Label"
+                value={typeof item.label === 'string' ? item.label : ''}
+                onChange={(e) => updateItem({ label: e.target.value })}
               />
-            </div>
+            </PropRow>
+          ) : (
+            // Its own path, so selecting the Options field does not mark every label.
+            <ParentPathContext.Provider value={withSegs(path, String(idx), 'label')}>
+              <CollapsiblePropertyCard
+                title="Label"
+                value={item.label}
+                schema={LABEL_SCHEMA}
+                forcedSources={['static', '$loc']}
+                onChange={(label) => updateItem({ label: label as ItemEntry['label'] })}
+              />
+            </ParentPathContext.Provider>
           )}
-          {valueCell(item, updateItem)}
         </>
       )}
     />

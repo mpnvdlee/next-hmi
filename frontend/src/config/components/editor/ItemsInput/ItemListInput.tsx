@@ -9,6 +9,8 @@ interface Props {
   onChange: (v: unknown[]) => void;
   /** Rows of Data Grid columns instead of label / value pairs. */
   columns?: boolean;
+  /** For `columns`: the widget's `items`, whose members a column picks from. */
+  rows?: unknown;
 }
 
 const LABEL_VALUE_KEYS = ['label', 'value'];
@@ -20,7 +22,7 @@ const COLUMN_KEYS = ['member', 'title', 'width', 'align'];
  * x / y / side) needs. Opens as JSON when any element is more than a
  * label / value pair, so no field is hidden.
  */
-export default function ItemListInput({ value, onChange, columns = false }: Props) {
+export default function ItemListInput({ value, onChange, columns = false, rows }: Props) {
   const items = Array.isArray(value) ? value : [];
   const keys = columns ? COLUMN_KEYS : LABEL_VALUE_KEYS;
   const [asJson, setAsJson] = useState(
@@ -56,7 +58,7 @@ export default function ItemListInput({ value, onChange, columns = false }: Prop
             setInvalid(false);
           }}
         >
-          {asJson ? 'Edit as rows' : 'Edit as JSON'}
+          {asJson ? (columns ? 'Edit as list' : 'Edit as rows') : 'Edit as JSON'}
         </button>
       </FieldHeaderActions>
       {asJson ? (
@@ -78,7 +80,7 @@ export default function ItemListInput({ value, onChange, columns = false }: Prop
           )}
         </>
       ) : columns ? (
-        <ColumnsInput value={items as ColumnEntry[]} onChange={onChange} />
+        <ColumnsInput value={items as ColumnEntry[]} onChange={onChange} rows={rows} />
       ) : (
         <ItemsInput value={items as ItemEntry[]} onChange={onChange} />
       )}

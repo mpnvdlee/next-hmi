@@ -34,7 +34,8 @@ interface RecipeConfigState {
   addParameter(typeId: string, init?: NewParameterInit): void;
   patchParameter(typeId: string, paramId: string, patch: Partial<RecipeParameter>): void;
   deleteParameter(typeId: string, paramId: string): void;
-  moveParameter(typeId: string, paramId: string, dir: -1 | 1): void;
+  /** Moves a parameter to position `to` in its type's list. */
+  moveParameter(typeId: string, paramId: string, to: number): void;
 
   addDataset(typeId: string): void;
   patchDataset(typeId: string, datasetId: string, patch: Partial<RecipeDataset>): void;
@@ -182,13 +183,12 @@ export const useRecipeConfigStore = create<RecipeConfigState>((set, get) => {
         }),
       })),
 
-    moveParameter: (typeId, paramId, dir) =>
+    moveParameter: (typeId, paramId, to) =>
       mutateType(typeId, (t) => {
         const idx = t.parameters.findIndex((p) => p.id === paramId);
-        const next = idx + dir;
-        if (idx < 0 || next < 0 || next >= t.parameters.length) return t;
+        if (idx < 0 || to < 0 || to >= t.parameters.length || to === idx) return t;
         const params = [...t.parameters];
-        [params[idx], params[next]] = [params[next], params[idx]];
+        params.splice(to, 0, ...params.splice(idx, 1));
         return { ...t, parameters: params };
       }),
 
