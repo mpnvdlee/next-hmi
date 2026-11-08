@@ -9,7 +9,7 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
-## [Unreleased]
+## [1.2.0] - 2026-11-08
 
 Opens the HMI to the systems around it and shuts out the ones that should not
 reach it: API v1 for a MES or badge reader, tokens under Settings › Tokens, bit
@@ -176,9 +176,8 @@ into a dialog or component is now read once.
 
 ### Changed
 
-- **Inputs and Widget Properties.** The **Component Property** source is now
-  called **Input**, and **Exported Property** is **Widget Property**; each says
-  in one line what it reads. The block that declares them is called **Inputs**
+- **Component Property is now Input, Exported Property is Widget Property.**
+  Each source says in one line what it reads. The block that declares them is called **Inputs**
   on a component, a dialog and a page alike (it was Component Properties,
   Input Parameters and Page Variables). Both sources open one picker with an
   **Inputs** and a **Widget Properties** group, so a field switches between
@@ -1578,6 +1577,7 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
+[1.2.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.2.0
 [1.1.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.1.0
 [1.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.0
