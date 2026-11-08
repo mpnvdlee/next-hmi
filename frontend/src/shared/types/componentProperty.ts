@@ -54,8 +54,15 @@ export type ComponentPropertySchema = Omit<
 export type InputMode = 'value' | 'binding';
 
 /** Types that hold no single writable value pass through as given, so they
- *  have no mode: handlers, a slot's widgets, an asset payload. */
-const MODELESS_PROPERTY_TYPES = new Set(['actions', 'widgets', 'icon', 'image', 'video']);
+ *  have no mode: handlers, a slot's widgets, an asset payload, an option list. */
+const MODELESS_PROPERTY_TYPES = new Set([
+  'actions',
+  'widgets',
+  'icon',
+  'image',
+  'video',
+  'option-list',
+]);
 
 /**
  * The mode an input works in, or null for a type that has none. A struct is
@@ -128,6 +135,7 @@ export const VALUE_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'image', label: 'Image' },
   { value: 'video', label: 'Video' },
   { value: 'struct', label: 'Struct' },
+  { value: 'option-list', label: 'Options' },
   { value: 'actions', label: 'Actions' },
   { value: 'widgets', label: 'Widget slot' },
 ];

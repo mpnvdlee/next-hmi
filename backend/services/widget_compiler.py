@@ -77,6 +77,7 @@ SDK_NAMES: tuple[str, ...] = (
     "usePropStruct",
     "useRecordListProp",
     "useItemListProp",
+    "useOptionListProp",
     "useCssVar",
     "useVariable",
     "useBindingValue",

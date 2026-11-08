@@ -38,6 +38,7 @@ _MANIFEST = {
                 {"key": "row", "label": "Row", "type": "Struct",
                  "structSchema": [{"name": "count", "type": "Integer"}]},
                 {"key": "raw", "label": "Raw"},
+                {"key": "choice", "label": "Choice", "type": ["string", "integer"]},
             ],
         },
         "Box": {"name": "Box", "schema": {}, "exportedProperties": []},
@@ -307,6 +308,32 @@ def test_an_instance_binding_is_typed_by_the_declaration(card_ctx):
     assert _codes(report) == ["source-type"]
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        [{"label": {"$loc": "pack.tray"}, "value": 1}],
+        {"$var": {"path": "PLC:Levels"}},
+    ],
+)
+def test_an_options_input_takes_a_list_or_a_variable(ctx, value):
+    """An Options input has no mode, so a static list passes where a Binding
+    would flag it, and a bound array passes as given."""
+    options_ctx = replace(
+        ctx,
+        component_ids={"card"},
+        component_property_keys={"card": frozenset({"options"})},
+        component_properties={"card": {"options": {"type": "option-list", "label": "Options", "mode": "binding"}}},
+    )
+    assert _codes(validate_widget_node(_instance({"options": value}), options_ctx)) == []
+
+
+def test_an_options_input_fills_a_dropdown(input_ctx):
+    options = replace(input_ctx, input_schema={"options": {"type": "option-list", "label": "Options"}})
+    field = {"type": ["option-list", "string[]", "integer[]"]}
+    assert _codes(_value(options, {"$componentProp": "options"}, field)) == []
+    assert _codes(_value(options, {"$componentProp": "options"}, {"type": "string"})) == ["componentprop-type"]
+
+
 def test_an_instance_of_an_unknown_interface_is_not_typed(ctx):
     unknown = replace(ctx, component_ids={"card"})
     assert _codes(validate_widget_node(_instance({"count": "many"}), unknown)) == []
@@ -452,6 +479,9 @@ def _widget_page(prop: dict, field: str = "text", *, source: str = "dd") -> dict
     [
         ({"property": "selectedValue"}, "text"),
         ({"property": "raw"}, "text"),
+        # A list-typed export holds whichever type its instance's options do.
+        ({"property": "choice"}, "text"),
+        ({"property": "choice"}, "size"),
         ({"property": "row", "path": "count"}, "size"),
         ({"property": "row", "path": "undeclared"}, "size"),
     ],
@@ -801,7 +831,7 @@ def test_a_builtin_export_list_wins_over_a_stale_custom_row(ctx):
         },
     }
     stale = replace(ctx, widget_schemas=manifest)
-    assert [e["key"] for e in stale.widget_exports("Dropdown")] == ["selectedValue", "row", "raw"]
+    assert [e["key"] for e in stale.widget_exports("Dropdown")] == ["selectedValue", "row", "raw", "choice"]
     report = validate_page(_widget_page({"property": "nope"}), stale)
     assert _codes(report) == ["widgetprop-unknown"]
 

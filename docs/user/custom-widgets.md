@@ -63,7 +63,7 @@ Every name below is a global — no import, ever.
 
 - **React primitives** — `React`, `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`, `createPortal`.
 - **Data & writes** — `useVariable`, `useStructVariable`, `useVariableMeta`, `useBindingValue`, `useWriteVariable`, `useEvalContext`, and `sendWsMessage` for frames that aren't variable writes.
-- **Property resolvers** — `usePropString` / `usePropNumber` / `usePropBoolean`, `usePropVar`, `usePropStruct`, `useRecordListProp`, and the non-hook `getProp*` variants for use inside callbacks.
+- **Property resolvers** — `usePropString` / `usePropNumber` / `usePropBoolean`, `usePropVar`, `usePropStruct`, `useRecordListProp`, `useOptionListProp`, and the non-hook `getProp*` variants for use inside callbacks.
 - **Styling** — `selfLayoutStyle`, `widgetColorStyle`, `useCssVar`, `useHmiScope`.
 - **Cross-widget props** — `usePublishWidgetProp`, so a sibling can read your state through `$widgetProp`.
 - **Workspace data** — `useUsersData`, `useUserGroupsData`, `useLanguagesData`.

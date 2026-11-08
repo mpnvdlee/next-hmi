@@ -836,6 +836,38 @@ export function useItemListProp(
   };
 }
 
+/** One entry of an `option-list`: its label as text, its value as given — a
+ *  number stays a number so a bound Integer is written one. */
+export interface OptionEntry {
+  label: string;
+  value: string | number;
+}
+
+/**
+ * Hook: read an `option-list` property as `{ label, value }` entries, from any
+ * source `useItemListProp` reads. Each label is evaluated, so a `{ $loc }` (or
+ * any other source) shows as its text; a bare element is both label and value.
+ * @example
+ *   const options = useOptionListProp(properties, 'options');
+ */
+export function useOptionListProp(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+): OptionEntry[] {
+  const { items } = useItemListProp(properties, key);
+  const evalCtx = useEvalContext();
+  return useMemo(
+    () =>
+      items.map((el) => {
+        const entry = isRecord(el) ? el : { value: el };
+        const label = stringValue(evaluatePropertyValue(entry.label ?? entry.value, evalCtx)) ?? '';
+        const value = entry.value ?? label;
+        return { label, value: typeof value === 'number' ? value : (stringValue(value) ?? '') };
+      }),
+    [items, evalCtx],
+  );
+}
+
 /**
  * Hook: read a CSS custom property from the document root, re-reading whenever the
  * active theme changes so canvas/SVG components (which can't rely on CSS cascade)

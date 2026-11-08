@@ -395,7 +395,7 @@ A row of mutually-exclusive buttons — pick 1 of N. Writes the chosen option to
 | `label` | Label | `String` |
 | `options` | Options | `option-list | String[] | Integer[]` |
 | `variable` | Value | `String | Integer | Float` |
-| `selectedValue` | Selected value | `String` |
+| `selectedValue` | Selected value | `String | Integer | Float` |
 | `disabled` | Disabled | `Boolean` |
 | `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |
@@ -409,7 +409,8 @@ Pick one option from a list. Publishes the selection for sibling widgets to read
 |---|---|---|
 | `label` | Label | `String` |
 | `options` | Options | `option-list | String[] | Integer[]` |
-| `selectedValue` | Selected value | `String` |
+| `maxIndex` | Max index | `Integer` |
+| `selectedValue` | Selected value | `String | Integer | Float` |
 | `disabled` | Disabled | `Boolean` |
 | `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |

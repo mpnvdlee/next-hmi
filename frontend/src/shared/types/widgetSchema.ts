@@ -97,7 +97,9 @@ export interface ExportedStructField {
 export interface ExportedProperty {
   key: string; // property key published to widgetPropStore
   label: string; // human-readable label shown in the editor picker
-  type?: string; // e.g. 'String', 'Float', 'Boolean'
+  /** e.g. 'String', 'Float', 'Boolean'. A list: the value is any one of them,
+   *  as the instance decides — a Dropdown's is whatever its options hold. */
+  type?: string | string[];
   /** For a `Struct` export: declared fields with datatypes, so the $widgetProp
    *  picker can show and type-check individual fields. Falls back to the
    *  component's configured column keys (untyped) when omitted. */

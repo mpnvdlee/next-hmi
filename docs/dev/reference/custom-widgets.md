@@ -203,6 +203,7 @@ Hook variants (call internally `useEvalContext()`; safe to use inside a componen
 - `usePropStruct(props, key)` — for struct properties; returns the live struct (or array for an array struct `type` like `'struct[]'`).
 - `useRecordListProp(props, key)` — for a `record-list` property (array of records); resolves a `$var` struct-array binding, the `$recipeList` value source, a `$widgetProp` export, or a static array, and returns `unknown[]`.
 - `useItemListProp(props, key)` — for an `item-list` property (any array); resolves a scalar or struct `$var` array, a static list, an `$http` JSON-array pick, `$recipeList`, `$user` users/groups or a `$widgetProp` export, and returns `{ items, arrayKey?, structArray }` — `arrayKey` is set only for a `$var` array, which is what makes its elements writable.
+- `useOptionListProp(props, key)` — for an `option-list` property; reads it as `useItemListProp` does and returns `{ label, value }[]`, each label evaluated (a `{ $loc }` label shows translated), a bare element both label and value, a numeric value kept a number.
 
 Non-hook variants (safe in event handlers, action callbacks, utilities — accept an optional `evalCtx`):
 
@@ -213,7 +214,7 @@ Non-hook variants (safe in event handlers, action callbacks, utilities — accep
 
 ### Cross-widget props (`$widgetProp`)
 
-- `usePublishWidgetProp(componentId, key, value)` — publish a value from this component so sibling components can read it via `$widgetProp`. Declare what you publish via `exportedProperties` on the default export.
+- `usePublishWidgetProp(componentId, key, value)` — publish a value from this component so sibling components can read it via `$widgetProp`. Declare what you publish via `exportedProperties` on the default export. It publishes after the render that changed `value`, so it returns a function that publishes at once: call it with the new value before `executeWidgetActions` in the handler that changed it, or an On Change action reading the export gets the value before.
 
 ### Workspace data
 
@@ -746,7 +747,7 @@ Every widget — built-in and custom — is automatically given two standard boo
 
 Optional sibling exports:
 
-- `exportedProperties: ExportedProperty[]` — declares which runtime values this component publishes for sibling components to consume via `$widgetProp`. Extracted into the schema manifest like `schema`, so the editor's `$widgetProp` picker lists them without loading the module, and backend validation checks a `$widgetProp` read against them (`widgetprop-unknown` / `widgetprop-type`, see [value-types.md](../architecture/value-types.md#type-diagnostics)); it must be an array of objects each with a non-empty `key`, or the widget lands in the manifest with a `schemaError`.
+- `exportedProperties: ExportedProperty[]` — declares which runtime values this component publishes for sibling components to consume via `$widgetProp`. Extracted into the schema manifest like `schema`, so the editor's `$widgetProp` picker lists them without loading the module, and backend validation checks a `$widgetProp` read against them (`widgetprop-unknown` / `widgetprop-type`, see [value-types.md](../architecture/value-types.md#type-diagnostics)); it must be an array of objects each with a non-empty `key`, or the widget lands in the manifest with a `schemaError`. A `type` list (`['string', 'integer', 'float']`) says the value is any one of them, as the instance decides — a Dropdown publishes whatever its options hold — so the export fits a field that takes one of them.
 - `displayName: string` — the label shown in the palette, the widget tree and the properties panel header. The folder name stays the widget *type* that page files reference; export this when that type reads badly as a label, since a folder name cannot carry spaces (`StretchSpacer` → `Stretch Spacer`). Defaults to the folder name.
 - `hostsChildren: boolean` — declares that nodes of this type carry a `children` array. The editor then treats the widget as a container (drop target, collapse toggle, tree recursion, move target) and the renderer hands the already-rendered children in as the component's `children` prop. Read them with `React.Children`, and place them with `containerLayoutProps(layout)` on the element that is actually `display: flex` — that element must carry `hmi-component` (or `hmi-container`), which is where the shared layout barrier in `hmi.css` resets every `--container-*` and `--w-*`/`--h-*`, and without it a nested host inherits its parent's direction and gap. The built-in `Container` is the worked example for the **split** form of this: its actual flex parent is `.hmi-container__content`, an inner element that carries neither class — only the outer `.hmi-container` does, and `--container-*` reaches the inner element by ordinary CSS inheritance, so only the class-carrying element needs it. `Container` also keeps its own configured padding off that outer element entirely, applying it instead to `.hmi-container__content` (and `.hmi-container__title`, when there is one) — see `containerLayoutProps` above for why.
 - `flowsChildren: boolean` — declares that those children are laid out with flexbox, off `containerLayoutProps`. Narrower than `hostsChildren`, and only meaningful with it: a host that pins its children to fixed slots (the built-in `ImageContainer`) hosts without flowing. Declaring it is what gives each child a resolvable main axis: the Layout panel offers them Hug/Fill/Fixed against it, and `hmi.css`'s flow-translation block reads each child's own axis-neutral `widthMode`/`heightMode` intent against whichever screen axis this host's own `data-flow-direction` says is main. Without it, a child's Fill/Hug intent applies against whatever ancestor is actually its flex parent, which may not be this one. Set it on any widget that arranges children in order (a row, a card, a grid).
@@ -784,7 +785,7 @@ A variable fits a token when its array-ness and base type match exactly — a `f
 | `image`             | `usePropString`                            |
 | `video`             | `usePropString`                            |
 | `struct`            | `usePropStruct` (or `useStructVariable`)   |
-| `option-list`       | inspect `properties.<key>` directly        |
+| `option-list`       | `useOptionListProp`                        |
 | `item-list`         | `useItemListProp`                          |
 | `actions`           | `executeWidgetActions(props[key][event])`  |
 | `groups`            | read `properties.<key>` as `string[]`      |

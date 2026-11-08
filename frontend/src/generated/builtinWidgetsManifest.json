@@ -968,7 +968,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "0506222783f0abc4",
+    "buildTs": "0d274ce78f4089a5",
     "displayName": "Button Row",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -994,7 +994,11 @@
         "write": true
       },
       "selectedValue": {
-        "type": "string"
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
       },
       "disabled": {
         "type": "boolean"
@@ -1014,7 +1018,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "ba035769cbc00049",
+    "buildTs": "c369afef70e27d94",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1031,8 +1035,15 @@
           "integer[]"
         ]
       },
+      "maxIndex": {
+        "type": "integer"
+      },
       "selectedValue": {
-        "type": "string"
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
       },
       "disabled": {
         "type": "boolean"

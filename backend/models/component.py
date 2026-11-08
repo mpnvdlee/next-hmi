@@ -15,7 +15,7 @@ class ComponentPropertySchema(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str  # boolean | integer | float | string | datetime | <arrays> | struct | color | select | icon | image | actions | widgets
+    type: str  # boolean | integer | float | string | datetime | <arrays> | struct | color | select | icon | image | option-list | actions | widgets
     label: str
     # One line explaining the property, mirroring SchemaField.description on the
     # frontend — which has always allowed it, while this model rejected it and

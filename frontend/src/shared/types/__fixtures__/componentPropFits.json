@@ -651,5 +651,33 @@
     "verdict": {
       "ok": false
     }
+  },
+  {
+    "name": "options property fits a dropdown's options field",
+    "prop": {
+      "type": "option-list",
+      "label": "O"
+    },
+    "slot": {
+      "fieldType": ["option-list", "string[]", "integer[]"]
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "options property does not fit a string field",
+    "prop": {
+      "type": "option-list",
+      "label": "O"
+    },
+    "slot": {
+      "fieldType": "string"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
   }
 ]

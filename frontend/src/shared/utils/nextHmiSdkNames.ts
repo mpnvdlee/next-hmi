@@ -59,6 +59,7 @@ export const SDK_NAMES = [
   'usePropStruct',
   'useRecordListProp',
   'useItemListProp',
+  'useOptionListProp',
   'useCssVar',
   'useVariable',
   'useBindingValue',

@@ -160,3 +160,49 @@ describe('ItemsInput — localisable values', () => {
     expect(screen.queryByPlaceholderText('Value')).not.toBeInTheDocument();
   });
 });
+
+describe('ItemsInput — a widget Options list', () => {
+  beforeEach(() => {
+    useTranslationStore.setState({
+      languages: [{ code: 'en' }],
+      translations: { 'pack.tray': { en: 'Tray' } },
+    });
+  });
+
+  it('shows a translated label as its key and can pick one', () => {
+    const onChange = vi.fn();
+    render(
+      <ItemsInput
+        value={[
+          { label: { $loc: 'pack.tray' }, value: 'tray' },
+          { label: 'Box', value: 'box' },
+        ]}
+        onChange={onChange}
+      />,
+    );
+
+    expect(screen.getByText('pack.tray')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('[object Object]')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByTitle('Plain text — click for Translation')[0]);
+    fireEvent.change(screen.getByPlaceholderText('Search translations…'), {
+      target: { value: 'pack' },
+    });
+    fireEvent.click(screen.getByRole('option', { name: /pack\.tray/ }));
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      { label: { $loc: 'pack.tray' }, value: 'tray' },
+      { label: { $loc: 'pack.tray' }, value: 'box' },
+    ]);
+  });
+
+  it('shows and keeps numeric values when no value kind is declared', () => {
+    const onChange = vi.fn();
+    render(<ItemsInput value={[{ label: 'One', value: 1 }]} onChange={onChange} />);
+
+    expect(screen.getByRole('spinbutton')).toHaveValue(1);
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2' } });
+
+    expect(onChange).toHaveBeenCalledWith([{ label: 'One', value: 2 }]);
+  });
+});

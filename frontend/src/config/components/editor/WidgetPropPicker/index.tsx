@@ -27,12 +27,15 @@ import { GroupHeaderRow } from '../BindingPickerShell/rowParts';
 import { PickerRow, type RowContext } from '../VariableBindingPicker/rows';
 import {
   buildComponentPropRows,
+  componentPropFits,
   componentPropVerdict,
   isStructTarget,
   propSlotOf,
   structSchemaNodeVerdict,
+  type PropSlot,
   type PropVerdict,
 } from '../VariableBindingPicker/componentPropHelpers';
+import { typeList } from '@shared/utils/valueTypes';
 import type { RowItem } from '../VariableBindingPicker/variableTreeHelpers';
 import RightPanel, {
   type ComponentPropMode,
@@ -70,14 +73,20 @@ function structFieldsFor(comp: ComponentOption, prop: ExportedProperty): Exporte
  * Adapt an exported property to the ComponentPropertySchema shape the shared
  * compatibility/row-building helpers understand, so an export is judged by the
  * same `accepts` rule as a component property. An export's struct fields are
- * flat, so they become childless variable nodes.
+ * flat, so they become childless variable nodes. An export typed with a list
+ * holds any one of those types, so it is judged by the first that fits `slot`.
  */
 function adaptSchema(
   prop: ExportedProperty,
   fields: ExportedStructField[],
+  slot: PropSlot | null,
 ): ComponentPropertySchema {
+  const types = typeList(prop.type ?? 'string');
+  const fitting = slot
+    ? types.find((type) => componentPropFits({ type, label: prop.label, mode: 'binding' }, slot))
+    : undefined;
   return {
-    type: prop.type ?? 'string',
+    type: fitting ?? types[0] ?? 'string',
     label: prop.label,
     // Another widget's state, written through nothing here — never a local Value.
     mode: 'binding',
@@ -120,7 +129,11 @@ function buildWidgetPropRows(
 
     const properties: Record<string, ComponentPropertySchema> = {};
     for (const prop of comp.exportedProperties) {
-      properties[prop.key] = adaptSchema(prop, structFieldsFor(comp, prop));
+      properties[prop.key] = adaptSchema(
+        prop,
+        structFieldsFor(comp, prop),
+        propSlotOf(fieldType, requiredFields, write),
+      );
     }
 
     const propRows = buildComponentPropRows(
@@ -230,7 +243,7 @@ export default function WidgetPropPicker() {
     if (!sel || !selComp || !selProp) return { selectedItem: null, typeIsOk: false };
 
     const fields = structFieldsFor(selComp, selProp);
-    const schema = adaptSchema(selProp, fields);
+    const schema = adaptSchema(selProp, fields, slot);
     const compLabel = selComp.name || selComp.type;
     let node: StructSchemaNode | null = null;
     let verdict: PropVerdict;

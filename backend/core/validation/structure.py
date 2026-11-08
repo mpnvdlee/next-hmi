@@ -2923,10 +2923,17 @@ def _widget_prop_problem(
         subject = f"exported property '{widget_id}.{prop_name}/{sub}'"
     else:
         # Another widget's state, written through nothing here — never a local Value.
-        adapted: dict[str, Any] = {"type": export.get("type") or "string", "mode": "binding"}
+        adapted: dict[str, Any] = {"mode": "binding"}
         if fields:
             adapted["structSchema"] = [as_node(f) for f in fields]
-        why = component_property.declaration_verdict(adapted, schema_field)
+        # A list-typed export holds any one of them, as the instance decides (a
+        # Dropdown's options): it fits where one of them does (`adaptSchema`).
+        declared = export.get("type") or "string"
+        verdicts = [
+            component_property.declaration_verdict({**adapted, "type": t}, schema_field)
+            for t in (declared if isinstance(declared, list) else [declared])
+        ]
+        why = None if None in verdicts else verdicts[0]
     if why == "read-only":
         return "widgetprop-type", f"{subject} cannot be written, and this field writes to it"
     if why == "type":

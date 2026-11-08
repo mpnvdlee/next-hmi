@@ -473,7 +473,8 @@ interface ExportedStructField {
 interface ExportedProperty {
   key: string;
   label: string;
-  type?: string;
+  /** A list: the value is any one of these types, as the instance decides. */
+  type?: string | string[];
   /** For a `Struct` export: declared fields with datatypes, shown in the $widgetProp picker. */
   structSchema?: ExportedStructField[];
 }
@@ -581,11 +582,13 @@ declare function executeWidgetActions(
   actions: ComponentAction[] | undefined,
   context?: { scope?: string; evalCtx?: EvaluationContext; anchorEl?: HTMLElement | null },
 ): void;
+/** Returns a function that publishes a value at once — call it before running
+ *  actions in the handler that changed the value, so they read the new one. */
 declare function usePublishWidgetProp(
   componentId: string | undefined,
   key: string,
   value: unknown,
-): void;
+): (value: unknown) => void;
 
 declare function useUsersData(): Array<{ id: string; username: string }>;
 declare function useUserGroupsData(): Array<{ id: string; label: string }>;
@@ -1103,6 +1106,22 @@ declare function useItemListProp(
   properties: Record<string, unknown> | undefined,
   key: string,
 ): ItemList;
+
+/** One entry of an `option-list`: its label as text, its value as given. */
+interface OptionEntry {
+  label: string;
+  value: string | number;
+}
+
+/**
+ * Read an `option-list` property as `{ label, value }` entries from any source
+ * `useItemListProp` reads. Each label is evaluated, so a `{ $loc }` label shows
+ * as its translation; a bare element is both label and value.
+ */
+declare function useOptionListProp(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+): OptionEntry[];
 
 declare function useCssVar(varName: string, fallback: string): string;
 

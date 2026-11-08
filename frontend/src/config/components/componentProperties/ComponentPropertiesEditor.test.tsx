@@ -77,6 +77,22 @@ describe('ComponentPropertiesEditor', () => {
     expect(screen.queryByText('Default value')).not.toBeInTheDocument();
   });
 
+  it('gives an Options input no kind and a list editor for its default', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const options = { options: { type: 'option-list', label: 'Choices' } };
+    render(<ComponentPropertiesEditor properties={options} onChange={onChange} />);
+
+    await user.click(screen.getByText('Choices'));
+    expect(screen.getByText('Options')).toBeInTheDocument();
+    expect(screen.queryByText('Kind')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Add item/ }));
+
+    expect(onChange).toHaveBeenCalledWith({
+      options: { type: 'option-list', label: 'Choices', defaultValue: [{ label: '', value: '' }] },
+    });
+  });
+
   it('offers only Value on a page of the Pages section', async () => {
     const user = userEvent.setup();
     render(<ComponentPropertiesEditor properties={properties} valueOnly onChange={vi.fn()} />);

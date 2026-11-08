@@ -15,16 +15,21 @@ import {
 type ItemValue = string | number | boolean | { $loc: string };
 
 export interface ItemEntry {
-  label: string;
+  /** Plain text, or a translation the runtime shows in the current language. */
+  label: string | { $loc: string };
   value?: ItemValue;
 }
 
 interface Props {
   value: ItemEntry[] | undefined;
   onChange: (v: ItemEntry[]) => void;
-  /** What each row's value holds. Absent reads as `string` — the only kind the
-   *  list offered before, and what every stored option-list still carries. */
+  /** What each row's value holds. Absent, a list holding a number edits as
+   *  numbers and any other as `string` — a widget's Options field declares no
+   *  value kind, and a numbered list must not show empty cells. */
   valueType?: ComponentPropertyOptionType;
+  /** Labels as plain text only: a `select` property's options, which the
+   *  editor itself shows, untranslated. */
+  plainLabels?: boolean;
 }
 
 /**
@@ -33,10 +38,17 @@ interface Props {
  * Used by any schema field declared with type: 'option-list', and by the
  * component-property editor for a `select` property's options. `valueType`
  * decides the value cell: text, a number input, a Yes/No group or a
- * translation picker.
+ * translation picker. A label is plain text or a translation.
  */
-export default function ItemsInput({ value, onChange, valueType = 'string' }: Props) {
+export default function ItemsInput({
+  value,
+  onChange,
+  valueType: declaredType,
+  plainLabels = false,
+}: Props) {
   const items: ItemEntry[] = Array.isArray(value) ? value : [];
+  const valueType =
+    declaredType ?? (items.some((item) => typeof item.value === 'number') ? 'float' : 'string');
 
   function addItem() {
     onChange([...items, { label: '', value: OPTION_TYPE_EMPTY_VALUE[valueType] }]);
@@ -145,13 +157,22 @@ export default function ItemsInput({ value, onChange, valueType = 'string' }: Pr
               ▼
             </button>
           </div>
-          <input
-            type="text"
-            className="cfg-items-input__field cfg-prop-input"
-            placeholder="Label"
-            value={item.label}
-            onChange={(e) => updateItem(idx, { label: e.target.value })}
-          />
+          {plainLabels ? (
+            <input
+              type="text"
+              className="cfg-items-input__field cfg-prop-input"
+              placeholder="Label"
+              value={typeof item.label === 'string' ? item.label : ''}
+              onChange={(e) => updateItem(idx, { label: e.target.value })}
+            />
+          ) : (
+            <div className="cfg-items-input__field">
+              <TranslationInput
+                value={item.label}
+                onChange={(next) => updateItem(idx, { label: next as ItemEntry['label'] })}
+              />
+            </div>
+          )}
           {valueCell(item, idx)}
           <button
             type="button"

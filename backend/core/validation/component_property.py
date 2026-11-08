@@ -48,7 +48,7 @@ def _required_fields(nodes: list) -> list[dict[str, Any]]:
 
 
 # Types that hold no single writable value, so they have no mode (`inputMode`).
-_MODELESS_TYPES = frozenset({"actions", "widgets", "icon", "image", "video"})
+_MODELESS_TYPES = frozenset({"actions", "widgets", "icon", "image", "video", "option-list"})
 
 
 def _primary(prop: dict[str, Any]) -> str:

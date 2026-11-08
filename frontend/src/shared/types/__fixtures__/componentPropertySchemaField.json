@@ -264,5 +264,29 @@
       "type": "actions",
       "label": "On press"
     }
+  },
+  {
+    "name": "an option list has no mode",
+    "input": {
+      "type": "option-list",
+      "label": "Options",
+      "mode": "binding",
+      "defaultValue": [
+        {
+          "label": "A",
+          "value": 0
+        }
+      ]
+    },
+    "output": {
+      "type": "option-list",
+      "label": "Options",
+      "defaultValue": [
+        {
+          "label": "A",
+          "value": 0
+        }
+      ]
+    }
   }
 ]

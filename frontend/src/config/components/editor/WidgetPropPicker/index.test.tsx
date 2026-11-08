@@ -45,4 +45,23 @@ describe('WidgetPropPicker', () => {
 
     expect(screen.getByText('Selected Row')).toBeInTheDocument();
   });
+
+  it('offers a list-typed export to a field that takes any one of its types', () => {
+    const dropdown: ComponentOption[] = [
+      {
+        id: 'dd',
+        name: 'Mode',
+        type: 'Dropdown',
+        exportedProperties: [
+          { key: 'selectedValue', label: 'Selected Value', type: ['string', 'integer'] },
+        ],
+      },
+    ];
+    useEditorDomainStore.getState().openWidgetPropPicker(dropdown, () => {}, {
+      fieldType: 'integer',
+    });
+    render(<WidgetPropPicker />);
+
+    expect(screen.getByText('Selected Value')).toBeInTheDocument();
+  });
 });

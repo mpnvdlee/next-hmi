@@ -82,6 +82,14 @@ server listed.
 - **`sendWsMessage` says whether it sent.** The widget SDK's
   `sendWsMessage` returns `true` when the message went out and `false` when
   the live connection is down.
+- **A component can take an option list.** A new input type, **Options**,
+  passes a list of label and value pairs. Set a Dropdown's or Button Row's
+  **Options** inside the component to that input, and each instance offers
+  its own list. The widget SDK has `useOptionListProp` to read one.
+- **A Dropdown can stop at a maximum.** A new **Max index** property shows
+  the options up to and including that position, counted from 0. Bind it to
+  a controller tag to offer only the choices the machine allows; left empty,
+  every option shows.
 
 ### Changed
 
@@ -194,6 +202,21 @@ server listed.
   the dialog page declares, and validation warned about any other,
   so an input its page group declares could not be set. Both now include the
   inputs of every group the page sits in.
+- **On Change reads the option just picked.** A Dropdown's or Button Row's
+  On Change that read the widget's own selection through **Widget property**
+  got the one picked before. Dropdown and Button
+  Row also publish the option's own value now, so a numbered list writes a
+  number to an Integer tag, and the warnings pill no longer says a String
+  does not fit it. Their **Selected value** binds an Integer or Float tag
+  too, and selects the option holding the tag's value.
+- **A translated option label shows its text.** A Dropdown or Button Row
+  option whose label was a translation showed `[object Object]`. Every label
+  is now read like any other property, so a translation shows in the active
+  language. The options list editor showed it as `[object Object]` too, and
+  showed a number value as an empty cell. The panel now lists one line per
+  option — the value first, then the label — reordered by dragging; a click
+  opens the option in the panel's drawer, where the label takes
+  Static or Localizable Text from the usual source menu and the value is typed.
 - **An AI assistant on another machine can reach MCP.** `/mcp` answered
   every client that did not address the HMI as `localhost` or `127.0.0.1`
   with `421 Invalid Host header`, so an assistant on a laptop on the plant

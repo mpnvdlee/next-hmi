@@ -13,7 +13,7 @@ export const schema = {
     write: true,
   },
   selectedValue: {
-    type: 'string' as const,
+    type: ['string', 'integer', 'float'] as const,
     label: 'Selected value',
     description: 'Initial selection when no Value variable is bound.',
     group: 'Data',
@@ -23,7 +23,8 @@ export const schema = {
 };
 
 export const exportedProperties: ExportedProperty[] = [
-  { key: 'selectedValue', label: 'Selected value', type: 'string' },
+  // The picked option's own value: a number for a numbered list.
+  { key: 'selectedValue', label: 'Selected value', type: ['string', 'integer', 'float'] },
 ];
 
 export const displayName = 'Button Row';
@@ -31,25 +32,6 @@ export const description =
   'A row of mutually-exclusive buttons — pick 1 of N. Writes the chosen option to a bound variable, or tracks selection locally and fires On Change.';
 export const category = 'Inputs';
 export const icon = { type: 'builtin', name: 'columns' } as const;
-
-interface OptionEntry {
-  label: string;
-  value: string | number;
-}
-
-function toOptions(items: unknown[]): OptionEntry[] {
-  return items.map((el) => {
-    if (el !== null && typeof el === 'object') {
-      const entry = el as Record<string, unknown>;
-      const rawValue = entry.value ?? entry.label ?? '';
-      return {
-        label: String(entry.label ?? entry.value ?? ''),
-        value: typeof rawValue === 'number' ? rawValue : String(rawValue),
-      };
-    }
-    return { label: String(el ?? ''), value: typeof el === 'number' ? el : String(el ?? '') };
-  });
-}
 
 export default function ButtonRow({ id, properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
@@ -67,13 +49,17 @@ export default function ButtonRow({ id, properties, layout }: HmiWidgetProps) {
     if (!varKey) setLocalSelected(propSelectedValue);
   }, [propSelectedValue, varKey]);
 
-  const { items } = useItemListProp(properties, 'options');
-  const options = useMemo(() => toOptions(items), [items]);
+  const options = useOptionListProp(properties, 'options');
 
   const activeValue = varKey ? boundValue : localSelected;
   const activeStr = activeValue == null ? '' : String(activeValue);
 
-  usePublishWidgetProp(id, 'selectedValue', activeStr);
+  const activeOption = options.find((option) => String(option.value) === activeStr);
+  const publishSelected = usePublishWidgetProp(
+    id,
+    'selectedValue',
+    activeOption ? activeOption.value : activeStr,
+  );
 
   const actions = (properties?.onChange as ActionsConfig | undefined)?.onChange;
 
@@ -83,6 +69,7 @@ export default function ButtonRow({ id, properties, layout }: HmiWidgetProps) {
     // row still tracks its own selection and publishes it to siblings.
     if (varKey) writeVariable(option.value);
     else setLocalSelected(String(option.value));
+    publishSelected(option.value);
     executeWidgetActions(actions, { scope, evalCtx });
   }
 

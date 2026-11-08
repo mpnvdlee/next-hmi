@@ -40,6 +40,7 @@ import {
   usePropStruct,
   useRecordListProp,
   useItemListProp,
+  useOptionListProp,
   useCssVar,
 } from '@hmi/components/layoutUtils';
 import { useVariable, useBindingValue, useVariableMeta } from '@hmi/hooks/useVariable';
@@ -126,6 +127,7 @@ export const nextHmiSdk = {
   usePropStruct,
   useRecordListProp,
   useItemListProp,
+  useOptionListProp,
   useCssVar,
   useVariable,
   useBindingValue,

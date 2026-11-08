@@ -1631,7 +1631,7 @@
           {
             "key": "selectedValue",
             "label": "Selected value",
-            "type": "String",
+            "type": "String | Integer | Float",
             "group": "Data"
           },
           {
@@ -1679,9 +1679,15 @@
             "group": "Content"
           },
           {
+            "key": "maxIndex",
+            "label": "Max index",
+            "type": "Integer",
+            "group": "Data"
+          },
+          {
             "key": "selectedValue",
             "label": "Selected value",
-            "type": "String",
+            "type": "String | Integer | Float",
             "group": "Data"
           },
           {

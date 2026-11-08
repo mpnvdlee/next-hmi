@@ -122,7 +122,10 @@ export function useEvalContext(): EvaluationContext {
         },
 
         resolveComponentProp: (componentId, property): ResolvedValue => {
-          const val = exportsFor(widgetProps, componentId, repeatScope?.key)?.[property];
+          // Fresh, like resolveVariable: an action run in the handler that just
+          // published a value must read it, not this render's snapshot.
+          const props = useComponentPropStore.getState().props;
+          const val = exportsFor(props, componentId, repeatScope?.key)?.[property];
           return (val !== undefined ? val : null) as ResolvedValue;
         },
 

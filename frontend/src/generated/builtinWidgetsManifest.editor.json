@@ -1838,7 +1838,11 @@
       {
         "key": "selectedValue",
         "label": "Selected value",
-        "type": "string"
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
       }
     ],
     "schema": {
@@ -1879,7 +1883,11 @@
       {
         "key": "selectedValue",
         "label": "Selected Value",
-        "type": "string"
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
       }
     ],
     "schema": {
@@ -1890,6 +1898,11 @@
       "options": {
         "label": "Options",
         "group": "Content"
+      },
+      "maxIndex": {
+        "label": "Max index",
+        "description": "Show the options up to and including this position, counted from 0. Empty shows all.",
+        "group": "Data"
       },
       "selectedValue": {
         "label": "Selected value",

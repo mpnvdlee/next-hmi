@@ -25,7 +25,7 @@ import propertySourceIcons from '../editor/PropertySourceSelector/propertySource
 import { KindLabel, PreviewText } from '../editor/PropertySourceEditor/editors/shared';
 import RequiredFieldsTree from '../editor/VariableBindingPicker/RequiredFieldsTree';
 import Select from '../ui/Select';
-import ItemsInput from '../editor/ItemsInput';
+import ItemsInput, { type ItemEntry } from '../editor/ItemsInput';
 import { PropertyModal } from './PropertyModal';
 import { StructSchemaModal } from './StructSchemaModal';
 
@@ -349,8 +349,9 @@ function ComponentPropertyRow({
           <PropRow label="Options" block sourceless>
             <ItemsInput
               valueType={optionType}
+              plainLabels
               value={schema.options ?? []}
-              onChange={(options) => onChange({ options })}
+              onChange={(options) => onChange({ options: options as typeof schema.options })}
             />
           </PropRow>
         </>
@@ -365,11 +366,19 @@ function ComponentPropertyRow({
           label="Default value"
           description="Used wherever an instance leaves this property unset."
           sourceless
+          block={primary === 'option-list'}
         >
-          {renderSchemaField(
-            componentPropertyToSchemaField({ ...schema, defaultValue: undefined }),
-            schema.defaultValue,
-            (v) => onChange({ defaultValue: v }),
+          {primary === 'option-list' ? (
+            <ItemsInput
+              value={schema.defaultValue as ItemEntry[] | undefined}
+              onChange={(defaultValue) => onChange({ defaultValue })}
+            />
+          ) : (
+            renderSchemaField(
+              componentPropertyToSchemaField({ ...schema, defaultValue: undefined }),
+              schema.defaultValue,
+              (v) => onChange({ defaultValue: v }),
+            )
           )}
         </PropRow>
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useComponentPropStore } from '../store/widgetPropStore';
 import { useRepeatScope } from '../context/RepeatScopeContext';
 
@@ -25,12 +25,17 @@ function publishIds(componentId: string, scopedId: string | undefined, bare: boo
  * bare id, which is what a reader outside the Repeater gets.
  *
  * Cleans up on unmount by removing this component's entry from the store.
+ *
+ * Returns a function that publishes a value at once. A widget that runs its
+ * actions in the same handler that changes the value calls it first, so a
+ * `$widgetProp` in those actions reads the new value, not the one the effect
+ * below would publish only after the next render.
  */
 export function usePublishWidgetProp(
   componentId: string | undefined,
   key: string,
   value: unknown,
-): void {
+): (value: unknown) => void {
   const setComponentProp = useComponentPropStore((s) => s.setComponentProp);
   const clearComponentProps = useComponentPropStore((s) => s.clearComponentProps);
   const repeatScope = useRepeatScope();
@@ -54,4 +59,13 @@ export function usePublishWidgetProp(
     // Only run cleanup on unmount (ids stable per component instance)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [componentId, scopedId]);
+
+  return useCallback(
+    (next: unknown) => {
+      if (componentId) {
+        setComponentProp(publishIds(componentId, scopedId, publishesBareRef.current), key, next);
+      }
+    },
+    [componentId, scopedId, key, setComponentProp],
+  );
 }
