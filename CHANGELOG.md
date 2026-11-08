@@ -22,6 +22,11 @@ server listed.
 
 ### Added
 
+- **Stack widgets on top of each other.** A Container's **Direction** gains
+  **Stack** beside Row and Column: every child sits in the same spot, drawn
+  over the one before it, and the Container is as big as its largest child.
+  Align and Distribute place the children, a Fill child stretches over the
+  whole Container; hide one and the one below shows.
 - **Build a tab bar from your own Buttons.** Three actions switch the pages of
   a page group: **Page Group: Next**, **Page Group: Previous** and **Page
   Group: Go To**, whose index is a number, a PLC variable or a dialog input.

@@ -231,23 +231,23 @@
   flex-shrink: var(--h-shrink, 1);
 }
 
-[data-flow-direction='row'][data-flow-align='stretch']
+:is([data-flow-direction='row'], [data-flow-direction='stack'])[data-flow-align='stretch']
   > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
-[data-flow-direction='row'][data-flow-align='stretch']
+:is([data-flow-direction='row'], [data-flow-direction='stack'])[data-flow-align='stretch']
   > .hmi-preview-node
   > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
-[data-flow-direction='row'][data-flow-align='stretch']
+:is([data-flow-direction='row'], [data-flow-direction='stack'])[data-flow-align='stretch']
   > .hmi-preview-node
   > .hmi-preview-node
   > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
   align-self: var(--h-alignself-stretch, auto);
 }
-[data-flow-direction='row']:not([data-flow-align='stretch'])
+:is([data-flow-direction='row'], [data-flow-direction='stack']):not([data-flow-align='stretch'])
   > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
-[data-flow-direction='row']:not([data-flow-align='stretch'])
+:is([data-flow-direction='row'], [data-flow-direction='stack']):not([data-flow-align='stretch'])
   > .hmi-preview-node
   > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
-[data-flow-direction='row']:not([data-flow-align='stretch'])
+:is([data-flow-direction='row'], [data-flow-direction='stack']):not([data-flow-align='stretch'])
   > .hmi-preview-node
   > .hmi-preview-node
   > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
@@ -274,6 +274,29 @@
   > .hmi-preview-node
   > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
   align-self: var(--w-alignself-notstretch, auto);
+}
+
+/* Stack: every child of a `stack` host shares one grid cell, so they draw on
+   top of each other in tree order and the host is as big as its largest
+   child. The host sets `display: grid` in its own sheet; same three nesting
+   paths as the flow translation above. */
+[data-flow-direction='stack'] > *,
+[data-flow-direction='stack'] > .hmi-preview-node > *,
+[data-flow-direction='stack'] > .hmi-preview-node > .hmi-preview-node > * {
+  grid-area: 1 / 1;
+}
+/* Height follows the row rules above (Align is vertical in a stack); width
+   has no stretch Distribute, so only a Fill width stretches across the cell. */
+[data-flow-direction='stack']
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='stack']
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='stack']
+  > .hmi-preview-node
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
+  justify-self: var(--w-alignself-notstretch, auto);
 }
 
 /* Pin direct children of header/content/footer to their declared sizes so a

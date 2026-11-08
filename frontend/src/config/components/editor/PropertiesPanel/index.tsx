@@ -86,7 +86,7 @@ import ComponentPropertiesEditor from '../../componentProperties/ComponentProper
 import { ComponentPropertySchemaContext } from '../PropertySourceEditor/componentPropertySchemaContext';
 
 import { LayoutFields } from '../../ui/LayoutFields';
-import { usesFlexLayout } from '@shared/utils/parentFlow';
+import { repeatItemsKey, usesFlexLayout } from '@shared/utils/parentFlow';
 import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefaultTokens';
 import { parseTokenVar, usePanelTokenValues } from '@shared/utils/themeDefaultHint';
 import { WidgetOptionsContext } from '../WidgetOptionsContext';
@@ -1201,6 +1201,7 @@ function ComponentPanel({
               onChange={patchLayout}
               componentId={comp.id}
               tokenValues={tokenValues}
+              noStack={repeatItemsKey(comp.type) !== null}
             />
           </CollapsibleSection>
         </FieldPathContext.Provider>

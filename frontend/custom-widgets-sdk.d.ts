@@ -91,10 +91,11 @@ interface ActionsConfig {
   [event: string]: ComponentAction[] | undefined;
 }
 
-/** Mirrors `LayoutConfig` in `shared/types/config.ts` — layout is flex, never grid. */
+/** Mirrors `LayoutConfig` in `shared/types/config.ts` — layout is flex, except
+ *  that `stack` puts every child in one grid cell. */
 interface LayoutConfig {
   // Container — flex arrangement of children
-  direction?: 'row' | 'column';
+  direction?: 'row' | 'column' | 'stack';
   gap?: string;
   wrap?: boolean;
   align?: string;
@@ -989,7 +990,7 @@ declare function selfLayoutStyle(
  *  a level the same way, past whichever element carries the Fill sizing. */
 declare function containerLayoutProps(layout?: LayoutConfig): {
   style: Record<string, string | number>;
-  'data-flow-direction': 'row' | 'column';
+  'data-flow-direction': 'row' | 'column' | 'stack';
   'data-flow-align': string;
 };
 declare function widgetColorStyle(color: string | undefined): Record<string, string>;

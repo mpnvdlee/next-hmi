@@ -429,6 +429,9 @@ describe('containerLayoutProps', () => {
       'data-flow-direction': 'row',
       'data-flow-align': 'center',
     });
+    expect(containerLayoutProps({ direction: 'stack' })).toMatchObject({
+      'data-flow-direction': 'stack',
+    });
   });
 
   it('falls back to row/stretch for a property-sourced direction/align — resolve before calling', () => {

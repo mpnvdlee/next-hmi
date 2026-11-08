@@ -10,7 +10,7 @@ import { LAYOUT_PATH_KEY } from '@config/utils/propertyPath';
 import PropRow from '../PropRow';
 import SchemaFieldRow from '../SchemaFieldRow';
 import { alignIcons, justifyIcons } from './alignIcons';
-import { COLUMN_ICON, ROW_ICON } from './directionIcons';
+import { COLUMN_ICON, ROW_ICON, STACK_ICON } from './directionIcons';
 import { CONTAINER_DEFAULT_TOKENS } from './containerDefaultTokens';
 
 /** The two axes a size mode can be stored for, named by the `LayoutConfig` key
@@ -53,7 +53,15 @@ const DIRECTION_FIELD: SchemaField = {
   options: [
     { label: 'Row', value: 'row', icon: ROW_ICON },
     { label: 'Column', value: 'column', icon: COLUMN_ICON },
+    { label: 'Stack', value: 'stack', icon: STACK_ICON },
   ],
+};
+
+/** A repeating widget's copies stacked on top of each other would all show as
+ *  one, so it is offered Row and Column only. */
+const FLOW_ONLY_DIRECTION_FIELD: SchemaField = {
+  ...DIRECTION_FIELD,
+  options: DIRECTION_FIELD.options?.filter((o) => o.value !== 'stack'),
 };
 
 /**
@@ -115,8 +123,18 @@ function justifyOptions(vertical: boolean) {
 // Both variants of each glyph set, built once: the option arrays are rebuilt on
 // every render of the panel otherwise, SVG strings and all, and a fresh
 // `options` identity defeats the field row's own memoisation.
-const ALIGN_OPTIONS = { row: alignOptions(true), column: alignOptions(false) };
-const JUSTIFY_OPTIONS = { row: justifyOptions(false), column: justifyOptions(true) };
+// A stack has no axis of flow: Align places each child vertically, Distribute
+// horizontally, and there is nothing to space between.
+const ALIGN_OPTIONS = {
+  row: alignOptions(true),
+  column: alignOptions(false),
+  stack: alignOptions(true),
+};
+const JUSTIFY_OPTIONS = {
+  row: justifyOptions(false),
+  column: justifyOptions(true),
+  stack: positionOptions(false, justifyIcons(false)),
+};
 
 const SIZE_MODE_OPTIONS = [
   { label: 'Hug', value: 'hug' },
@@ -319,6 +337,8 @@ interface LayoutProps {
    *  still share (null when they differ there too). Those rows read "Mixed" and
    *  ignore `layout`, which carries only the lead widget's values. */
   mixedLayout?: ReadonlyMap<keyof LayoutConfig, PropertySource | null>;
+  /** Leave Stack out of Direction — set for a widget that repeats its children. */
+  noStack?: boolean;
 }
 
 export function LayoutFields({
@@ -328,10 +348,16 @@ export function LayoutFields({
   componentId,
   tokenValues,
   mixedLayout,
+  noStack,
 }: LayoutProps) {
   const openBindingPicker = useEditorDomainStore((s) => s.openBindingPicker);
-  const visible = FIELDS.filter((f) => f.group === 'self' || mode === 'container');
-  const isRow = stringOrUndefined(layout.direction) !== 'column';
+  const direction = stringOrUndefined(layout.direction);
+  // A stack has no flow to space or wrap.
+  const visible = FIELDS.filter(
+    (f) =>
+      (f.group === 'self' || mode === 'container') &&
+      !(direction === 'stack' && (f.key === 'gap' || f.key === 'wrap')),
+  );
 
   /** The literal stored mode for one axis — `undefined` for unset, `$var`-bound,
    *  or (in a multi-selection) disagreeing. Used both to pick this axis's own
@@ -366,7 +392,8 @@ export function LayoutFields({
     // `direction` decides which screen axis each property drives. A `$var`-bound
     // or mixed direction can be either at runtime; `row` is the CSS default and
     // the safer read.
-    const axisKey = isRow ? 'row' : 'column';
+    const axisKey = direction === 'column' || direction === 'stack' ? direction : 'row';
+    if (f.key === 'direction' && noStack) return FLOW_ONLY_DIRECTION_FIELD;
     if (f.key === 'align') return { ...ALIGN_FIELD, options: ALIGN_OPTIONS[axisKey] };
     if (f.key === 'justify') return { ...JUSTIFY_FIELD, options: JUSTIFY_OPTIONS[axisKey] };
     // One neutral hint on both axes: the panel no longer knows which one its

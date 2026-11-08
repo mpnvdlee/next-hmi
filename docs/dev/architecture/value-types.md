@@ -46,7 +46,7 @@ The types above are the *runtime* kinds. A field may also declare an **optional 
 | `String` · `Integer` · `Float` · `Boolean` | `select` | A dropdown of allowed values. The base type is whatever the options hold, so a numeric option list accepts numeric sources. A component property declares that with `optionType` (`string` \| `integer` \| `float` \| `boolean` \| `loc`, absent = `string`); `loc` options hold `{ $loc }` values and still resolve to `String` |
 | `String` | `password` | A masked input |
 | `String` | `length` | A CSS size input (`300px`, `50%`, `auto`) |
-| `String` | `direction` | A `row` \| `column` picker |
+| `String` | `direction` | A `row` \| `column` \| `stack` picker |
 | `String` | `align` | A cross-axis alignment picker (`start`, `center`, `end`, `stretch`, …) |
 | `String` | `justify` | A main-axis alignment picker (`start`, `center`, `end`, `space-between`, …) |
 | `String` | `page` | A dropdown of the project's **navigable** pages (stores the page id). The Dialogs folder is left out — nothing routes to one, so naming it would author a dead target; a page id already stored from there stays listed, marked *not navigable* |

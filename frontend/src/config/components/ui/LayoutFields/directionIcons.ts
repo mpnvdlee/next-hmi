@@ -34,3 +34,10 @@ export const ROW_ICON = bars(false);
 
 /** Three bars stacked. */
 export const COLUMN_ICON = bars(true);
+
+/** Two squares overlapping: children drawn on top of each other. */
+export const STACK_ICON =
+  OPEN +
+  '<rect x="1.5" y="1.5" width="9" height="9" rx="1"/>' +
+  '<rect x="5.5" y="5.5" width="9" height="9" rx="1" fill-opacity="0.55"/>' +
+  '</svg>';

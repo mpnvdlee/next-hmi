@@ -140,7 +140,7 @@
       {
         "type": "Container",
         "name": "Container",
-        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
+        "description": "Groups and lays out child widgets in a row, a column or stacked on top of each other. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
         "props": [
           {
             "key": "title",

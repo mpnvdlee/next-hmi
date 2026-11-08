@@ -46,6 +46,16 @@
   justify-content: var(--container-justify, flex-start);
 }
 
+/* Stack (hmi.css puts every child in cell 1 / 1): Align places each child
+   vertically, Distribute horizontally. */
+.hmi-container > .hmi-container__content[data-flow-direction='stack'] {
+  display: grid;
+  /* The one column spans the whole box, so Distribute and a Fill width
+     measure against the Container, not against its widest child. */
+  justify-content: stretch;
+  justify-items: var(--container-justify, flex-start);
+}
+
 .hmi-container > .hmi-container__content.hmi-container__content--clip {
   overflow: hidden;
 }

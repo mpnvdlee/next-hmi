@@ -3,7 +3,8 @@ import type { ComponentPropertySchema } from './componentProperty';
 
 export interface LayoutConfig {
   // ── Container — flex arrangement of children ───────────────────────────────
-  direction?: 'row' | 'column';
+  /** `stack` puts every child in the same spot, one on top of the next. */
+  direction?: 'row' | 'column' | 'stack';
   gap?: string;
   wrap?: boolean;
   align?: string;

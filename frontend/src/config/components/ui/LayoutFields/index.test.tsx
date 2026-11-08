@@ -481,6 +481,15 @@ describe('LayoutFields align and distribute', () => {
     expect(alignButton('Space between')).toBeInTheDocument();
   });
 
+  it('offers a stack only positions: Align vertical, Distribute horizontal, no spacing', () => {
+    render(<LayoutFields mode="container" layout={{ direction: 'stack' }} onChange={vi.fn()} />);
+
+    for (const name of ['Top', 'Middle', 'Bottom', 'Stretch', 'Left', 'Center', 'Right']) {
+      expect(alignButton(name)).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', { name: 'Space between' })).not.toBeInTheDocument();
+  });
+
   it('writes the CSS value the option stands for', () => {
     const onChange = vi.fn();
     render(<LayoutFields mode="container" layout={{}} onChange={onChange} />);
@@ -516,6 +525,27 @@ describe('LayoutFields direction', () => {
     expect(row).toHaveAttribute('title', 'Row');
     expect(row.querySelector('.cfg-seg-btn__icon')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Column' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stack' })).toBeInTheDocument();
+  });
+
+  it('drops Gap and Wrap for a stack, which neither spaces nor wraps', () => {
+    const LABEL = { selector: '.cfg-field-group__label' };
+    const { rerender } = render(
+      <LayoutFields mode="container" layout={{ direction: 'row' }} onChange={vi.fn()} />,
+    );
+    expect(screen.getByText('Gap', LABEL)).toBeInTheDocument();
+    expect(screen.getByText('Wrap', LABEL)).toBeInTheDocument();
+
+    rerender(<LayoutFields mode="container" layout={{ direction: 'stack' }} onChange={vi.fn()} />);
+    expect(screen.queryByText('Gap', LABEL)).not.toBeInTheDocument();
+    expect(screen.queryByText('Wrap', LABEL)).not.toBeInTheDocument();
+  });
+
+  it('leaves Stack out for a widget that repeats its children', () => {
+    render(<LayoutFields mode="container" layout={{}} onChange={vi.fn()} noStack />);
+
+    expect(screen.getByRole('button', { name: 'Column' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Stack' })).not.toBeInTheDocument();
   });
 
   // Wrap folds into Figma's direction control as a third state; ours keeps it

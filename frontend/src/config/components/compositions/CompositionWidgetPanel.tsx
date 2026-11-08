@@ -6,7 +6,7 @@ import PropRow from '../ui/PropRow';
 import SchemaFieldRow from '../ui/SchemaFieldRow';
 import { LayoutFields } from '../ui/LayoutFields';
 import { CONTAINER_DEFAULT_TOKENS } from '../ui/LayoutFields/containerDefaultTokens';
-import { usesFlexLayout } from '@shared/utils/parentFlow';
+import { repeatItemsKey, usesFlexLayout } from '@shared/utils/parentFlow';
 import WidgetIcon from '../ui/WidgetIcon';
 import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import { ComponentPropertySchemaContext } from '../editor/PropertySourceEditor/componentPropertySchemaContext';
@@ -124,6 +124,7 @@ export default function CompositionWidgetPanel({
               layout={layout}
               onChange={patchLayout}
               tokenValues={tokenValues}
+              noStack={repeatItemsKey(comp.type) !== null}
             />
           </div>
         </PanelScopeContext.Provider>

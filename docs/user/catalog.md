@@ -48,7 +48,7 @@ Marks where content the caller supplies is rendered. Put one in a reusable compo
 
 ### Container
 
-Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.
+Groups and lays out child widgets in a row, a column or stacked on top of each other. Hosts other widgets; a Button Container does the same and runs actions when pressed.
 
 | Property | Label | Type |
 |---|---|---|

@@ -339,14 +339,14 @@ function containerStyle(layout?: LayoutConfig): CSSWithVars {
  */
 export function containerLayoutProps(layout?: LayoutConfig): {
   style: CSSWithVars;
-  'data-flow-direction': 'row' | 'column';
+  'data-flow-direction': 'row' | 'column' | 'stack';
   'data-flow-align': string;
 } {
   const direction = layout?.direction;
   const align = layout?.align;
   return {
     style: containerStyle(layout),
-    'data-flow-direction': direction === 'column' ? 'column' : 'row',
+    'data-flow-direction': direction === 'column' || direction === 'stack' ? direction : 'row',
     'data-flow-align': typeof align === 'string' && align !== '' ? align : 'stretch',
   };
 }
