@@ -256,7 +256,8 @@ async function setSource(ed, label, sourceName) {
   await ed.waitForTimeout(400);
   await ed
     .locator('.cfg-source-pill__popup .cfg-source-pill__option-label', {
-      hasText: new RegExp(`^${sourceName}$`),
+      // Input and Widget Property carry a description line after the name.
+      hasText: new RegExp(`^${sourceName}(\\s|$)`),
     })
     .first()
     .click();

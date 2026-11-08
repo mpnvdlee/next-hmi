@@ -667,7 +667,7 @@ Known false positive: a digit-suffixed function in a `$stringExpr` template
 | Slot box / unfilled outline / its name | `.hmi-slot` / `.hmi-slot--empty` / `.hmi-slot__empty-label` |
 | Preview size inputs | `.component-preview-size__input` |
 | Slot picker of a `ComponentSlot` | the **Slot name** row's `.cfg-select` — one option per declared `widgets` property |
-| Add property | definition row selected → `button[title="Add component property"]` → `.property-dialog`; key `getByPlaceholder('e.g. motorVar')` |
+| Add property | definition row selected → `button[title="Add input"]` → `.property-dialog`; key `getByPlaceholder('e.g. motorVar')` |
 
 - The dashed `.hmi-slot--empty` outline renders **only here**; a placed
   instance's unfilled slot renders nothing in the page preview or the runtime.
