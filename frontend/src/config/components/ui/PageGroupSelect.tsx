@@ -37,9 +37,9 @@ export default function PageGroupSelect({ value, onChange, placeholder }: Props)
   const current = getStaticString(value);
 
   const nearestLabel = nearest
-    ? `${groupLabel(nearest)} (nearest)`
+    ? `${groupLabel(nearest)} (nearest group)`
     : (placeholder ?? '(nearest ancestor)');
-  const parentLabel = parent ? `${groupLabel(parent)} (parent)` : null;
+  const parentLabel = parent ? `${groupLabel(parent)} (parent group)` : null;
 
   return (
     <Select value={current} onChange={(v) => onChange(v || undefined)}>

@@ -91,10 +91,11 @@ interface ActionsConfig {
   [event: string]: ComponentAction[] | undefined;
 }
 
-/** Mirrors `LayoutConfig` in `shared/types/config.ts` — layout is flex, never grid. */
+/** Mirrors `LayoutConfig` in `shared/types/config.ts` — layout is flex, except
+ *  that `stack` puts every child in one grid cell. */
 interface LayoutConfig {
   // Container — flex arrangement of children
-  direction?: 'row' | 'column';
+  direction?: 'row' | 'column' | 'stack';
   gap?: string;
   wrap?: boolean;
   align?: string;
@@ -175,6 +176,10 @@ interface EvaluationContext {
   /** Innermost input scope at the read site — drives `$componentProp` nested
    *  inside other sources and inside action payloads. */
   inputScopeProps?: Record<string, unknown>;
+  /** The text is for a machine — a URL, a value written to a PLC — not the
+   *  operator: a number read as text, or filled into a `{n}` placeholder,
+   *  keeps its decimal point. */
+  machineText?: boolean;
   /** Backend response exposed to onSuccess / onFailed / onSettled handlers via
    *  `$result`. Absent in every other context. */
   resultValue?: Record<string, unknown>;
@@ -304,9 +309,17 @@ type ComponentAction =
   | {
       /** Closes every open overlay, then navigates to a page in the `pages` root. */
       type: 'navigateToPage';
-      /** A page id, or a dialog input parameter declared `format: 'page'`. */
+      /** A page id, or a dialog input declared `format: 'page'`. */
       pageId: string | { $componentProp: string };
+      /** Values for the target page's inputs, read once on arrival. */
+      componentProperties?: Record<string, unknown>;
     }
+  /** Tabs of the group the widget sits in, or of `groupId` (`'$parent'` or a
+   *  group id). Next and Previous stop at either end. */
+  | { type: 'pageGroupNext'; groupId?: string }
+  | { type: 'pageGroupPrevious'; groupId?: string }
+  /** `index` counts from 0: a number or any property source. */
+  | { type: 'pageGroupGoTo'; groupId?: string; index: unknown }
   | {
       type: 'writeDataVariable';
       /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
@@ -379,6 +392,8 @@ type ComponentAction =
       onSettled?: ComponentAction[];
     }
   | { type: 'acknowledgeAllAlarms' }
+  /** Reloads the HMI in this browser, as a page refresh does. */
+  | { type: 'reloadHmi' }
   | { type: 'delay'; duration: number }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }
@@ -443,6 +458,8 @@ interface SchemaField {
       }
   )[];
   write?: boolean;
+  /** Takes a variable binding only — set on a component's Binding input. */
+  bindsOnly?: boolean;
   options?: {
     label: string;
     value?: string | number | boolean | { $loc: string };
@@ -460,6 +477,10 @@ interface SchemaField {
    *  `visibleWhen`. */
   recordedWhen?: unknown;
   event?: string;
+  /** For an `actions` field: the `item-list` property whose chosen element the
+   *  actions run with — `$repeatItem` inside them reads it (pass it as
+   *  `resolveRepeatItem` on the `evalCtx` you hand `executeWidgetActions`). */
+  repeatsOver?: string;
 }
 
 interface ExportedStructField {
@@ -471,7 +492,8 @@ interface ExportedStructField {
 interface ExportedProperty {
   key: string;
   label: string;
-  type?: string;
+  /** A list: the value is any one of these types, as the instance decides. */
+  type?: string | string[];
   /** For a `Struct` export: declared fields with datatypes, shown in the $widgetProp picker. */
   structSchema?: ExportedStructField[];
 }
@@ -579,11 +601,13 @@ declare function executeWidgetActions(
   actions: ComponentAction[] | undefined,
   context?: { scope?: string; evalCtx?: EvaluationContext; anchorEl?: HTMLElement | null },
 ): void;
+/** Returns a function that publishes a value at once — call it before running
+ *  actions in the handler that changed the value, so they read the new one. */
 declare function usePublishWidgetProp(
   componentId: string | undefined,
   key: string,
   value: unknown,
-): void;
+): (value: unknown) => void;
 
 declare function useUsersData(): Array<{ id: string; username: string }>;
 declare function useUserGroupsData(): Array<{ id: string; label: string }>;
@@ -723,6 +747,10 @@ declare function levelDotClass(level: AlarmLevel): string;
 declare function formatAlarmTimeShort(iso: string): string;
 /** ISO timestamp as a full local date and time; '—' when empty. */
 declare function formatAlarmDateTime(iso: string): string;
+/** A number as the operator reads it: a decimal comma, no thousands separator
+ *  (1234.5 → '1234,5'). `decimals` fixes the digits after the comma, clamped to
+ *  0–6; left out, the number keeps its own. '---' when not finite. */
+declare function formatNumber(value: number, decimals?: number): string;
 interface AckAlarmOptions {
   /**
    * How a refused acknowledgement is surfaced. `'toast'` (the default) shows one
@@ -844,6 +872,30 @@ declare function useAnchoredStyle(
   placement: OverlayPlacement | null | undefined,
 ): [{ current: HTMLDivElement | null }, Record<string, string | number>];
 
+/** One row the virtualizer keeps in the DOM: its position in the list and its
+ *  offset from the top of the scrolled content, in px. */
+interface VirtualItem {
+  key: string | number;
+  index: number;
+  start: number;
+  end: number;
+  size: number;
+}
+/** The subset of `@tanstack/react-virtual`'s `useVirtualizer` the SDK documents. */
+declare function useVirtualizer(options: {
+  count: number;
+  getScrollElement: () => HTMLElement | null;
+  estimateSize: (index: number) => number;
+  overscan?: number;
+  getItemKey?: (index: number) => string | number;
+  initialRect?: { width: number; height: number };
+}): {
+  getVirtualItems(): VirtualItem[];
+  getTotalSize(): number;
+  scrollToIndex(index: number, options?: { align?: 'start' | 'center' | 'end' | 'auto' }): void;
+  measure(): void;
+};
+
 interface PhosphorIconProps {
   size?: number | string;
   weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
@@ -950,7 +1002,7 @@ declare function selfLayoutStyle(
  *  a level the same way, past whichever element carries the Fill sizing. */
 declare function containerLayoutProps(layout?: LayoutConfig): {
   style: Record<string, string | number>;
-  'data-flow-direction': 'row' | 'column';
+  'data-flow-direction': 'row' | 'column' | 'stack';
   'data-flow-align': string;
 };
 declare function widgetColorStyle(color: string | undefined): Record<string, string>;
@@ -1007,8 +1059,9 @@ declare function readNumberValue(value: unknown): number | undefined;
 declare function usePropVar(properties: Record<string, unknown> | undefined, key: string): unknown;
 
 /** A string property from any source — static, a property source, or a `$var`
- *  binding, read live — as `getPropString` converts it: a number or boolean as
- *  its text, an object as no value. Returns `fallback` (default `''`) when there
+ *  binding, read live — as `getPropString` converts it: a number as
+ *  `formatNumber` writes it (`3.5` → `'3,5'`), a boolean as its text, an object
+ *  as no value. A value matched or written back reads `usePropVar` instead. Returns `fallback` (default `''`) when there
  *  is no value; pass `null` to get `null` instead. */
 declare function usePropString(
   properties: Record<string, unknown> | undefined,
@@ -1102,6 +1155,22 @@ declare function useItemListProp(
   key: string,
 ): ItemList;
 
+/** One entry of an `option-list`: its label as text, its value as given. */
+interface OptionEntry {
+  label: string;
+  value: string | number;
+}
+
+/**
+ * Read an `option-list` property as `{ label, value }` entries from any source
+ * `useItemListProp` reads. Each label is evaluated, so a `{ $loc }` label shows
+ * as its translation; a bare element is both label and value.
+ */
+declare function useOptionListProp(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+): OptionEntry[];
+
 declare function useCssVar(varName: string, fallback: string): string;
 
 declare var Recharts: any;
@@ -1119,10 +1188,12 @@ interface VirtualKeyboardProps {
 
 interface VirtualNumpadProps {
   isOpen: boolean;
+  /** The entry, with a decimal point; the panel shows it with a comma. */
   value: string;
   onChange: (value: string) => void;
-  /** Called on Enter with a value that parses and sits inside min/max. */
-  onApply: (value: string) => void;
+  /** Called on Enter with a value that parses and sits inside min/max: the
+   *  entry (a decimal point) and the number it reads as. */
+  onApply: (value: string, parsed: number) => void;
   /** Called on ×, Escape, or a press outside the panel: the entry is dropped. */
   onCancel: () => void;
   anchorRef?: { readonly current: Element | null };
@@ -1138,7 +1209,7 @@ interface VirtualNumpadProps {
   rangeMessage?: string;
   /** The value being replaced: the entry field's placeholder while the entry is empty. */
   currentValue?: string;
-  /** Digits allowed after the point; 0 disables the point. Omit for no limit. */
+  /** Digits allowed after the comma; 0 disables the comma. Omit for no limit. */
   decimals?: number;
   /** Whether the minus key works. Default: true unless min is 0 or more. */
   allowNegative?: boolean;

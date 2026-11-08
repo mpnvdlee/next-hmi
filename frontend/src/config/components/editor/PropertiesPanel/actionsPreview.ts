@@ -10,7 +10,7 @@ export const ACTION_TYPES = [
     label: 'Open Dialog',
     category: 'Screens',
     description:
-      'Opens a page or page group from the Dialogs folder as a modal on top of the current screen, passing it input parameters.',
+      'Opens a page or page group from the Dialogs folder as a modal on top of the current screen, passing it inputs.',
   },
   {
     type: 'openPageOverlay' as const,
@@ -29,7 +29,28 @@ export const ACTION_TYPES = [
     label: 'Navigate To Page',
     category: 'Screens',
     description:
-      'Closes every open dialog and overlay, then goes to a page — a fixed one, or the one a dialog input parameter names.',
+      'Closes every open dialog and overlay but those with Background usable, then goes to a page — a fixed one, or the one a dialog input names — passing it inputs.',
+  },
+  {
+    type: 'pageGroupNext' as const,
+    label: 'Page Group: Next',
+    category: 'Screens',
+    description:
+      'Shows the next page of the page group the widget sits in, or of a chosen group. Does nothing on the last page.',
+  },
+  {
+    type: 'pageGroupPrevious' as const,
+    label: 'Page Group: Previous',
+    category: 'Screens',
+    description:
+      'Shows the previous page of the page group the widget sits in, or of a chosen group. Does nothing on the first page.',
+  },
+  {
+    type: 'pageGroupGoTo' as const,
+    label: 'Page Group: Go To',
+    category: 'Screens',
+    description:
+      'Shows the page at an index in the page group, counted from 0 — a number, a variable or an input.',
   },
   {
     type: 'writeDataVariable' as const,
@@ -106,6 +127,12 @@ export const ACTION_TYPES = [
     description: 'Shows a transient message with an info, success, warning or error severity.',
   },
   {
+    type: 'reloadHmi' as const,
+    label: 'Reload HMI',
+    category: 'Interface',
+    description: 'Reloads the HMI in this browser, as a page refresh does.',
+  },
+  {
     type: 'delay' as const,
     label: 'Delay',
     category: 'Logic',
@@ -136,6 +163,9 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   openPageOverlay: 'page',
   closePageOverlay: 'static',
   navigateToPage: 'pageIsActive',
+  pageGroupNext: 'page',
+  pageGroupPrevious: 'page',
+  pageGroupGoTo: 'page',
   writeDataVariable: 'var',
   toggleDataVariable: 'not',
   editValue: 'formula',
@@ -150,6 +180,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   setActiveTheme: 'viewport',
   showAlert: 'alarmCount',
   showToast: 'result',
+  reloadHmi: 'device',
   runComponentActions: 'componentProp',
 };
 

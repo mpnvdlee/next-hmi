@@ -304,14 +304,19 @@ describe('field choices that fit the field', () => {
     render(
       <PageEditor value={{ $page: { field: 'depth' } }} onChange={vi.fn()} fieldType="Integer" />,
     );
-    expect(await fieldOptions()).toEqual(['Depth']);
+    expect(await fieldOptions()).toEqual(['Depth', 'Page group index', 'Page group last index']);
   });
 
   it('keeps a stored choice that does not fit, marked', async () => {
     render(
       <PageEditor value={{ $page: { field: 'title' } }} onChange={vi.fn()} fieldType="Integer" />,
     );
-    expect(await fieldOptions()).toEqual(['Title (does not fit this field)', 'Depth']);
+    expect(await fieldOptions()).toEqual([
+      'Title (does not fit this field)',
+      'Depth',
+      'Page group index',
+      'Page group last index',
+    ]);
   });
 
   it('lists the page fields any type of a union field takes', async () => {
@@ -322,7 +327,7 @@ describe('field choices that fit the field', () => {
         fieldType={['Float', 'Integer']}
       />,
     );
-    expect(await fieldOptions()).toEqual(['Depth']);
+    expect(await fieldOptions()).toEqual(['Depth', 'Page group index', 'Page group last index']);
   });
 
   it('lists every choice for a slot that takes any type', async () => {

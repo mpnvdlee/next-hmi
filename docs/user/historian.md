@@ -39,7 +39,7 @@ A row whose variable no longer exists on any datasource is flagged red and stops
 
 Add a **Trend Chart** widget ([catalog](catalog.md#trend-chart)) and set:
 
-- **Variables** — one row per line on the chart, added with **+ Add** and set from the row's own dropdown, which lists exactly the variables you added in the Historian area — a tag that is not logged has nothing to draw. The `⌃` / `⌄` buttons move a line up or down, and **Line colors** follows that order. (A **Live buffer** chart picks from the whole variable tree instead, through the usual `✎` binding picker — it reads values off the connection and needs no history at all.)
+- **Variables** — one row per line on the chart, added with **+ Add** and set from the row's own dropdown, which lists exactly the variables you added in the Historian area — a tag that is not logged has nothing to draw. The `⌃` / `⌄` buttons move a line up or down, and **Line colors** follows that order. (A **Live buffer** chart picks from the whole variable tree instead, through the usual `✎` binding picker — it reads values off the connection and needs no history at all. Its time axis is fixed: the last **Live window (s)** seconds up to now, and a line whose value holds still runs on flat to now. A change draws as a step, since the value held until it changed. A Boolean draws as 0 and 1.)
 - **Default time range** — the window the chart opens on, from **1 min** to **30 days**.
 - **Refresh interval (s)** — how often it re-queries. `10` by default; `0` freezes it on the first query, which suits a report screen.
 - **Show zoom buttons** — adds the range controls so the operator can widen or narrow the window themselves.

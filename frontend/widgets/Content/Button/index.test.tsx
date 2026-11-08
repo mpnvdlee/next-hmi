@@ -6,6 +6,7 @@ import { useVariableStore } from '@hmi/store/variableStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { __resetForTests, resolvePending } from '@hmi/utils/actionDispatcher';
+import StringInput from '../../Inputs/StringInput';
 import Button from './index';
 
 vi.mock('@hmi/hooks/useWebSocket', () => ({
@@ -116,6 +117,38 @@ describe('Button', () => {
 
     await user.pointer({ keys: '[/MouseLeft]', target: button });
     expect(overlays()).toEqual(['pressed', 'released']);
+  });
+
+  it('commits a field still being edited before its actions run', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <StringInput id="name" properties={{ variable: { $var: { path: 'PLC:Recipe/Name' } } }} />
+        <Button
+          properties={{
+            label: 'Save',
+            variable: { $var: { path: 'PLC:Recipe/Save' } },
+            actions: { onPress: [{ type: 'closePageOverlay' }] },
+          }}
+        />
+      </MemoryRouter>,
+    );
+    await user.type(screen.getByRole('textbox'), 'Lager');
+
+    await user.pointer({
+      keys: '[MouseLeft>]',
+      target: screen.getByRole('button', { name: 'Save' }),
+    });
+
+    expect(
+      vi.mocked(sendWsMessage).mock.calls.map(([f]) => {
+        const frame = f as { path: string; value: unknown };
+        return [frame.path, frame.value];
+      }),
+    ).toEqual([
+      ['Recipe/Name', 'Lager'],
+      ['Recipe/Save', true],
+    ]);
   });
 
   it('toasts the rejection the backend correlates back to the write', async () => {
@@ -246,6 +279,33 @@ describe('Button', () => {
       renderButton({ label: 'Home', align: 'start' });
 
       expect(screen.getByRole('button')).toHaveClass('hmi-button__btn--start');
+    });
+
+    it('takes a typography combo through custom properties, and none for the Body default', () => {
+      const { container, rerender } = renderButton({ label: 'Save as', typography: 'caption' });
+      const el = container.firstElementChild as HTMLElement;
+
+      expect(el.style.getPropertyValue('--hmi-btn-type-size')).toBe('var(--hmi-type-caption-size)');
+      expect(el.style.getPropertyValue('--hmi-btn-type-font')).toBe('var(--hmi-type-caption-font)');
+
+      rerender(
+        <MemoryRouter>
+          <Button properties={{ label: 'Save as' }} />
+        </MemoryRouter>,
+      );
+      expect(el.style.getPropertyValue('--hmi-btn-type-size')).toBe('');
+    });
+
+    it('truncates its label on request, and wraps by default', () => {
+      const { rerender } = renderButton({ label: 'Rename', wrap: 'truncate' });
+      expect(screen.getByText('Rename')).toHaveClass('hmi-button__label--truncate');
+
+      rerender(
+        <MemoryRouter>
+          <Button properties={{ label: 'Rename' }} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText('Rename')).not.toHaveClass('hmi-button__label--truncate');
     });
   });
 });

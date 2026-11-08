@@ -305,9 +305,9 @@ describe('a page in the Dialogs folder', () => {
     expect(screen.getByText('Dialog Group Open')).toBeInTheDocument();
   });
 
-  it('calls its declarations input parameters, the name the action fills them by', () => {
+  it('calls its declarations Inputs, as a component and a page do', () => {
     selectOverlayPage();
-    expect(screen.getByText('Input Parameters')).toBeInTheDocument();
+    expect(screen.getByText('Inputs')).toBeInTheDocument();
   });
 
   it('leaves a navigable page reading as a plain page', () => {

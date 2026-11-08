@@ -17,9 +17,9 @@ function Panel({ request }: { request: NumpadRequest }) {
       isOpen
       value={value}
       onChange={setValue}
-      onApply={(raw) => {
+      onApply={(_raw, parsed) => {
         close();
-        request.apply(parseFloat(raw));
+        request.apply(parsed);
       }}
       onCancel={close}
       title={request.title}

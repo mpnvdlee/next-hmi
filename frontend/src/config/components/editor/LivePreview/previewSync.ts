@@ -28,6 +28,7 @@ export function buildPagesUpdate(pageIds?: string[]): Record<string, unknown> {
     rightSidebar: s.rightSidebar,
     shell: s.shell,
     globalEvents: s.globalEvents,
+    valueMaps: s.valueMaps,
     pageContent,
   };
 }

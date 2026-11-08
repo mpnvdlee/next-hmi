@@ -58,6 +58,11 @@ export default function CompositionSchemaEditor({ component, onUpdate }: Props) 
             onChange={(e) => handleRename(e.target.value)}
           />
         </PropRow>
+        <ComponentPropertiesEditor
+          ownerName={component.name}
+          properties={component.componentProperties}
+          onChange={handlePropertiesChange}
+        />
       </div>
 
       <div className="cfg-section">
@@ -96,12 +101,6 @@ export default function CompositionSchemaEditor({ component, onUpdate }: Props) 
           />
         </PropRow>
       </div>
-
-      <ComponentPropertiesEditor
-        ownerName={component.name}
-        properties={component.componentProperties}
-        onChange={handlePropertiesChange}
-      />
     </>
   );
 }

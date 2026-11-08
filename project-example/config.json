@@ -982,13 +982,15 @@
           "type": "string",
           "label": "Starting bean type",
           "description": "Seeds Brew:Wizard/BeanType when the wizard opens.",
-          "defaultValue": ""
+          "defaultValue": "",
+          "mode": "value"
         },
         "startingCupCount": {
           "type": "integer",
           "label": "Starting cup count",
           "description": "Seeds Brew:Wizard/CupCount when the wizard opens.",
-          "defaultValue": 0
+          "defaultValue": 0,
+          "mode": "value"
         }
       },
       "events": {

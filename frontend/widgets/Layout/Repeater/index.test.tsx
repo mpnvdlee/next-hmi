@@ -89,7 +89,7 @@ describe('Repeater', () => {
       ]),
     );
 
-    expect(await texts(/^\d\.5$/)).toEqual(['1.5', '2.5', '3.5']);
+    expect(await texts(/^\d,5$/)).toEqual(['1,5', '2,5', '3,5']);
   });
 
   it('reads a struct-array member from its own leaf, whatever the element folder is named', async () => {

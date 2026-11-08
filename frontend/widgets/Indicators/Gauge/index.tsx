@@ -48,7 +48,7 @@ export default function Gauge({ properties, layout }: HmiWidgetProps) {
   const unit = usePropString(properties, 'unit', '');
 
   const fraction = Math.min(1, Math.max(0, (value - min) / (max - min || 1)));
-  const displayValue = numericValue !== null ? numericValue.toFixed(1) : '---';
+  const displayValue = numericValue !== null ? formatNumber(numericValue, 1) : '---';
 
   return (
     <div className="hmi-component hmi-gauge" style={selfLayoutStyle(layout)}>

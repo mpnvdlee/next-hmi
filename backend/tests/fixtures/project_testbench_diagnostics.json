@@ -1,1 +1,872 @@
-[]
+[
+  {
+    "artifactId": "batches",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/1/children/0/properties/value",
+    "widgetId": "bt-stat-target",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Batches layout › Wrap › Detail › Stats › Target › value",
+    "nested": false
+  },
+  {
+    "artifactId": "batches",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/1/children/1/properties/value",
+    "widgetId": "bt-stat-done",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Batches layout › Wrap › Detail › Stats › Produced › value",
+    "nested": false
+  },
+  {
+    "artifactId": "batches",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/1/children/2/properties/value",
+    "widgetId": "bt-stat-pct",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Batches layout › Wrap › Detail › Stats › Progress › value",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/0/children/1/children/1/children/0/properties/text",
+    "widgetId": "db-oee-a",
+    "propKey": "text",
+    "fieldPath": [
+      "text"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Top row › Line performance › Body › Breakdown › Availability › text",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/0/children/1/children/1/children/1/properties/text",
+    "widgetId": "db-oee-p",
+    "propKey": "text",
+    "fieldPath": [
+      "text"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Top row › Line performance › Body › Breakdown › Performance › text",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/0/children/1/children/1/children/2/properties/text",
+    "widgetId": "db-oee-q",
+    "propKey": "text",
+    "fieldPath": [
+      "text"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Top row › Line performance › Body › Breakdown › Quality › text",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/0/properties/dot",
+    "widgetId": "db-flow-n0",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 1 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/0/properties/edge",
+    "widgetId": "db-flow-n0",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 1 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/0/properties/tint",
+    "widgetId": "db-flow-n0",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 1 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/10/properties/dot",
+    "widgetId": "db-flow-n5",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 6 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/10/properties/edge",
+    "widgetId": "db-flow-n5",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 6 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/10/properties/tint",
+    "widgetId": "db-flow-n5",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 6 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/2/properties/dot",
+    "widgetId": "db-flow-n1",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 2 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/2/properties/edge",
+    "widgetId": "db-flow-n1",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 2 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/2/properties/tint",
+    "widgetId": "db-flow-n1",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 2 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/4/properties/dot",
+    "widgetId": "db-flow-n2",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 3 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/4/properties/edge",
+    "widgetId": "db-flow-n2",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 3 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/4/properties/tint",
+    "widgetId": "db-flow-n2",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 3 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/6/properties/dot",
+    "widgetId": "db-flow-n3",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 4 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/6/properties/edge",
+    "widgetId": "db-flow-n3",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 4 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/6/properties/tint",
+    "widgetId": "db-flow-n3",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 4 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/8/properties/dot",
+    "widgetId": "db-flow-n4",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 5 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/8/properties/edge",
+    "widgetId": "db-flow-n4",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 5 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "dashboard",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/children/8/properties/tint",
+    "widgetId": "db-flow-n4",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Dashboard layout › Line flow › Line flow › Station 5 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/0/properties/dot",
+    "widgetId": "ln-track-n0",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 1 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/0/properties/edge",
+    "widgetId": "ln-track-n0",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 1 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/0/properties/tint",
+    "widgetId": "ln-track-n0",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 1 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/10/properties/dot",
+    "widgetId": "ln-track-n5",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 6 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/10/properties/edge",
+    "widgetId": "ln-track-n5",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 6 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/10/properties/tint",
+    "widgetId": "ln-track-n5",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 6 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/2/properties/dot",
+    "widgetId": "ln-track-n1",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 2 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/2/properties/edge",
+    "widgetId": "ln-track-n1",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 2 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/2/properties/tint",
+    "widgetId": "ln-track-n1",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 2 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/4/properties/dot",
+    "widgetId": "ln-track-n2",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 3 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/4/properties/edge",
+    "widgetId": "ln-track-n2",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 3 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/4/properties/tint",
+    "widgetId": "ln-track-n2",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 3 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/6/properties/dot",
+    "widgetId": "ln-track-n3",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 4 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/6/properties/edge",
+    "widgetId": "ln-track-n3",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 4 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/6/properties/tint",
+    "widgetId": "ln-track-n3",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 4 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/8/properties/dot",
+    "widgetId": "ln-track-n4",
+    "propKey": "dot",
+    "fieldPath": [
+      "dot"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 5 › dot",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/8/properties/edge",
+    "widgetId": "ln-track-n4",
+    "propKey": "edge",
+    "fieldPath": [
+      "edge"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 5 › edge",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/1/children/8/properties/tint",
+    "widgetId": "ln-track-n4",
+    "propKey": "tint",
+    "fieldPath": [
+      "tint"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $switch is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Filling line schematic › Line flow › Station 5 › tint",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/0/properties/value",
+    "widgetId": "ln-ro-0",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Readouts › Fill rate › value",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/1/properties/value",
+    "widgetId": "ln-ro-1",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Readouts › Fill volume › value",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/2/properties/value",
+    "widgetId": "ln-ro-2",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Readouts › Cap torque › value",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/3/properties/value",
+    "widgetId": "ln-ro-3",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Readouts › Product temp › value",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/4/properties/value",
+    "widgetId": "ln-ro-4",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Readouts › Label reject › value",
+    "nested": false
+  },
+  {
+    "artifactId": "line",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/1/children/5/properties/value",
+    "widgetId": "ln-ro-5",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Line layout › Readouts › Air pressure › value",
+    "nested": false
+  },
+  {
+    "artifactId": "trends",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/0/children/0/properties/value",
+    "widgetId": "tb-sig-0",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Trends layout › Wrap › Legend › Fill rate › value",
+    "nested": false
+  },
+  {
+    "artifactId": "trends",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/0/children/1/properties/value",
+    "widgetId": "tb-sig-1",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Trends layout › Wrap › Legend › Fill volume › value",
+    "nested": false
+  },
+  {
+    "artifactId": "trends",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/0/children/2/properties/value",
+    "widgetId": "tb-sig-2",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Trends layout › Wrap › Legend › Cap torque › value",
+    "nested": false
+  },
+  {
+    "artifactId": "trends",
+    "artifactKind": "page",
+    "sourcePath": "/sections/content/0/children/0/children/0/children/3/properties/value",
+    "widgetId": "tb-sig-3",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Trends layout › Wrap › Legend › Product temp › value",
+    "nested": false
+  },
+  {
+    "artifactId": "shell",
+    "artifactKind": "shell",
+    "sourcePath": "/header/0/children/1/children/0/properties/value",
+    "widgetId": "kpi-0",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Header › KPI strip › Throughput › value",
+    "nested": false
+  },
+  {
+    "artifactId": "shell",
+    "artifactKind": "shell",
+    "sourcePath": "/header/0/children/1/children/1/properties/value",
+    "widgetId": "kpi-1",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Header › KPI strip › OEE › value",
+    "nested": false
+  },
+  {
+    "artifactId": "shell",
+    "artifactKind": "shell",
+    "sourcePath": "/header/0/children/1/children/2/properties/value",
+    "widgetId": "kpi-2",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Header › KPI strip › Fill accuracy › value",
+    "nested": false
+  },
+  {
+    "artifactId": "shell",
+    "artifactKind": "shell",
+    "sourcePath": "/header/0/children/1/children/3/properties/delta",
+    "widgetId": "kpi-3",
+    "propKey": "delta",
+    "fieldPath": [
+      "delta"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Header › KPI strip › Good today › delta",
+    "nested": false
+  },
+  {
+    "artifactId": "shell",
+    "artifactKind": "shell",
+    "sourcePath": "/header/0/children/1/children/3/properties/value",
+    "widgetId": "kpi-3",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Header › KPI strip › Good today › value",
+    "nested": false
+  },
+  {
+    "artifactId": "shell",
+    "artifactKind": "shell",
+    "sourcePath": "/header/0/children/1/children/4/properties/value",
+    "widgetId": "kpi-4",
+    "propKey": "value",
+    "fieldPath": [
+      "value"
+    ],
+    "code": "value-reads-once",
+    "severity": "warning",
+    "message": "this input is a Value, so this live $stringExpr is read once when the instance appears — to keep it live, make the input a Binding, pass it the variable and compute inside",
+    "breadcrumb": "Header › KPI strip › CO₂ / 100 btl › value",
+    "nested": false
+  }
+]

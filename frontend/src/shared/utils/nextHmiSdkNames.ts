@@ -59,6 +59,7 @@ export const SDK_NAMES = [
   'usePropStruct',
   'useRecordListProp',
   'useItemListProp',
+  'useOptionListProp',
   'useCssVar',
   'useVariable',
   'useBindingValue',
@@ -82,6 +83,7 @@ export const SDK_NAMES = [
   'levelDotClass',
   'formatAlarmTimeShort',
   'formatAlarmDateTime',
+  'formatNumber',
   'ackAlarm',
   'ackAllAlarms',
   'AlarmDetailDialog',
@@ -117,4 +119,5 @@ export const SDK_NAMES = [
   'useIsPreview',
   'useActivePage',
   'useAnchoredStyle',
+  'useVirtualizer',
 ] as const;

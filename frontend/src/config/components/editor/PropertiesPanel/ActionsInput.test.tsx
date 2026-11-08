@@ -638,7 +638,7 @@ describe('ActionsInput — Navigate To Page in a dialog', () => {
     );
 
     await user.click(screen.getByTitle('Expand'));
-    await user.click(screen.getByRole('button', { name: 'Select component property' }));
+    await user.click(screen.getByRole('button', { name: 'Select input' }));
 
     const source = useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
     expect(Object.keys(source?.properties ?? {})).toEqual(['target']);
@@ -668,7 +668,7 @@ describe('ActionsInput — a write target inside a component', () => {
     );
 
     await user.click(screen.getByTitle('Expand'));
-    await user.click(screen.getByRole('button', { name: 'Select component property' }));
+    await user.click(screen.getByRole('button', { name: 'Select input' }));
 
     const source = useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
     expect(source?.write).toBe(true);

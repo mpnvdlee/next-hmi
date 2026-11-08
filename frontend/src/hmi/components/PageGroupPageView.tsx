@@ -1,6 +1,14 @@
-import { Suspense, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  Suspense,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { PageConfig, PageNode, PageGroupConfig, WidgetConfig } from '@shared/types/config';
-import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import { resolvePageContext } from '@shared/utils/pageTree';
 import { useConfigStore } from '@shared/store/configStore';
 import WidgetRenderer from './WidgetRenderer';
@@ -9,34 +17,75 @@ import { COLUMN_FLOW } from './layoutUtils';
 import { PageGroupStackContext, type PageGroupStackEntry } from './PageGroupStackContext';
 import { HostPageContext } from '../context/HostPageContext';
 import { InputScopeContext, type InputScopeValue } from '../context/InputScopeContext';
-import { withDeclaredDefaults } from '../utils/componentPropResolution';
+import { valueInputSeeds, withDeclaredDefaults } from '../utils/componentPropResolution';
+import { useValueInputs, type ValueInputSeed } from '../hooks/useValueInputs';
 import { ComponentSelfSuspenseContext } from '../context/ComponentSuspenseContext';
 import { prefetchWidgetModules, widgetModulesLoaded } from '../registry/widgetRegistry';
 import { ContentSpinner } from '@shared/components/Spinner';
+import { useHmiStore } from '../store/hmiStore';
+import { isLocalInputKey, useVariableStore } from '../store/variableStore';
+import { isVarSource } from '@shared/types/propertyValueGuards';
 
-type Declarations = Record<string, ComponentPropertySchema> | undefined;
+/** A page or group of the view's own trail, as far as its inputs go. */
+type DeclaringNode = Pick<PageConfig | PageGroupConfig, 'id' | 'componentProperties'>;
+
+/** A Value input's slot in the view's frame: one per declaring node and name,
+ *  so a page's and its group's never share state. */
+const slotOf = (node: DeclaringNode, key: string) => `${node.id}/${key}`;
 
 /**
- * Layer declared defaults under the values already in scope, innermost scope
- * first. `withDeclaredDefaults` only fills a key that is still `undefined`, so
- * folding the chain innermost -> outermost is the whole precedence rule in one
- * line: values the action supplied beat every default, and the innermost
- * declaration of a name beats an outer one's.
+ * The scope a chain of declaring nodes publishes, innermost node first.
+ *
+ * A Value input reads its local slot; any other input the value passed in, or
+ * else its default. `withDeclaredDefaults` only fills a key that is still
+ * `undefined`, so folding the chain innermost -> outermost is the whole
+ * precedence rule: values the action supplied beat every default, and the
+ * innermost declaration of a name beats an outer one's. A page of the Pages
+ * section (`takesInputs` false) has only its Value inputs, which start at their
+ * default or at what a Navigate To Page passed.
  *
  * A chain that declares nothing publishes no frame of its own — the inherited
  * one passes through untouched, so an ordinary page keeps costing nothing.
  */
-function foldDeclaredDefaults(
+function foldInputScope(
   inherited: InputScopeValue | null,
-  chain: Declarations[],
+  chain: DeclaringNode[],
+  locals: Record<string, unknown>,
+  takesInputs: boolean,
 ): InputScopeValue | null {
-  if (!chain.some(Boolean)) return inherited;
-  return {
-    properties: chain.reduce(
-      (acc, declared) => withDeclaredDefaults(acc, declared),
-      inherited?.properties ?? {},
+  const props: Record<string, unknown> = { ...(inherited?.properties ?? {}) };
+  const declaredInside = new Set<string>();
+  let declares = false;
+  for (const node of chain) {
+    for (const [key, schema] of Object.entries(node.componentProperties ?? {})) {
+      const local = locals[slotOf(node, key)];
+      if (local !== undefined) {
+        if (!declaredInside.has(key)) props[key] = local;
+      } else if (takesInputs) {
+        if (props[key] === undefined && schema?.defaultValue !== undefined) {
+          props[key] = schema.defaultValue;
+        }
+      } else continue;
+      declaredInside.add(key);
+      declares = true;
+    }
+  }
+  return declares ? { properties: props } : inherited;
+}
+
+/** One seed per Value input the chain declares, from the value passed in or
+ *  else the declaration's default. */
+function trailSeeds(
+  chain: DeclaringNode[],
+  supplied: Record<string, unknown> | undefined,
+): ValueInputSeed[] {
+  return chain.flatMap((node) =>
+    valueInputSeeds(
+      node.componentProperties,
+      withDeclaredDefaults(supplied, node.componentProperties),
+      `${node.id}/`,
     ),
-  };
+  );
 }
 
 interface PageGroupPageViewProps {
@@ -44,10 +93,18 @@ interface PageGroupPageViewProps {
   requestedId?: string;
   onNavigate: (pageId: string, replace?: boolean) => void;
   emptyMessage?: string;
-  /** Whether the nodes shown take input parameters — true only for a page
-   *  overlay of the Dialogs folder. Anywhere else a node's declarations are
-   *  ignored and its `$componentProp`s read nothing. */
+  /** Whether the nodes shown take every kind of input — true only for a page
+   *  overlay of the Dialogs folder. Anywhere else only a node's Value inputs
+   *  count, starting at their defaults. */
   takesInputs?: boolean;
+  /** The main view: a Navigate To Page's inputs land here (`pageArrival`). */
+  readsArrivals?: boolean;
+}
+
+/** What the latest Navigate To Page passed a slot, and which navigation that was. */
+interface HeldInputs {
+  seq: number;
+  slots: Record<string, { value: unknown; seq: number }>;
 }
 
 export default function PageGroupPageView({
@@ -56,6 +113,7 @@ export default function PageGroupPageView({
   onNavigate,
   emptyMessage = 'No page found.',
   takesInputs = false,
+  readsArrivals = false,
 }: PageGroupPageViewProps) {
   const parentStack = useContext(PageGroupStackContext);
 
@@ -98,6 +156,58 @@ export default function PageGroupPageView({
   // groups, whose parameters have nothing to do with what the overlay shows.
   const chromeOffset = stack.length - pageGroups.length;
 
+  // Value inputs of this view's own trail, read when their node appears and
+  // dropped when it leaves: a group's survive moving between its pages. Only a
+  // Dialogs-folder trail was passed anything; a Pages one starts at defaults.
+  const trail = useMemo<DeclaringNode[]>(
+    () => (page ? [page, ...[...pageGroups].reverse()] : []),
+    [page, pageGroups],
+  );
+  // A Navigate To Page into this trail hands its page's inputs a value, or the
+  // default for one it left empty, and its groups' inputs only those it fills:
+  // a group's keep theirs while the operator moves between its pages. Held
+  // here, not in the store, so a slot that leaves the trail forgets it.
+  const arrival = useHmiStore((s) => (readsArrivals ? s.pageArrival : null));
+  const [held, setHeld] = useState<HeldInputs>({ seq: 0, slots: {} });
+  const trailSlots = useMemo(
+    () => new Set(trailSeeds(trail, undefined).map((s) => s.slot)),
+    [trail],
+  );
+  const landing =
+    arrival && arrival.seq !== held.seq && trail.some((n) => n.id === arrival.pageId)
+      ? arrival
+      : null;
+  if (landing || Object.keys(held.slots).some((slot) => !trailSlots.has(slot))) {
+    const slots: HeldInputs['slots'] = {};
+    for (const node of trail) {
+      for (const { slot } of valueInputSeeds(node.componentProperties, undefined, `${node.id}/`)) {
+        const given = landing?.values[slot.slice(node.id.length + 1)];
+        if (landing && (node === page || given !== undefined)) {
+          slots[slot] = { value: given, seq: landing.seq };
+        } else if (held.slots[slot]) slots[slot] = held.slots[slot];
+      }
+    }
+    setHeld({ seq: landing?.seq ?? held.seq, slots });
+  }
+  // Read once: a later remount of this view starts at defaults.
+  useEffect(() => {
+    if (arrival && arrival.seq === held.seq) useHmiStore.setState({ pageArrival: null });
+  }, [arrival, held.seq]);
+
+  const seeds = useMemo(() => {
+    if (takesInputs) return trailSeeds(trail, inheritedScope?.properties);
+    return trailSeeds(trail, undefined).map((seed) => {
+      const given = held.slots[seed.slot];
+      if (!given) return seed;
+      return {
+        ...seed,
+        source: given.value === undefined ? seed.source : given.value,
+        generation: given.seq,
+      };
+    });
+  }, [trail, takesInputs, inheritedScope, held]);
+  const [locals, seeder] = useValueInputs(seeds);
+
   // Scope for each shell's own header/footer band, aligned with `stack`. Chrome
   // sits outside the page, so the active page's declarations are not in its
   // chain — only its own group's, then its ancestors'.
@@ -105,27 +215,34 @@ export default function PageGroupPageView({
     () =>
       stack.map((_, level) => {
         const index = level - chromeOffset;
-        if (index < 0 || !takesInputs) return inheritedScope;
-        return foldDeclaredDefaults(
+        if (index < 0) return inheritedScope;
+        return foldInputScope(
           inheritedScope,
-          pageGroups
-            .slice(0, index + 1)
-            .reverse()
-            .map((group) => group.componentProperties),
+          pageGroups.slice(0, index + 1).reverse(),
+          locals,
+          takesInputs,
         );
       }),
-    [stack, chromeOffset, pageGroups, inheritedScope, takesInputs],
+    [stack, chromeOffset, pageGroups, inheritedScope, takesInputs, locals],
   );
 
   const pageScope = useMemo(
+    () => foldInputScope(inheritedScope, trail, locals, takesInputs),
+    [trail, inheritedScope, takesInputs, locals],
+  );
+
+  // Each node's scope as its own widgets see it, for the routed trail's events.
+  const nodeScopes = useMemo(
     () =>
-      takesInputs
-        ? foldDeclaredDefaults(inheritedScope, [
-            page?.componentProperties,
-            ...[...pageGroups].reverse().map((group) => group.componentProperties),
-          ])
-        : inheritedScope,
-    [page, pageGroups, inheritedScope, takesInputs],
+      readsArrivals
+        ? Object.fromEntries(
+            trail.map((node, i) => [
+              node.id,
+              foldInputScope(inheritedScope, trail.slice(i), locals, takesInputs)?.properties ?? {},
+            ]),
+          )
+        : null,
+    [readsArrivals, trail, inheritedScope, locals, takesInputs],
   );
 
   if (!page) {
@@ -134,9 +251,38 @@ export default function PageGroupPageView({
 
   return (
     <PageGroupStackContext.Provider value={stack}>
+      {nodeScopes && <RoutedScopePublisher scopes={nodeScopes} />}
+      {seeder}
       <ActiveBranch stack={stack} chromeScopes={chromeScopes} page={page} pageScope={pageScope} />
     </PageGroupStackContext.Provider>
   );
+}
+
+/**
+ * Publishes the routed trail's inputs for its page and group events
+ * (`routedInputScopes`). Rendered ahead of the seeder, whose layout effect
+ * drops the local copies of a node that left the trail: this one runs first,
+ * so that node's close event gets the values it had.
+ */
+function RoutedScopePublisher({ scopes }: { scopes: Record<string, Record<string, unknown>> }) {
+  const live = useRef<Record<string, Record<string, unknown>>>({});
+  useLayoutEffect(() => {
+    const { values } = useVariableStore.getState();
+    const next = { ...scopes };
+    for (const [id, props] of Object.entries(live.current)) {
+      if (id in next) continue;
+      next[id] = Object.fromEntries(
+        Object.entries(props).map(([key, v]) => [
+          key,
+          isVarSource(v) && isLocalInputKey(v.$var.path) ? values[v.$var.path] : v,
+        ]),
+      );
+    }
+    live.current = scopes;
+    useHmiStore.setState({ routedInputScopes: next });
+  }, [scopes]);
+  useLayoutEffect(() => () => useHmiStore.setState({ routedInputScopes: {} }), []);
+  return null;
 }
 
 interface ActiveBranchProps {

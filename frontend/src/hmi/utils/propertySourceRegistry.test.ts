@@ -6,6 +6,7 @@ import {
   createSourceDefault,
   sourceFieldFits,
   type FieldSelectingSource,
+  valueMapFits,
 } from './propertySourceRegistry';
 
 describe('SOURCE_FIELD_PRODUCES', () => {
@@ -90,5 +91,16 @@ describe('createDefault on a field-selecting source', () => {
 
   it("shapes a union field's default value by its first type", () => {
     expect(createSourceDefault('static', ['float', 'integer'])).toBe(0);
+  });
+});
+
+describe('valueMapFits', () => {
+  it('fits a map to a field of its own type only, a number to a duration too', () => {
+    expect(valueMapFits('Color', 'color')).toBe(true);
+    expect(valueMapFits('String', 'color')).toBe(false);
+    expect(valueMapFits('Integer', ['Float', 'Integer'])).toBe(true);
+    expect(valueMapFits('Integer', 'Float')).toBe(false);
+    expect(valueMapFits('Float', 'Duration')).toBe(true);
+    expect(valueMapFits('Boolean', undefined)).toBe(true);
   });
 });

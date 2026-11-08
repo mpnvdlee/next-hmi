@@ -573,6 +573,47 @@ def test_put_config_without_a_dialogs_key_keeps_the_stored_folder(client, dialog
     assert not page_file.exists()
 
 
+
+_SEVERITY_MAP = {
+    "id": "alarm-severity",
+    "type": "Color",
+    "cases": [{"when": 1, "then": "--hmi-accent"}, {"when": 2, "then": "--hmi-warn"}],
+    "default": "--hmi-text-muted",
+}
+
+
+def test_put_config_round_trips_value_maps_and_keeps_them_when_omitted(client):
+    assert client.put("/api/config/config", json={"pages": [], "valueMaps": [_SEVERITY_MAP]}).status_code == 200
+    assert client.get("/api/config/config").json()["valueMaps"] == [_SEVERITY_MAP]
+    # An older client that knows nothing of value maps must not empty them.
+    assert client.put("/api/config/config", json={"pages": []}).status_code == 200
+    assert client.get("/api/config/config").json()["valueMaps"] == [_SEVERITY_MAP]
+
+
+@pytest.mark.parametrize("maps", [
+    [{**_SEVERITY_MAP, "type": "Icon"}],
+    [{**_SEVERITY_MAP, "id": ""}],
+    [_SEVERITY_MAP, _SEVERITY_MAP],
+    "not-a-list",
+])
+def test_put_config_rejects_a_malformed_value_map(client, maps):
+    assert client.put("/api/config/config", json={"pages": [], "valueMaps": maps}).status_code == 422
+
+
+def test_validate_draft_resolves_a_map_against_the_editors_unsaved_maps(client):
+    draft = {
+        "id": "p1",
+        "sections": {"content": [{
+            "id": "g1", "type": "Gauge",
+            "properties": {"label": {"$map": {"id": "state-text", "value": {"$static": 1}}}},
+        }]},
+    }
+    unknown = client.post("/api/config/validate", json={"kind": "page", "draft": draft}).json()
+    assert [d["code"] for d in unknown["diagnostics"]] == ["map-unknown"]
+    maps = [{"id": "state-text", "type": "String", "cases": [], "default": ""}]
+    known = client.post("/api/config/validate", json={"kind": "page", "draft": draft, "valueMaps": maps}).json()
+    assert known["diagnostics"] == []
+
 def test_put_config_keeps_the_page_files_of_the_dialogs_folder(client, dialogs_dir):
     """A page in the Dialogs folder is indexed under `dialogs`, not `pages` —
     the sweep runs per directory, so each one has to be counted against its own
@@ -1136,8 +1177,8 @@ def _overlay_opener_draft(target_id: str, args: dict) -> dict:
 
 
 def test_post_validate_ignores_declarations_outside_the_dialogs_folder(client, tmp_dirs):
-    """A page in the navigable tree takes no input parameters, whatever its file
-    declares, so every value an action hands it is flagged."""
+    """Open Dialog fills no inputs of a page in the navigable tree, whatever its
+    file declares, so every value it hands one is flagged."""
     project_dir, pages_dir = tmp_dirs
     target_id = "motor-page"
     storage.write_json(project_dir / "config.json", {
@@ -1188,6 +1229,39 @@ def test_post_validate_reports_input_parameter_on_a_navigable_page(client, tmp_d
     codes = [d["code"] for d in navigable.json()["diagnostics"]]
     assert "componentprop-no-scope" in codes
     assert "componentprop-no-scope" not in [d["code"] for d in overlay.json()["diagnostics"]]
+
+
+def test_post_validate_reads_page_variables_on_a_navigable_page(client, tmp_dirs):
+    """A Pages page reads its own and its group's inputs. One that is a
+    Binding is flagged once, where it is declared — not again at every read."""
+    project_dir, _pages_dir = tmp_dirs
+    storage.write_json(project_dir / "config.json", {
+        "version": 2,
+        "pages": [{
+            "id": "line", "type": "page-group",
+            "componentProperties": {
+                "shift": {"type": "String", "mode": "value"},
+                "crew": {"type": "String", "mode": "binding"},
+            },
+            "children": [{"id": "home", "type": "page"}],
+        }],
+        "dialogs": [],
+    })
+
+    def read(name: str) -> dict:
+        return {"id": "l-" + name, "type": "Label", "properties": {"text": {"$componentProp": name}}}
+
+    draft = {
+        "id": "home",
+        "componentProperties": {
+            "pv": {"type": "String", "mode": "value"},
+            "live": {"type": "String", "mode": "binding"},
+        },
+        "sections": {"content": [read("pv"), read("shift"), read("live"), read("live"), read("crew")]},
+    }
+    resp = client.post("/api/config/validate", json={"kind": "page", "draft": draft})
+
+    assert [d["code"] for d in resp.json()["diagnostics"]] == ["page-input-binding"]
 
 
 def test_post_validate_reports_unknown_page_overlay_argument(client, tmp_dirs):
@@ -1574,7 +1648,9 @@ def test_component_diagnostics_unescape_json_pointer_segments_for_field_ownershi
     ]
 
 
-def test_post_validate_component_flags_component_props_the_runtime_cannot_keep_live(client):
+def test_post_validate_component_accepts_nested_component_props(client):
+    """The runtime substitutes a $componentProp at any depth, in properties and
+    layout alike, so none of these is reported."""
     draft = {
         "name": "Stale",
         "componentProperties": {
@@ -1611,89 +1687,8 @@ def test_post_validate_component_flags_component_props_the_runtime_cannot_keep_l
     resp = client.post("/api/config/validate", json={"kind": "component", "draft": draft})
 
     assert resp.status_code == 200
-    nested = {
-        d["sourcePath"]
-        for d in resp.json()["diagnostics"]
-        if d["code"] == "componentprop-nested"
-    }
-    # The two bare top-level uses (`border`, the nested Label's `text`) are the
-    # shape that stays live and must not be flagged.
-    assert nested == {
-        "/children/0/properties/background/$switch/value/$componentProp",
-        "/children/0/layout/width/$componentProp",
-        "/componentProperties/fallback/defaultValue/$componentProp",
-    }
-
-
-def test_post_validate_component_lets_actions_nest_component_props(client):
-    """An action reads its fields when it fires, so a nested $componentProp in
-    any action list stays current; a rendered property still warns."""
-    label = {"$componentProp": "label"}
-    toast = {
-        "type": "showToast",
-        "message": {"$stringExpr": {"template": "Set {1}", "wildcards": {"1": label}}},
-    }
-    edit = {"type": "editValue", "target": {"$componentProp": "value"}, "title": label}
-    draft = {
-        "name": "ParamRow",
-        "componentProperties": {
-            "label": {"type": "string", "label": "Name"},
-            "value": {"type": "float", "label": "Value", "write": True},
-        },
-        "children": [
-            {
-                "id": "edit",
-                "type": "Button",
-                "properties": {
-                    "label": {"$stringExpr": {"template": "Edit {1}", "wildcards": {"1": label}}},
-                    "actions": {
-                        "onPress": [
-                            {"type": "if", "condition": True, "then": [edit], "else": [toast]},
-                            {**edit, "onSuccess": [toast]},
-                        ]
-                    },
-                },
-            },
-            {"id": "entry", "type": "StringInput", "properties": {"onSubmit": [toast]}},
-        ],
-    }
-
-    resp = client.post("/api/config/validate", json={"kind": "component", "draft": draft})
-
-    nested = {
-        d["sourcePath"] for d in resp.json()["diagnostics"] if d["code"] == "componentprop-nested"
-    }
-    assert nested == {"/children/0/properties/label/$stringExpr/wildcards/1/$componentProp"}
-
-
-def test_post_validate_component_keeps_nested_component_props_a_warning(client):
-    draft = {
-        "name": "Stale",
-        "componentProperties": {"status": {"type": "string", "label": "Status"}},
-        "children": [
-            {
-                "id": "label-1",
-                "type": "Label",
-                "properties": {
-                    "text": {
-                        "$if": {
-                            "condition": {"$componentProp": "status"},
-                            "true": "on",
-                            "false": "off",
-                        }
-                    }
-                },
-            }
-        ],
-    }
-
-    resp = client.post("/api/config/validate", json={"kind": "component", "draft": draft})
-
-    diagnostic = next(
-        d for d in resp.json()["diagnostics"] if d["code"] == "componentprop-nested"
-    )
-    assert diagnostic["severity"] == "warning"
-    assert diagnostic["propKey"] == "text"
+    flagged = [d for d in resp.json()["diagnostics"] if "$componentProp" in d["sourcePath"]]
+    assert flagged == []
 
 
 def _slot_property_draft(slot_names):

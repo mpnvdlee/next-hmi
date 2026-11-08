@@ -20,6 +20,7 @@ export type PropertySource =
   | '$formula'
   | '$random'
   | '$switch'
+  | '$map'
   | '$user'
   | '$userGroups'
   | '$device'
@@ -116,6 +117,8 @@ export const SOURCE_FIELD_PRODUCES = {
     pathString: 'string',
     depth: 'integer',
     pathSegments: 'string[]',
+    groupIndex: 'integer',
+    groupLastIndex: 'integer',
   },
   $viewport: { size: 'string', orientation: 'string', width: 'integer', height: 'integer' },
   $recipe: {
@@ -185,6 +188,20 @@ export function producedFits(produced: ProducedValueType, fieldType: string): bo
   if (produced === 'any' || produced === fieldType) return true;
   // a duration is a number of seconds
   return fieldType === 'duration' && (produced === 'integer' || produced === 'float');
+}
+
+/** Whether a value map of `mapType` fills a field of `fieldType` (any one of
+ *  a union's types): the same type, or a number in a duration. No field type
+ *  takes any map. Mirrors `_validate_map_ref` in structure.py. */
+export function valueMapFits(
+  mapType: string,
+  fieldType: string | readonly string[] | undefined,
+): boolean {
+  if (fieldType === undefined) return true;
+  // A map's type is a scalar type or `color`, which only `color` equals.
+  const produced = mapType.toLowerCase() as ProducedValueType;
+  const types = typeof fieldType === 'string' ? [fieldType] : fieldType;
+  return types.some((t) => producedFits(produced, t.toLowerCase()));
 }
 
 /** Whether a produced type fits a field of any kind: a scalar by
@@ -394,6 +411,17 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     }),
   },
   {
+    source: '$map',
+    key: '$map',
+    contentTier: 3,
+    label: 'Value Map',
+    description: 'A value looked up in one of the project value maps.',
+    abbr: 'M',
+    // The type of the map it names; the color kind lists it too.
+    produces: ['string', 'boolean', 'integer', 'float'],
+    createDefault: () => ({ $map: { id: '', value: { $var: { path: '' } } } }),
+  },
+  {
     source: '$user',
     key: '$user',
     contentTier: 3,
@@ -446,10 +474,10 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     source: '$widgetProp',
     key: '$widgetProp',
     contentTier: 1,
-    label: 'Exported Property',
-    description: 'A value exported by another widget on the page.',
-    short: 'Exported Prop',
-    abbr: 'XP',
+    label: 'Widget Property',
+    description: "What another widget on this screen publishes, like a Dropdown's selection.",
+    short: 'Widget Prop',
+    abbr: 'WP',
     produces: ['any'],
     createDefault: () => ({ $widgetProp: { componentId: '', property: '' } }),
   },
@@ -523,11 +551,9 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     source: '$componentProp',
     key: '$componentProp',
     contentTier: 1,
-    label: 'Component Property',
-    description:
-      'A value passed in by the parent component, or by the action that opened this page overlay.',
-    short: 'Component Prop',
-    abbr: 'CP',
+    label: 'Input',
+    description: 'What comes in from whoever places this component or opens this dialog or page.',
+    abbr: 'IN',
     produces: ['any'],
     createDefault: () => ({ $componentProp: '' }),
   },
@@ -537,7 +563,7 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     contentTier: 3,
     label: 'Open Dialog Input',
     description:
-      'An input parameter of a dialog while it is open — empty once it closes. Lights a selection that follows the open popover.',
+      'An input of a dialog while it is open — empty once it closes. Lights a selection that follows the open popover.',
     short: 'Dialog Input',
     abbr: 'DI',
     produces: ['any'],

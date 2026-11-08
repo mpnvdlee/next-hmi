@@ -30,7 +30,7 @@ describe('ValueDisplay', () => {
   it('formats a numeric value to the configured decimals', () => {
     renderValue({ variable: 12.3456, decimals: 2 });
 
-    expect(screen.getByText('12.35')).toBeInTheDocument();
+    expect(screen.getByText('12,35')).toBeInTheDocument();
   });
 
   it('stringifies a non-numeric value rather than showing NaN', () => {
@@ -42,7 +42,7 @@ describe('ValueDisplay', () => {
   it('clamps a decimals value a binding pushed outside the schema range', () => {
     expect(renderValue({ variable: 12.3456, decimals: -1 }).container.textContent).toBe('12');
     expect(renderValue({ variable: 12.3456, decimals: 200 }).container.textContent).toBe(
-      '12.345600',
+      '12,345600',
     );
   });
 });

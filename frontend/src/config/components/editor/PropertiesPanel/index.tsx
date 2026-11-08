@@ -44,8 +44,9 @@ import type {
   LockedFeedback,
 } from '@shared/types/config';
 import { LOCKED_FEEDBACK_MODES } from '@shared/types/config';
-import type { ComponentPropertySchema } from '@shared/types/componentProperty';
+import { inputMode, type ComponentPropertySchema } from '@shared/types/componentProperty';
 import PanelHeader from '../../ui/PanelHeader';
+import ValueMapPanel from './ValueMapPanel';
 import PropRow from '../../ui/PropRow';
 import PathInputField from '../../ui/PathInputField';
 import GroupsField from '../../ui/GroupsField';
@@ -62,7 +63,6 @@ import {
   findComponentById,
   findInPages,
   type FindInPagesResult,
-  flattenComponents,
   isFound,
 } from '@shared/utils/widgetTree';
 import {
@@ -85,17 +85,16 @@ import ComponentPropertiesEditor from '../../componentProperties/ComponentProper
 import { ComponentPropertySchemaContext } from '../PropertySourceEditor/componentPropertySchemaContext';
 
 import { LayoutFields } from '../../ui/LayoutFields';
-import { usesFlexLayout } from '@shared/utils/parentFlow';
+import { repeatItemsKey, usesFlexLayout } from '@shared/utils/parentFlow';
 import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefaultTokens';
 import { parseTokenVar, usePanelTokenValues } from '@shared/utils/themeDefaultHint';
-import { WidgetOptionsContext } from '../WidgetOptionsContext';
-import type { ComponentOption } from '../WidgetOptionsContext';
+import { WidgetOptionsContext, buildComponentOptions } from '../WidgetOptionsContext';
 import { bindsVariable } from '@hmi/utils/propertySourceRules';
 import { primaryType } from '@shared/utils/valueTypes';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { detectCopyPasteKey } from '@shared/utils/domEvent';
-import { EDITOR_NODE_IDS } from '@shared/constants/editorSentinels';
+import { EDITOR_NODE_IDS, parseValueMapNodeId } from '@shared/constants/editorSentinels';
 
 const SECTION_IDS = new Set<string>([EDITOR_NODE_IDS.PAGES, EDITOR_NODE_IDS.DIALOGS]);
 
@@ -186,37 +185,6 @@ function useEventActionsCopyPaste(root: unknown, write: (newRoot: unknown) => vo
     const label = schema.label || path[0];
     if (key === 'c') void copyPropertyValue(getAtPath(root, path), label);
     else pasteActionAfter(root, path, label, write);
-  });
-}
-
-/** Candidate struct-field keys for a component's struct exports, taken from a
- *  `columns` property (the grid convention: each column's `value` is a row
- *  field). These populate the field tree under a `Struct` export. */
-function deriveStructFields(properties: Record<string, unknown> | undefined): string[] {
-  const columns = properties?.columns;
-  if (!Array.isArray(columns)) return [];
-  const fields: string[] = [];
-  for (const col of columns) {
-    const value =
-      col && typeof col === 'object' ? (col as Record<string, unknown>).value : undefined;
-    if (typeof value === 'string' && value && !fields.includes(value)) fields.push(value);
-  }
-  return fields;
-}
-
-function buildComponentOptions(containerComps: WidgetConfig[]): ComponentOption[] {
-  return flattenComponents(containerComps).flatMap((c) => {
-    const entry = widgetRegistry[c.type];
-    if (!entry?.exportedProperties?.length) return [];
-    return [
-      {
-        id: c.id,
-        name: c.name,
-        type: c.type,
-        exportedProperties: entry.exportedProperties,
-        structFields: deriveStructFields(c.properties),
-      },
-    ];
   });
 }
 
@@ -363,6 +331,11 @@ function PropertiesPanelBody() {
     return <GlobalEventsPanel />;
   }
 
+  const valueMapId = parseValueMapNodeId(selectedId);
+  if (valueMapId !== null) {
+    return <ValueMapPanel mapId={valueMapId} />;
+  }
+
   if (selectedId && SHELL_AREA_PANELS[selectedId]) {
     return <ShellAreaPanel {...SHELL_AREA_PANELS[selectedId]} nodeId={selectedId} />;
   }
@@ -477,6 +450,14 @@ function PropertiesPanelBody() {
 
 /** Merge declarations from innermost scope outwards — the first chain entry to
  *  declare a name owns it, matching what the runtime resolves. */
+function valueInputsOf(
+  declared: Record<string, ComponentPropertySchema> | undefined,
+): Record<string, ComponentPropertySchema> | undefined {
+  return declared
+    ? Object.fromEntries(Object.entries(declared).filter(([, p]) => inputMode(p) === 'value'))
+    : undefined;
+}
+
 function mergeDeclarations(
   chain: (Record<string, ComponentPropertySchema> | undefined)[],
 ): Record<string, ComponentPropertySchema> {
@@ -490,13 +471,13 @@ function mergeDeclarations(
 }
 
 /**
- * Publishes the input parameters a widget can actually read to the source
+ * Publishes the inputs a widget can actually read to the source
  * picker, so it can bind `$componentProp`. That is the owning page's
  * declarations over its ancestor page-groups' — page shadows group, inner group
  * shadows outer. A widget in page-group chrome renders around pages rather than
  * inside one, so it gets its group chain alone. Only the Dialogs folder's pages
- * take input parameters, so anywhere else the scope is empty whatever the
- * nodes declare.
+ * take every kind of input; anywhere else the scope holds the nodes' Value
+ * inputs alone.
  *
  * A scope that declares nothing publishes nothing: consumers key on the context
  * being present, not on its contents, so an empty frame would offer
@@ -515,11 +496,12 @@ function PageComponentPropertyScope({
   children: ReactNode;
 }) {
   const value = useMemo(() => {
-    if (!takesInputs) return null;
-    const declared = mergeDeclarations([
+    const chain = [
       page?.componentProperties,
       ...[...(groupTrail ?? [])].reverse().map((group) => group.componentProperties),
-    ]);
+    ];
+    // Outside the Dialogs folder a node has only its Value inputs.
+    const declared = mergeDeclarations(takesInputs ? chain : chain.map(valueInputsOf));
     return Object.keys(declared).length > 0 ? { properties: declared } : null;
   }, [page, groupTrail, takesInputs]);
   return (
@@ -539,6 +521,8 @@ interface OverlaySettings {
   showCloseButton?: boolean;
   closeOnBackgroundPress?: boolean;
   tapThrough?: boolean;
+  draggable?: boolean;
+  modeless?: boolean;
 }
 
 function OverlaySection({
@@ -557,7 +541,9 @@ function OverlaySection({
         label="Show header bar"
         description={
           // Outside the Dialogs folder a backdrop press always closes.
-          inDialogs && node.showModalHeader === false && node.closeOnBackgroundPress === false
+          inDialogs &&
+          node.showModalHeader === false &&
+          (node.closeOnBackgroundPress === false || node.modeless === true)
             ? 'Without the header bar there is no ×; add a Close Dialog/Overlay button on the page.'
             : undefined
         }
@@ -580,14 +566,39 @@ function OverlaySection({
               />
             </PropRow>
           )}
-          <PropRow label="Close on backdrop">
+          {/* The header bar is the drag handle. */}
+          {node.showModalHeader !== false && (
+            <PropRow label="Draggable">
+              <BoolButtonGroup
+                value={node.draggable === true}
+                onChange={(v) => onPatch({ draggable: v })}
+              />
+            </PropRow>
+          )}
+          <PropRow
+            label="Background usable"
+            description={
+              node.modeless === true
+                ? 'The screen under the dialog works while it is open. Close it with its × or a Close Dialog/Overlay action.'
+                : undefined
+            }
+          >
             <BoolButtonGroup
-              value={node.closeOnBackgroundPress !== false}
-              onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
+              value={node.modeless === true}
+              onChange={(v) => onPatch({ modeless: v })}
             />
           </PropRow>
+          {/* A usable background has no backdrop to press. */}
+          {node.modeless !== true && (
+            <PropRow label="Close on backdrop">
+              <BoolButtonGroup
+                value={node.closeOnBackgroundPress !== false}
+                onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
+              />
+            </PropRow>
+          )}
           {/* Only a backdrop press that closes can be handed on. */}
-          {node.closeOnBackgroundPress !== false && (
+          {node.modeless !== true && node.closeOnBackgroundPress !== false && (
             <PropRow label="Tap through">
               <BoolButtonGroup
                 value={node.tapThrough !== false}
@@ -668,6 +679,12 @@ function PagePanel({
             value={page.title}
             onChange={(v) => onRename(v as string)}
           />
+          <ComponentPropertiesEditor
+            ownerName={resolvePageTitle(page.title)}
+            owner={inDialogs ? 'dialog' : 'page'}
+            properties={page.componentProperties ?? {}}
+            onChange={(next) => updatePage(page.id, { componentProperties: next })}
+          />
         </div>
         <div className="cfg-section">
           <div className="cfg-section__title">Layout</div>
@@ -700,18 +717,9 @@ function PagePanel({
         <PageEventsSection
           node={page}
           kindLabel={inDialogs ? 'Dialog' : 'Page'}
-          inputs={inDialogs ? page.componentProperties : undefined}
+          inputs={inDialogs ? page.componentProperties : valueInputsOf(page.componentProperties)}
           onPatch={(patch) => updatePage(page.id, patch)}
         />
-        {inDialogs && (
-          <ComponentPropertiesEditor
-            ownerName={resolvePageTitle(page.title)}
-            title="Input Parameters"
-            itemNoun="input parameter"
-            properties={page.componentProperties ?? {}}
-            onChange={(next) => updatePage(page.id, { componentProperties: next })}
-          />
-        )}
       </FieldPathContext.Provider>
     </PanelScopeContext.Provider>
   );
@@ -884,8 +892,8 @@ function PageEventsSection({
   onPatch,
 }: {
   node: { events?: PageEventsConfig };
-  /** A Dialogs-folder node's input parameters — its event actions run with
-   *  them in scope, so their fields may read them. */
+  /** The node's inputs — a page's Values only — which its event actions run
+   *  with in scope, so their fields may read them. */
   inputs?: Record<string, ComponentPropertySchema>;
   /** 'Page' / 'Group', or 'Dialog' / 'Dialog Group' in the Dialogs folder —
    *  the noun the event labels read with. */
@@ -976,6 +984,12 @@ function PageGroupPanel({
               />
             </PropRow>
           )}
+          <ComponentPropertiesEditor
+            ownerName={resolvePageTitle(pageGroup.title)}
+            owner={inDialogs ? 'dialog' : 'page'}
+            properties={pageGroup.componentProperties ?? {}}
+            onChange={(next) => updatePageGroup(pageGroup.id, { componentProperties: next })}
+          />
         </div>
         {!inDialogs && (
           <>
@@ -997,18 +1011,11 @@ function PageGroupPanel({
         <PageEventsSection
           node={pageGroup}
           kindLabel={inDialogs ? 'Dialog Group' : 'Group'}
-          inputs={inDialogs ? pageGroup.componentProperties : undefined}
+          inputs={
+            inDialogs ? pageGroup.componentProperties : valueInputsOf(pageGroup.componentProperties)
+          }
           onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
         />
-        {inDialogs && (
-          <ComponentPropertiesEditor
-            ownerName={resolvePageTitle(pageGroup.title)}
-            title="Input Parameters"
-            itemNoun="input parameter"
-            properties={pageGroup.componentProperties ?? {}}
-            onChange={(next) => updatePageGroup(pageGroup.id, { componentProperties: next })}
-          />
-        )}
       </FieldPathContext.Provider>
     </PanelScopeContext.Provider>
   );
@@ -1186,6 +1193,7 @@ function ComponentPanel({
               onChange={patchLayout}
               componentId={comp.id}
               tokenValues={tokenValues}
+              noStack={repeatItemsKey(comp.type) !== null}
             />
           </CollapsibleSection>
         </FieldPathContext.Provider>

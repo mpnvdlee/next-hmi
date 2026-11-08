@@ -77,6 +77,7 @@ SDK_NAMES: tuple[str, ...] = (
     "usePropStruct",
     "useRecordListProp",
     "useItemListProp",
+    "useOptionListProp",
     "useCssVar",
     "useVariable",
     "useBindingValue",
@@ -100,6 +101,7 @@ SDK_NAMES: tuple[str, ...] = (
     "levelDotClass",
     "formatAlarmTimeShort",
     "formatAlarmDateTime",
+    "formatNumber",
     "ackAlarm",
     "ackAllAlarms",
     "AlarmDetailDialog",
@@ -130,6 +132,7 @@ SDK_NAMES: tuple[str, ...] = (
     "useIsPreview",
     "useActivePage",
     "useAnchoredStyle",
+    "useVirtualizer",
 )
 
 BUILD_STATUS_VERSION = 2

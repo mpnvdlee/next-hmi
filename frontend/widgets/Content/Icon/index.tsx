@@ -10,6 +10,13 @@ export const schema = {
     step: 1,
   },
   color: { type: 'color' as const, label: 'Color', defaultToken: '--hmi-text' },
+  rotation: {
+    type: 'integer' as const,
+    label: 'Rotation (°)',
+    defaultValue: 0,
+    step: 90,
+    description: 'Turns the icon clockwise. Bind it to show one asset in any orientation.',
+  },
   chrome: {
     type: 'boolean' as const,
     format: 'show' as const,
@@ -28,6 +35,7 @@ export default function Icon({ properties, layout }: HmiWidgetProps) {
   const size = getPropNumber(properties, 'size', 24, evalCtx);
   const color = getPropString(properties, 'color', '', evalCtx) || undefined;
   const chrome = getPropBoolean(properties, 'chrome', true, evalCtx);
+  const rotation = getPropNumber(properties, 'rotation', 0, evalCtx);
 
   const IconComp =
     iconValue && isBuiltinIconId(iconValue) ? getBuiltinIconComponent(iconValue) : null;
@@ -38,7 +46,7 @@ export default function Icon({ properties, layout }: HmiWidgetProps) {
   return (
     <div
       className={`hmi-component hmi-icon${chrome ? '' : ' hmi-icon--bare'}`}
-      style={selfLayoutStyle(layout)}
+      style={{ ...selfLayoutStyle(layout), '--hmi-icon-rotation': `${rotation}deg` }}
     >
       {IconComp && (
         <span style={color ? { color } : undefined}>

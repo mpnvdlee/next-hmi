@@ -23,3 +23,11 @@ export function parseWidgetPropRowKey(key: string): WidgetPropSelection | null {
     ? { componentId, property: rest }
     : { componentId, property: rest.slice(0, slashIdx), path: rest.slice(slashIdx + 1) };
 }
+
+/** An Input's row in the same picker: its `$componentProp` key behind a prefix
+ *  no component id can start with. */
+export const INPUT_KEY_PREFIX = '\x01';
+
+export function inputRowKey(key: string): string {
+  return `${INPUT_KEY_PREFIX}${key}`;
+}

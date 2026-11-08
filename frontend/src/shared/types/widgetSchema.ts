@@ -43,6 +43,9 @@ export interface SchemaField {
   requiredFields?: RequiredFieldEntry[];
   /** When true, variable picker only shows writable variables. */
   write?: boolean;
+  /** Takes a variable binding only — no literal or computed source. Set on a
+   *  component's or dialog's Binding input (`inputMode`). */
+  bindsOnly?: boolean;
   /** For a `format: 'select'` field: the list of options shown in the dropdown.
    *  A `{ $loc }` value makes the option itself a translation, so the dropdown
    *  offers translated captions without opening the free translation picker.
@@ -75,6 +78,9 @@ export interface SchemaField {
   recordedWhen?: VisibilityCondition | VisibilityCondition[];
   /** For 'actions' type: the ActionsConfig event key this field edits (defaults to 'onPress'). */
   event?: string;
+  /** For 'actions' type: the `item-list` property whose chosen element the
+   *  actions run with — `$repeatItem` inside them reads that element. */
+  repeatsOver?: string;
   /** Conditional visibility: field only shown when condition(s) pass.
    *  Conditions reference other properties in the same component schema.
    *  All conditions in an array must pass (AND logic). */
@@ -94,7 +100,9 @@ export interface ExportedStructField {
 export interface ExportedProperty {
   key: string; // property key published to widgetPropStore
   label: string; // human-readable label shown in the editor picker
-  type?: string; // e.g. 'String', 'Float', 'Boolean'
+  /** e.g. 'String', 'Float', 'Boolean'. A list: the value is any one of them,
+   *  as the instance decides — a Dropdown's is whatever its options hold. */
+  type?: string | string[];
   /** For a `Struct` export: declared fields with datatypes, so the $widgetProp
    *  picker can show and type-check individual fields. Falls back to the
    *  component's configured column keys (untyped) when omitted. */

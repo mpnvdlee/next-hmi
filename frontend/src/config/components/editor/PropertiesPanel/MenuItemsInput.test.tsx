@@ -57,9 +57,11 @@ function Harness({
 /** Top-level item rows, in order. */
 function itemRows(container: HTMLElement): HTMLElement[] {
   const list = container.querySelector('.cfg-menu-items') as HTMLElement;
-  return [...list.children].filter((el) =>
-    el.classList.contains('cfg-field-group'),
-  ) as HTMLElement[];
+  return [
+    ...list.querySelectorAll(
+      ':scope > .cfg-sortable-row > .cfg-sortable-row__body > .cfg-field-group',
+    ),
+  ] as HTMLElement[];
 }
 
 /** The add control of the outermost list (nested lists render their own). */

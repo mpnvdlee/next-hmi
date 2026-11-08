@@ -9,27 +9,40 @@
   "componentProperties": {
     "label": {
       "type": "string",
-      "label": "Label"
-    },
-    "text": {
-      "type": "string",
-      "label": "Reading",
-      "description": "Already formatted. Build it on the instance with $stringExpr — a $componentProp nested inside another source stops updating."
+      "label": "Label",
+      "mode": "value"
     },
     "value": {
       "type": "float",
       "label": "Value",
-      "description": "Drives the bar."
+      "description": "The variable behind the reading and the bar.",
+      "mode": "binding"
+    },
+    "unit": {
+      "type": "string",
+      "label": "Unit",
+      "description": "Shown after the reading.",
+      "defaultValue": "",
+      "mode": "value"
+    },
+    "decimals": {
+      "type": "integer",
+      "label": "Decimals",
+      "description": "0 shows a whole number, anything else one decimal.",
+      "defaultValue": 1,
+      "mode": "value"
     },
     "max": {
       "type": "float",
       "label": "Range maximum",
-      "defaultValue": 100
+      "defaultValue": 100,
+      "mode": "value"
     },
     "color": {
       "type": "color",
       "label": "Bar colour",
-      "defaultValue": "var(--hmi-accent)"
+      "defaultValue": "var(--hmi-accent)",
+      "mode": "value"
     }
   },
   "children": [
@@ -119,7 +132,42 @@
               "properties": {
                 "typography": "body",
                 "text": {
-                  "$componentProp": "text"
+                  "$switch": {
+                    "value": {
+                      "$componentProp": "decimals"
+                    },
+                    "cases": [
+                      {
+                        "when": 0,
+                        "then": {
+                          "$stringExpr": {
+                            "template": "{Round(1)} {2}",
+                            "wildcards": {
+                              "1": {
+                                "$componentProp": "value"
+                              },
+                              "2": {
+                                "$componentProp": "unit"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "default": {
+                      "$stringExpr": {
+                        "template": "{Round1(1)} {2}",
+                        "wildcards": {
+                          "1": {
+                            "$componentProp": "value"
+                          },
+                          "2": {
+                            "$componentProp": "unit"
+                          }
+                        }
+                      }
+                    }
+                  }
                 },
                 "weight": 650
               },

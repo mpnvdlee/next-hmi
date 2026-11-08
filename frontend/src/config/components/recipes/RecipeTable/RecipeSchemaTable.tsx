@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { typeLabel } from '@shared/types/componentProperty';
 import type { RecipeDatasetType, RecipeDataType } from '@shared/types/recipe';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
@@ -8,6 +8,8 @@ import { EditIcon } from '@config/components/ui/actionIcons';
 import { varBindingOf } from '../../editor/bindingPickerUtils';
 import PropertySourceBadge from '../../editor/PropertySourceSelector/PropertySourceBadge';
 import AddButton from '../../ui/AddButton';
+import SortableList from '../../ui/SortableList';
+import { useSortableRow } from '../../ui/SortableList/useSortableRow';
 import Button from '../../ui/Button';
 import HighlightedInput from '../../ui/HighlightedInput';
 import NameInputModal from '../../ui/NameInputModal';
@@ -42,7 +44,7 @@ export default function RecipeSchemaTable({ type, filter, showLive }: Props) {
   });
 
   const rows = filterParameters(type.parameters, filter);
-  const columns = showLive ? 6 : 5;
+  const columns = showLive ? 5 : 4;
 
   useRecipePriorityContext(
     type.parameters.map((p) => bindingPath(p.binding)).filter(Boolean),
@@ -114,114 +116,110 @@ export default function RecipeSchemaTable({ type, filter, showLive }: Props) {
         </div>
 
         <div className="cfg-table-wrap">
-          <table className="cfg-table cfg-recipe-table">
-            <thead>
-              <tr>
-                <th className="cfg-th cfg-recipe-th--label">Parameter</th>
-                <th className="cfg-th">Variable</th>
-                <th className="cfg-th cfg-recipe-th--type">Type</th>
-                {showLive && <th className="cfg-th cfg-recipe-th--live">Live</th>}
-                <th className="cfg-th cfg-recipe-th--move" />
-                <th className="cfg-th cfg-th--actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((param) => {
-                const index = type.parameters.indexOf(param);
-                const path = bindingPath(param.binding);
-                // Same finding the backend reports as `recipe-parameter-unbound`:
-                // the parameter is carried in every dataset but writes nowhere.
-                const unbound = param.binding === undefined;
-                return (
-                  <tr
-                    key={param.id}
-                    className={`cfg-row cfg-row--enabled${unbound ? ' cfg-recipe-row--unbound' : ''}`}
-                  >
-                    <td className="cfg-td">
-                      <span className="cfg-recipe-label-cell">
-                        {unbound && (
-                          <span
-                            className="cfg-recipe-warn"
-                            title="recipe parameter is not bound to a variable"
-                          >
-                            ⚠
-                          </span>
-                        )}
-                        <HighlightedInput
-                          value={param.label}
-                          placeholder="Label"
-                          onCommit={(text) => patchParameter(type.id, param.id, { label: text })}
-                        />
-                      </span>
-                    </td>
-                    <td className="cfg-td">
-                      <button
-                        type="button"
-                        className="cfg-recipe-var-btn"
-                        title="Change variable"
-                        onClick={() => onRebind(param.id)}
-                      >
-                        <PropertySourceBadge source="$var" />
-                        <span className="cfg-recipe-var-path">
-                          {path ? <SearchHighlight text={path} /> : 'Pick a variable…'}
-                        </span>
-                        <EditIcon />
-                      </button>
-                    </td>
-                    {/* Derived from the bound variable at pick time — stated, not editable. */}
-                    <td className="cfg-td cfg-recipe-td--type">
-                      <SearchHighlight text={typeLabel(param.dataType)} />
-                    </td>
-                    {showLive && (
-                      <td className="cfg-td cfg-recipe-td--live">
-                        <RecipeLiveCell path={path} />
-                      </td>
-                    )}
-                    <td className="cfg-td cfg-recipe-td--move">
-                      <button
-                        type="button"
-                        className="cfg-row-action-btn"
-                        title="Move up"
-                        disabled={index === 0}
-                        onClick={() => moveParameter(type.id, param.id, -1)}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        className="cfg-row-action-btn"
-                        title="Move down"
-                        disabled={index === type.parameters.length - 1}
-                        onClick={() => moveParameter(type.id, param.id, 1)}
-                      >
-                        ↓
-                      </button>
-                    </td>
-                    <td className="cfg-td cfg-recipe-td--actions">
-                      <button
-                        type="button"
-                        className="cfg-delete-btn"
-                        title="Remove parameter"
-                        onClick={() => deleteParameter(type.id, param.id)}
-                      >
-                        ×
-                      </button>
+          <SortableList
+            ids={rows.map((param) => param.id)}
+            // Around the table, not its body: the list adds screen-reader nodes a
+            // <tbody> cannot hold. `rows` may be a search's subset, so a row lands
+            // where the one it dropped on sits in the full list.
+            onMove={(from, to) =>
+              moveParameter(type.id, rows[from].id, type.parameters.indexOf(rows[to]))
+            }
+          >
+            <table className="cfg-table cfg-recipe-table">
+              <thead>
+                <tr>
+                  <th className="cfg-th cfg-recipe-th--label">Parameter</th>
+                  <th className="cfg-th">Variable</th>
+                  <th className="cfg-th cfg-recipe-th--type">Type</th>
+                  {showLive && <th className="cfg-th cfg-recipe-th--live">Live</th>}
+                  <th className="cfg-th cfg-th--actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((param) => {
+                  const path = bindingPath(param.binding);
+                  // Same finding the backend reports as `recipe-parameter-unbound`:
+                  // the parameter is carried in every dataset but writes nowhere.
+                  const unbound = param.binding === undefined;
+                  return (
+                    <SortableTr
+                      key={param.id}
+                      id={param.id}
+                      className={`cfg-row cfg-row--enabled${unbound ? ' cfg-recipe-row--unbound' : ''}`}
+                    >
+                      {(grip) => (
+                        <>
+                          <td className="cfg-td">
+                            <span className="cfg-recipe-label-cell">
+                              {grip}
+                              {unbound && (
+                                <span
+                                  className="cfg-recipe-warn"
+                                  title="recipe parameter is not bound to a variable"
+                                >
+                                  ⚠
+                                </span>
+                              )}
+                              <HighlightedInput
+                                value={param.label}
+                                placeholder="Label"
+                                onCommit={(text) =>
+                                  patchParameter(type.id, param.id, { label: text })
+                                }
+                              />
+                            </span>
+                          </td>
+                          <td className="cfg-td">
+                            <button
+                              type="button"
+                              className="cfg-recipe-var-btn"
+                              title="Change variable"
+                              onClick={() => onRebind(param.id)}
+                            >
+                              <PropertySourceBadge source="$var" />
+                              <span className="cfg-recipe-var-path">
+                                {path ? <SearchHighlight text={path} /> : 'Pick a variable…'}
+                              </span>
+                              <EditIcon />
+                            </button>
+                          </td>
+                          {/* Derived from the bound variable at pick time — stated, not editable. */}
+                          <td className="cfg-td cfg-recipe-td--type">
+                            <SearchHighlight text={typeLabel(param.dataType)} />
+                          </td>
+                          {showLive && (
+                            <td className="cfg-td cfg-recipe-td--live">
+                              <RecipeLiveCell path={path} />
+                            </td>
+                          )}
+                          <td className="cfg-td cfg-recipe-td--actions">
+                            <button
+                              type="button"
+                              className="cfg-delete-btn"
+                              title="Remove parameter"
+                              onClick={() => deleteParameter(type.id, param.id)}
+                            >
+                              ×
+                            </button>
+                          </td>
+                        </>
+                      )}
+                    </SortableTr>
+                  );
+                })}
+
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={columns} className="cfg-table-empty">
+                      {filter
+                        ? 'No parameters match the search.'
+                        : 'No parameters. Click + Add to pick a variable.'}
                     </td>
                   </tr>
-                );
-              })}
-
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={columns} className="cfg-table-empty">
-                    {filter
-                      ? 'No parameters match the search.'
-                      : 'No parameters. Click + Add to pick a variable.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </SortableList>
         </div>
 
         {renaming && (
@@ -240,5 +238,24 @@ export default function RecipeSchemaTable({ type, filter, showLive }: Props) {
         {deleteConfirm.modal}
       </div>
     </SearchHighlightProvider>
+  );
+}
+
+/** A parameter's row, dragged by the `⋮⋮` grip its cells place: the label
+ *  cell holds it in its start padding, so no column is given to it. */
+function SortableTr({
+  id,
+  className,
+  children,
+}: {
+  id: string;
+  className: string;
+  children: (grip: ReactNode) => ReactNode;
+}) {
+  const { rowProps, grip } = useSortableRow(id);
+  return (
+    <tr {...rowProps} className={`${className} cfg-sortable-item`}>
+      {children(grip)}
+    </tr>
   );
 }

@@ -14,13 +14,86 @@ heading.
 Opens the HMI to the systems around it and shuts out the ones that should not
 reach it: API v1 for a MES or badge reader, tokens under Settings › Tokens, bit
 bindings and a `Byte` type for status words, and an editor that keeps up with
-an AI assistant's changes. Projects stay on file format 11. Read **Changed**
-before you update: a reverse proxy must pass the browser's `Host` with its
-port, and an `$http` URL that takes its server from a placeholder needs that
-server listed.
+an AI assistant's changes. It also adds a Data Grid, project value maps, page
+inputs and dialogs that move. Projects move to file format 12, where every
+input is a Value or a Binding. Read **Changed** before you update: a reverse
+proxy must pass the browser's `Host` with its port, an `$http` URL that takes
+its server from a placeholder needs that server listed, and a formula passed
+into a dialog or component is now read once.
 
 ### Added
 
+- **Move a dialog, and keep working beside it.** A dialog's Overlay section
+  gains **Draggable**: the operator drags it by its header bar, which never
+  leaves the screen, and it stays there until it closes. **Background usable**
+  keeps the screen under the dialog working — no dim, presses beside it reach
+  the screen and do not close it — and keeps the dialog open, where it was
+  put, when the operator goes to another page.
+- **Restart the HMI from a button.** A new action, **Reload HMI**, reloads
+  the HMI in this browser as a page refresh does. Other panels and the server
+  keep running.
+- **Size a Button's text.** A Button gains the Label's **Typography**
+  (Heading to Caption) and **Overflow** (Wrap or Truncate), so a narrow
+  button can take a smaller caption or cut its text off with an ellipsis.
+  Unset, a Button looks as it did.
+- **A live Trend Chart keeps a fixed time base.** With **Data source: Live
+  buffer** the time axis always spans the last **Live window (s)** seconds up
+  to now, and a line whose value holds still runs on flat to now instead of
+  stopping at its last change. A change draws as a step, not as a ramp from
+  the change before it.
+- **Turn an Icon or an Image.** Both gain **Rotation (°)**, clockwise and
+  bindable, so one asset shows in every orientation instead of a rotated copy
+  per angle. An Icon turns its glyph inside the chip; an Image turns the
+  picture under its indicators.
+- **Stack widgets on top of each other.** A Container's **Direction** gains
+  **Stack** beside Row and Column: every child sits in the same spot, drawn
+  over the one before it, and the Container is as big as its largest child.
+  Align and Distribute place the children, a Fill child stretches over the
+  whole Container; hide one and the one below shows.
+- **Build a tab bar from your own Buttons.** Three actions switch the pages of
+  a page group: **Page Group: Next**, **Page Group: Previous** and **Page
+  Group: Go To**, whose index is a number, a PLC variable or a dialog input.
+  They work on the group the Button sits in, or its parent: in the main screen
+  they change the page, in a dialog group the tab, and the dialog stays open.
+  Next and Previous do nothing on the last and first page. `$page` gains
+  **Page group index** and **Page group last index**, counted from 0, so a tab
+  Button lights up with a `$compare` and Next greys out on the last page.
+- **Value maps: define a lookup once, use it everywhere.** Under **Value
+  Maps** in the editor tree, below Global Events, a map turns a value into a
+  colour, a text, a number or a Boolean — alarm severity 2 into the warning
+  colour, machine state 3 into the translated word for "Fault" — with a
+  default for anything else. A property picks **Value Map** as its source, the
+  map and the tag it looks up; only maps of the property's type are offered,
+  and one that is gone or of the wrong type shows up in the diagnostics.
+  Right-click a map to rename it in the tree, duplicate or delete it; a new
+  name, there or in its **Id**, carries over to every property that uses it.
+- **A String Input can show and edit a variable.** Bind its **Variable** to a
+  String tag, a page input or a dialog input: the field shows that text and
+  writes what the operator types back to it, on Enter or on leaving the field,
+  or on every key with **Write on** › **Every key** — a search field that
+  filters a Data Grid as the operator types. **Value** sets what an unbound
+  field starts with.
+- **Drag a list's rows by their ⋮⋮ grip.** Every list whose order matters —
+  actions, Switch / Case cases, value map cases, Navigation Menu items, Trend
+  Chart variables, recipe parameters, Dropdown options and Data Grid columns
+  — now has a grip in the margin before each row, so the row itself keeps
+  its place and width; in the panel's one-line option and column lists it
+  shows on the row under the pointer or with keyboard focus. Drag it, or
+  focus it and use Space and the arrow keys. Actions, cases and menu items
+  could not be reordered before; the others lose their up and down buttons.
+- **A Data Grid shows an array as a table.** Bind **Items** to a struct array
+  from the PLC — a recipe list, an event log — and list the **Columns**, one
+  line each in the panel and one row each in its drawer: a member picked from
+  the struct, a title from any source (text, a translation, a tag, a formula),
+  a width that fills or is fixed in px, and an alignment. Only the rows in
+  view are drawn, so a list of 500 scrolls smoothly; the header stays put. A
+  click on a header sorts on that column. **Filter member** and **Filter
+  value** show the rows that contain a text, and **Hide empty** drops the
+  unused slots of a fixed array. A picked row is published as **Selected
+  Item**, **Index** and **Value** — the Value member as the row holds it, so a
+  number id writes to an Integer tag — a bound **Selected value** picks and
+  scrolls to its row, and **On Select** reads the picked row through Repeat
+  Item.
 - **The LED Indicator's colours can be changed.** It was always green when on
   and grey when off. Two new properties, **On color** and **Off color**, take
   a theme colour or any other colour; left unset they follow the theme's OK
@@ -81,8 +154,74 @@ server listed.
 - **`sendWsMessage` says whether it sent.** The widget SDK's
   `sendWsMessage` returns `true` when the message went out and `false` when
   the live connection is down.
+- **Pages have inputs, and Navigate To Page fills them.** A page or page group
+  in the Pages section declares **Inputs**, always Values. A **Navigate To
+  Page** to it gets one field per input — any source, read once in the screen
+  that navigates; one left empty gives the page its default. After that the
+  input is the screen's own: a search box can write it and the list below can
+  filter on it, and a second panel showing the same page keeps its own.
+  Arriving any other way — a menu, a Tab Bar, a Page Group action, the
+  browser's back button or a refresh — starts at the defaults; a page group's
+  inputs last while the operator moves between its pages. The page's and
+  group's Open and Close events read the inputs as the page's widgets do.
+  Nothing is stored on the server or in the URL.
+- **A component can take an option list.** A new input type, **Options**,
+  passes a list of label and value pairs. Set a Dropdown's or Button Row's
+  **Options** inside the component to that input, and each instance offers
+  its own list. The widget SDK has `useOptionListProp` to read one.
+- **A Dropdown can stop at a maximum.** A new **Max index** property shows
+  the options up to and including that position, counted from 0. Bind it to
+  a controller tag to offer only the choices the machine allows; left empty,
+  every option shows.
 
 ### Changed
+
+- **Inputs and Widget Properties.** The **Component Property** source is now
+  called **Input**, and **Exported Property** is **Widget Property**; each says
+  in one line what it reads. The block that declares them is called **Inputs**
+  on a component, a dialog and a page alike (it was Component Properties,
+  Input Parameters and Page Variables). Both sources open one picker with an
+  **Inputs** and a **Widget Properties** group, so a field switches between
+  them by picking a row. Project files do not change.
+- **A page's Inputs sit under its title.** A page's or page group's
+  **Inputs** — a dialog's too — moved from the bottom of the panel to the
+  bottom of its **Page** section, under an **Inputs** title; a component's
+  sit the same way at the bottom of its **Identity** section. Each line shows
+  the input's name, type and default; › opens the rest.
+- **A placed component sets its Inputs.** The section of a component
+  instance's panel where its inputs get their values is titled **Inputs**, not
+  **Properties**, as in an Open Dialog or Navigate To Page action.
+- **A source badge opens the source drawer.** Clicking a field's source
+  badge slides in the same drawer the action list's **Add** opens, with a
+  search and a line on each source; the short menu in between, with its
+  **Browse property sources…** row, is gone. A field with one source opens
+  nothing.
+- **Numbers read with a decimal comma.** Every number the HMI shows — Value
+  Display, Gauge, Ring Gauge, Progress Bar, Trend, Trend Chart, Number Input,
+  Numeric Stepper, Data Grid cells, `{1}` in a Text Expression, a Localizable
+  Text or an alarm text, and any text bound straight to a number, such as a
+  Label's or a Stat Tile's — reads `1234,5`, and a Number Input no longer groups
+  digits. The numpad has a comma key instead of the point and still writes a
+  plain number, and a custom widget's numpad still hands it the entry with a
+  point; `Thousands` groups with a point. Saved projects, API requests,
+  the values sent to the PLC (a Write Data Variable's Text Expression too),
+  the URL or source of a Web Frame, Video or Image, a String Input's text and
+  the selection of a Dropdown, Button Row or Data Grid keep the decimal point.
+- **Every input is a Value or a Binding (breaking).** An input of a component
+  or a dialog has a **Kind**; a page's is always a Value, and the warnings
+  pill flags a Binding declared on one. A Value takes anything, is read once
+  when the dialog opens or the instance appears, and is then that screen's or
+  instance's own: a Write, Toggle or input field changes it there and nothing
+  goes back. A Binding takes a variable only, stays live and writes to the
+  controller. A Binding given a fixed value or a formula is flagged in the
+  warnings pill. Opening a project moves it to file format 12 and works out
+  each input's kind: a Binding where every opener or instance passes a
+  variable, a Value otherwise. A formula that was passed in and kept computing
+  inside a dialog is now read once; the warnings pill flags each case. To keep
+  it live, pass the variable as a Binding and compute inside, as the NEXT BREW
+  example's Metric Row now does. **Start** asks to upgrade a project the first
+  time 1.2.0 opens it, zipping it into `.backups/` first; a 1.1.x build then
+  shows **Requires update** and names 1.2.0 as the version it needs.
 
 - **A `Byte` tag no longer fits a field that takes an Integer.** An OPC-UA
   `Byte` — a Siemens `BYTE` or `USINT` — used to arrive as an Integer. It is
@@ -173,6 +312,50 @@ server listed.
 
 ### Fixed
 
+- **Escape closes one drawer at a time.** With a drawer opened from inside
+  another — a source picked for an option's label, or for a field of an
+  action in its own drawer — one Escape closed both, and with the cursor in
+  the drawer's search the first Escape did nothing. Now Escape closes the
+  top drawer only; in a search with text it first clears the search.
+- **A sidebar shrinks with its menu.** Collapsing a Navigation Menu with
+  its « button left a sidebar with a fixed **Expanded size** at that width,
+  with the icons in a strip at its edge. The sidebar now fits the collapsed
+  menu and takes its size back when the menu opens. Collapsed, the icons keep
+  the link's side padding instead of touching the edge.
+- **A widget's value in a component reads as bound.** In the components
+  editor a working **Widget Property** source, such as a Dropdown's
+  Selected Value, showed *Not bound*: the picker knew only a page's widgets,
+  not the open definition's. It now names them as on a page.
+- **Open Dialog fills a group's inputs.** The action listed only the inputs
+  the dialog page declares, and validation warned about any other,
+  so an input its page group declares could not be set. Both now include the
+  inputs of every group the page sits in.
+- **Chart tooltips show on the HMI.** Hovering a Trend Chart showed no
+  tooltip at runtime; charts ignored the pointer everywhere, not only on the
+  editor canvas, where a click must select the widget.
+- **Write Data Variable shows every value.** A value taken from another
+  widget, a formula or a variable had no row in the editor, so it could be
+  neither seen nor changed there. It now shows in the action like any
+  property value.
+- **A Button reads what was just typed.** Pressing a Button while a String
+  Input still held an unsaved edit ran the Button's actions before the edit
+  was written, and a Button that closed the dialog lost the edit. The field
+  now writes first.
+- **On Change reads the option just picked.** A Dropdown's or Button Row's
+  On Change that read the widget's own selection through **Widget property**
+  got the one picked before. Dropdown and Button
+  Row also publish the option's own value now, so a numbered list writes a
+  number to an Integer tag, and the warnings pill no longer says a String
+  does not fit it. Their **Selected value** binds an Integer or Float tag
+  too, and selects the option holding the tag's value.
+- **A translated option label shows its text.** A Dropdown or Button Row
+  option whose label was a translation showed `[object Object]`. Every label
+  is now read like any other property, so a translation shows in the active
+  language. The options list editor showed it as `[object Object]` too, and
+  showed a number value as an empty cell. The panel now lists one line per
+  option — the value first, then the label — reordered by dragging; a click
+  opens the option in the panel's drawer, where the label takes
+  Static or Localizable Text from its source badge and the value is typed.
 - **An AI assistant on another machine can reach MCP.** `/mcp` answered
   every client that did not address the HMI as `localhost` or `127.0.0.1`
   with `421 Invalid Host header`, so an assistant on a laptop on the plant
@@ -217,6 +400,13 @@ server listed.
   on a group shows its first page in the temporary tab, but a double-click
   left it temporary, while on a page it pins the tab. It now pins that first
   page too.
+- **A component or dialog input stays live inside a formula.** An input read
+  inside an `$if`, `$compare`, `$not`, `$switch` or string expression, or on a
+  Layout field, showed its first value and then stopped following the tag. It
+  now updates like an input used as a whole value, so a dialog given one
+  device folder can work out its own colours and texts with
+  `$componentProp: device/Run`. The warning "`$componentProp` is only
+  substituted as a property's whole value" is gone with it.
 
 ### Security
 

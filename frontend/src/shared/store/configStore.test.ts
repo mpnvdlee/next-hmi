@@ -3,6 +3,7 @@ import { resolveDropTarget, type DropBand } from '@config/components/editor/Widg
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
 import { useTranslationStore } from './translationStore';
+import { useComponentStore } from './componentStore';
 
 describe('configStore', () => {
   beforeEach(() => {
@@ -1505,6 +1506,92 @@ describe('configStore', () => {
       if (group.type !== 'page-group') throw new Error('expected page group');
       expect(group.children).toHaveLength(1);
       expect(group.children[0].id).toBe('child-1');
+    });
+  });
+
+  describe('renameValueMap', () => {
+    const ref = (id: string) => ({ $map: { id, value: { $var: { path: 'PLC:State' } } } });
+
+    beforeEach(() => {
+      useConfigStore.setState({
+        valueMaps: [
+          { id: 'state', type: 'String', cases: [] },
+          { id: 'other', type: 'String', cases: [] },
+        ],
+        pages: [
+          {
+            id: 'page-1',
+            type: 'page',
+            title: 'Page 1',
+            sections: {
+              main: [
+                { id: 'a', type: 'Label', name: 'A', properties: { text: ref('state') } },
+                { id: 'b', type: 'Label', name: 'B', properties: { text: ref('other') } },
+              ],
+            },
+          },
+          { id: 'page-2', type: 'page', title: 'Page 2', sections: {} },
+        ],
+        header: [{ id: 'h', type: 'Label', name: 'H', properties: { text: ref('state') } }],
+        loadedPageIds: new Set(['page-1']),
+      });
+      useComponentStore.setState({
+        components: [
+          { id: 'Comp', name: 'Comp', children: [{ id: 'c', properties: { t: ref('state') } }] },
+        ] as never,
+        draftComponents: {},
+      });
+    });
+
+    it('points every reference at the new id, on pages not opened yet too, as one undo step', async () => {
+      const loaded = vi.fn(async () =>
+        useConfigStore.setState((s) => ({
+          pages: s.pages.map((p) =>
+            p.id === 'page-2'
+              ? {
+                  ...p,
+                  sections: { main: [{ id: 'd', type: 'Label', properties: { x: ref('state') } }] },
+                }
+              : p,
+          ) as never,
+          loadedPageIds: new Set([...s.loadedPageIds, 'page-2']),
+        })),
+      );
+      const { loadPageContent } = useConfigStore.getState();
+      useConfigStore.setState({ loadPageContent: loaded });
+      try {
+        expect(await useConfigStore.getState().renameValueMap('state', 'machine-state')).toBe(true);
+      } finally {
+        useConfigStore.setState({ loadPageContent });
+      }
+
+      const s = useConfigStore.getState();
+      expect(loaded).toHaveBeenCalledWith('page-2');
+      expect(s.valueMaps.map((m) => m.id)).toEqual(['machine-state', 'other']);
+      const [p1, p2] = s.pages as Array<{
+        sections: Record<string, Array<{ properties: object }>>;
+      }>;
+      expect(p1.sections.main.map((w) => w.properties)).toEqual([
+        { text: ref('machine-state') },
+        { text: ref('other') },
+      ]);
+      expect(p2.sections.main[0].properties).toEqual({ x: ref('machine-state') });
+      expect(s.header[0].properties).toEqual({ text: ref('machine-state') });
+      expect([...s.dirtyPageIds].sort()).toEqual(['page-1', 'page-2']);
+      expect(useComponentStore.getState().draftComponents.Comp.children[0]).toEqual({
+        id: 'c',
+        properties: { t: ref('machine-state') },
+      });
+
+      useProjectStore.getState().undo();
+      expect(useConfigStore.getState().valueMaps[0].id).toBe('state');
+      expect(useConfigStore.getState().header[0].properties).toEqual({ text: ref('state') });
+    });
+
+    it('refuses an id another map has, and changes nothing', async () => {
+      expect(await useConfigStore.getState().renameValueMap('state', 'other')).toBe(false);
+      expect(useConfigStore.getState().valueMaps[0].id).toBe('state');
+      expect(useProjectStore.getState().past).toHaveLength(0);
     });
   });
 });

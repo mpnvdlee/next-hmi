@@ -49,7 +49,6 @@ import { findComponentInPages } from '@shared/utils/widgetTree';
 import { allPageRootNodes } from '@shared/utils/pageTree';
 import { apiJson } from '@shared/utils/api';
 import { withDotSearchSeparators } from '@shared/utils/search';
-import type { ComponentPropertySchema, StructSchemaNode } from '@shared/types/componentProperty';
 import { rfName } from '../bindingPickerUtils';
 import {
   type DatasourceNode,
@@ -69,16 +68,12 @@ import {
 } from './variableTreeHelpers';
 import {
   buildComponentPropRows,
+  componentPropItem,
   componentPropVerdict,
   propSlotOf,
-  splitComponentPropPath,
   structSchemaNodeVerdict,
 } from './componentPropHelpers';
-import RightPanel, {
-  type ComponentPropMode,
-  type ComponentPropSelectedItem,
-  type VarMode,
-} from './RightPanel';
+import RightPanel, { type ComponentPropMode, type VarMode } from './RightPanel';
 import { varStructVerdict } from './helpers';
 import {
   REPEAT_INDEX_SUFFIX,
@@ -101,36 +96,6 @@ type VariableEntry = PickerVariableEntry;
 /** Collapse key for the component-prop mode's single source row. Namespaced so it
  *  can never collide with a property key. */
 const COMPONENT_PROP_SOURCE_KEY = 'source:componentProps';
-
-/** A component-prop key resolved against the properties on offer: a top-level
- *  property or a node inside a struct property's schema. */
-function componentPropItem(
-  properties: Record<string, ComponentPropertySchema>,
-  key: string,
-): ComponentPropSelectedItem | null {
-  const slashIdx = key.indexOf('/');
-  const propKey = slashIdx === -1 ? key : key.slice(0, slashIdx);
-  const propSchema = properties[propKey];
-  if (!propSchema) return null;
-  let node: StructSchemaNode | null = null;
-  if (slashIdx !== -1) {
-    let nodes = propSchema.structSchema ?? [];
-    for (const part of key.slice(slashIdx + 1).split('/')) {
-      node = nodes.find((n) => n.name === part) ?? null;
-      if (!node) return null;
-      nodes = node.children ?? [];
-    }
-  }
-  const { parentPath, leaf } = splitComponentPropPath(key, properties);
-  return {
-    propKey,
-    propSchema,
-    node,
-    structNodes: node ? (node.children ?? null) : (propSchema.structSchema ?? null),
-    parentPath,
-    displayLabel: leaf,
-  };
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -458,7 +423,7 @@ export default function VariableBindingPicker() {
       const source: RowItem = {
         kind: 'component-prop-source',
         key: COMPONENT_PROP_SOURCE_KEY,
-        name: 'Component properties',
+        name: 'Inputs',
         depth: 0,
       };
       return collapsed.has(COMPONENT_PROP_SOURCE_KEY) ? [source] : [source, ...propRows];

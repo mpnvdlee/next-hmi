@@ -15,7 +15,7 @@ class ComponentPropertySchema(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str  # boolean | integer | float | string | datetime | <arrays> | struct | color | select | icon | image | actions | widgets
+    type: str  # boolean | integer | float | string | datetime | <arrays> | struct | color | select | icon | image | option-list | actions | widgets
     label: str
     # One line explaining the property, mirroring SchemaField.description on the
     # frontend — which has always allowed it, while this model rejected it and
@@ -26,6 +26,10 @@ class ComponentPropertySchema(BaseModel):
     # from this on the frontend. No flat `requiredFields` is persisted.
     structSchema: list[Any] = Field(default_factory=list)
     write: bool = False
+    # "value": read once when the dialog opens or the instance appears, then
+    # local to that screen or instance. "binding": a variable, live, written
+    # through. Absent is a Value, unless `write` is set (``input_mode``).
+    mode: Literal["value", "binding"] | None = Field(default=None, exclude_if=lambda v: v is None)
     # "page": a String naming a page in the Pages section, picked with a page
     # picker — what a Navigate To Page inside reads, as a dialog's input does.
     # Left out when unset, so saving a component writes nothing new into it.

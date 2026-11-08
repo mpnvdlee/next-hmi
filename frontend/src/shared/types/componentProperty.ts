@@ -5,7 +5,7 @@
 
 import type { SchemaField } from './widgetSchema';
 import { parseTypeToken } from './varType';
-import { typeList } from '../utils/valueTypes';
+import { isStructType, primaryType, typeList } from '../utils/valueTypes';
 
 /**
  * A node in the visual struct-schema tree editor.
@@ -41,7 +41,48 @@ export type ComponentPropertySchema = Omit<
   /** For a `select` property: what its options hold. Absent reads as `string`,
    *  which is what every select stored before the others existed. */
   optionType?: ComponentPropertyOptionType;
+  /** How the input takes what its opener or instance passes — see {@link inputMode}. */
+  mode?: InputMode;
 };
+
+/**
+ * `value`: read once when the dialog opens or the instance appears, then local
+ * state of that one screen or instance, which Write, Toggle and a writing
+ * widget change and which never reaches the opener. `binding`: a variable (or a
+ * Binding the opener itself received), live, written through to it.
+ */
+export type InputMode = 'value' | 'binding';
+
+/** Types that hold no single writable value pass through as given, so they
+ *  have no mode: handlers, a slot's widgets, an asset payload, an option list. */
+const MODELESS_PROPERTY_TYPES = new Set([
+  'actions',
+  'widgets',
+  'icon',
+  'image',
+  'video',
+  'option-list',
+]);
+
+/**
+ * The mode an input works in, or null for a type that has none. A struct is
+ * always a Binding — it is a variable folder. An input stored without a mode is
+ * a Value, unless it declares write access, which only a Binding can use.
+ */
+export function inputMode(
+  prop: Pick<ComponentPropertySchema, 'type' | 'mode' | 'write'>,
+): InputMode | null {
+  const primary = primaryType(prop.type);
+  if (MODELESS_PROPERTY_TYPES.has(primary.toLowerCase())) return null;
+  if (isStructInput(primary)) return 'binding';
+  return prop.mode ?? (prop.write === true ? 'binding' : 'value');
+}
+
+/** `struct`, or a struct's own name (`Motor`) — anything but a simple type,
+ *  an editor kind or the `select` sugar over one. */
+export function isStructInput(type: string): boolean {
+  return type.toLowerCase() !== 'select' && isStructType(type);
+}
 
 /** The value kinds a `select` property's options may hold. `loc` is a string
  *  whose options are translations rather than literals. */
@@ -94,6 +135,7 @@ export const VALUE_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'image', label: 'Image' },
   { value: 'video', label: 'Video' },
   { value: 'struct', label: 'Struct' },
+  { value: 'option-list', label: 'Options' },
   { value: 'actions', label: 'Actions' },
   { value: 'widgets', label: 'Widget slot' },
 ];
@@ -156,7 +198,7 @@ function structSchemaToRequiredFields(nodes: StructSchemaNode[]): SchemaField['r
 
 /** Convert a ComponentPropertySchema to a SchemaField for the component registry / editors. */
 export function componentPropertyToSchemaField(prop: ComponentPropertySchema): SchemaField {
-  const { structSchema, optionType, ...rest } = prop;
+  const { structSchema, optionType, mode: _mode, ...rest } = prop;
   // A widgets property resolves to no value at all — its content is the
   // instance's own children. Anything hand-edited onto it (a default, a write
   // flag) would otherwise reach `withDeclaredDefaults` and be injected as the
@@ -168,6 +210,13 @@ export function componentPropertyToSchemaField(prop: ComponentPropertySchema): S
     ...rest,
     requiredFields: structSchema?.length ? structSchemaToRequiredFields(structSchema) : undefined,
   };
+  // A Value is written locally whatever the opener passed, so write access
+  // constrains nothing; a Binding takes a variable only.
+  const mode = inputMode(prop);
+  if (mode === 'value') delete field.write;
+  else if (mode === 'binding' && !isStructInput(primaryType(prop.type))) {
+    field.bindsOnly = true;
+  }
   // `select` is authoring sugar for a dropdown editor over an ordinary value;
   // normalise it to the canonical base-type + format so source rules follow the
   // base type rather than the editor control.

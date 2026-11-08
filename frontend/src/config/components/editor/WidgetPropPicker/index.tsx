@@ -15,6 +15,10 @@
  * into that shape and reuses its row-building, row chrome and RightPanel
  * wholesale. The one genuinely distinct concern is the outer "component"
  * grouping, which VariableBindingPicker's component-prop mode doesn't have.
+ *
+ * Opened with the surrounding scope's `inputs`, it is also the Input picker:
+ * an "Inputs" group beside a "Widget Properties" one, so either source's field
+ * can switch to the other by picking a row there.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -27,12 +31,16 @@ import { GroupHeaderRow } from '../BindingPickerShell/rowParts';
 import { PickerRow, type RowContext } from '../VariableBindingPicker/rows';
 import {
   buildComponentPropRows,
+  componentPropFits,
+  componentPropItem,
   componentPropVerdict,
   isStructTarget,
   propSlotOf,
   structSchemaNodeVerdict,
+  type PropSlot,
   type PropVerdict,
 } from '../VariableBindingPicker/componentPropHelpers';
+import { typeList } from '@shared/utils/valueTypes';
 import type { RowItem } from '../VariableBindingPicker/variableTreeHelpers';
 import RightPanel, {
   type ComponentPropMode,
@@ -43,13 +51,19 @@ import type { ExportedProperty, ExportedStructField } from '@shared/types/widget
 import type { ComponentPropertySchema, StructSchemaNode } from '@shared/types/componentProperty';
 import { rfName, type RequiredFieldEntry } from '../bindingPickerUtils';
 import { matchesSearchWords } from '@shared/utils/search';
-import { COMPOSITE_KEY_SEP, parseWidgetPropRowKey as parseRowKey } from './rowKey';
+import {
+  COMPOSITE_KEY_SEP,
+  INPUT_KEY_PREFIX,
+  parseWidgetPropRowKey as parseRowKey,
+} from './rowKey';
 
 const NO_LOADING = new Set<string>();
 
 type PropOrFieldRow = Extract<RowItem, { kind: 'component-prop' | 'component-prop-node' }>;
 type WidgetPropRow =
-  { kind: 'group'; comp: ComponentOption; key: string; depth: number } | PropOrFieldRow;
+  | { kind: 'section'; key: string; name: string; meta?: string; depth: number }
+  | { kind: 'group'; comp: ComponentOption; key: string; depth: number }
+  | PropOrFieldRow;
 
 /**
  * Struct fields offered for an exported property: declared typed fields first,
@@ -70,15 +84,23 @@ function structFieldsFor(comp: ComponentOption, prop: ExportedProperty): Exporte
  * Adapt an exported property to the ComponentPropertySchema shape the shared
  * compatibility/row-building helpers understand, so an export is judged by the
  * same `accepts` rule as a component property. An export's struct fields are
- * flat, so they become childless variable nodes.
+ * flat, so they become childless variable nodes. An export typed with a list
+ * holds any one of those types, so it is judged by the first that fits `slot`.
  */
 function adaptSchema(
   prop: ExportedProperty,
   fields: ExportedStructField[],
+  slot: PropSlot | null,
 ): ComponentPropertySchema {
+  const types = typeList(prop.type ?? 'string');
+  const fitting = slot
+    ? types.find((type) => componentPropFits({ type, label: prop.label, mode: 'binding' }, slot))
+    : undefined;
   return {
-    type: prop.type ?? 'string',
+    type: fitting ?? types[0] ?? 'string',
     label: prop.label,
+    // Another widget's state, written through nothing here — never a local Value.
+    mode: 'binding',
     structSchema: fields.length
       ? fields.map((f) => ({
           kind: 'variable' as const,
@@ -107,6 +129,7 @@ function buildWidgetPropRows(
   search: string,
   showAll: boolean,
   collapsed: Set<string>,
+  depth = 0,
 ): WidgetPropRow[] {
   const rows: WidgetPropRow[] = [];
 
@@ -118,7 +141,11 @@ function buildWidgetPropRows(
 
     const properties: Record<string, ComponentPropertySchema> = {};
     for (const prop of comp.exportedProperties) {
-      properties[prop.key] = adaptSchema(prop, structFieldsFor(comp, prop));
+      properties[prop.key] = adaptSchema(
+        prop,
+        structFieldsFor(comp, prop),
+        propSlotOf(fieldType, requiredFields, write),
+      );
     }
 
     const propRows = buildComponentPropRows(
@@ -130,7 +157,7 @@ function buildWidgetPropRows(
       collapsed,
       {
         keyPrefix: `${comp.id}${COMPOSITE_KEY_SEP}`,
-        baseDepth: 1,
+        baseDepth: depth + 1,
         searchPath: componentSearchPath,
         write,
       },
@@ -139,7 +166,7 @@ function buildWidgetPropRows(
     if (propRows.length === 0) continue;
 
     const groupKey = `comp:${comp.id}`;
-    rows.push({ kind: 'group', comp, key: groupKey, depth: 0 });
+    rows.push({ kind: 'group', comp, key: groupKey, depth });
     if (!collapsed.has(groupKey)) rows.push(...propRows);
   }
   return rows;
@@ -198,7 +225,8 @@ export default function WidgetPropPicker() {
   const title = target.label;
   const slot = propSlotOf(fieldType, requiredFields, write);
 
-  const rows = buildWidgetPropRows(
+  const inputs = target.inputs;
+  const widgetRows = buildWidgetPropRows(
     target.componentOptions,
     fieldType,
     requiredFields,
@@ -206,7 +234,32 @@ export default function WidgetPropPicker() {
     search,
     showAll,
     collapsed,
+    inputs ? 1 : 0,
   );
+  let rows: WidgetPropRow[] = widgetRows;
+  if (inputs) {
+    const inputRows = buildComponentPropRows(
+      inputs.properties,
+      fieldType,
+      requiredFields,
+      search,
+      showAll,
+      collapsed,
+      { keyPrefix: INPUT_KEY_PREFIX, baseDepth: 1, write },
+    ) as PropOrFieldRow[];
+    const section = (key: string, name: string, meta: string | undefined, body: WidgetPropRow[]) =>
+      body.length === 0
+        ? []
+        : [
+            { kind: 'section' as const, key, name, meta, depth: 0 },
+            ...(collapsed.has(key) ? [] : body),
+          ];
+    const groups = [
+      section('section:inputs', 'Inputs', undefined, inputRows),
+      section('section:widgets', 'Widget Properties', 'on this screen', widgetRows),
+    ];
+    rows = (inputs.first ? groups : groups.reverse()).flat();
+  }
 
   /** The row a key names and whether it fits the field — judged for any key,
    *  so a double-click is held to the same ✓/✗ as Confirm. A key that no
@@ -217,6 +270,18 @@ export default function WidgetPropPicker() {
     mismatchReason?: string;
   } {
     if (!target || !key) return { selectedItem: null, typeIsOk: null };
+    if (key.startsWith(INPUT_KEY_PREFIX)) {
+      const item = inputs
+        ? componentPropItem(inputs.properties, key.slice(INPUT_KEY_PREFIX.length))
+        : null;
+      if (!item) return { selectedItem: null, typeIsOk: false };
+      const verdict = !slot
+        ? { ok: true }
+        : item.node
+          ? structSchemaNodeVerdict(item.node, slot)
+          : componentPropVerdict(item.propSchema, slot);
+      return { selectedItem: item, typeIsOk: verdict.ok, mismatchReason: verdict.reason };
+    }
     const sel = parseRowKey(key);
     const selComp = sel
       ? (target.componentOptions.find((c) => c.id === sel.componentId) ?? null)
@@ -228,7 +293,7 @@ export default function WidgetPropPicker() {
     if (!sel || !selComp || !selProp) return { selectedItem: null, typeIsOk: false };
 
     const fields = structFieldsFor(selComp, selProp);
-    const schema = adaptSchema(selProp, fields);
+    const schema = adaptSchema(selProp, fields, slot);
     const compLabel = selComp.name || selComp.type;
     let node: StructSchemaNode | null = null;
     let verdict: PropVerdict;
@@ -265,8 +330,14 @@ export default function WidgetPropPicker() {
   }
 
   function pickAndClose(key: string) {
+    if (!target || selectionFor(key).typeIsOk === false) return;
+    if (key.startsWith(INPUT_KEY_PREFIX)) {
+      inputs?.onPick(key.slice(INPUT_KEY_PREFIX.length));
+      close();
+      return;
+    }
     const sel = parseRowKey(key);
-    if (!sel || !target || selectionFor(key).typeIsOk === false) return;
+    if (!sel) return;
     target.onPick(sel.componentId, sel.property, sel.path);
     close();
   }
@@ -291,12 +362,28 @@ export default function WidgetPropPicker() {
     <>
       {rows.length === 0 && (
         <p className="editor-binding-empty">
-          {target.componentOptions.length === 0
-            ? 'No components with exported properties on this page.'
+          {target.componentOptions.length === 0 && !inputs
+            ? 'No widget on this screen publishes a Widget Property.'
             : 'No matches.'}
         </p>
       )}
       {rows.map((row) => {
+        if (row.kind === 'section') {
+          return (
+            <GroupHeaderRow
+              key={row.key}
+              rowStyle={
+                {
+                  '--row-indent': treePaddingLeft(row.depth, { stepRem: 1, baseRem: 1 }),
+                } as CSSProperties
+              }
+              isOpen={!collapsed.has(row.key)}
+              name={row.name}
+              meta={row.meta}
+              onToggle={() => toggle(row.key)}
+            />
+          );
+        }
         if (row.kind === 'group') {
           return (
             <GroupHeaderRow

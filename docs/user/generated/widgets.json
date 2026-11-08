@@ -140,7 +140,7 @@
       {
         "type": "Container",
         "name": "Container",
-        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
+        "description": "Groups and lays out child widgets in a row, a column or stacked on top of each other. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
         "props": [
           {
             "key": "title",
@@ -604,6 +604,20 @@
             "defaultValue": "none"
           },
           {
+            "key": "typography",
+            "label": "Typography",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "body"
+          },
+          {
+            "key": "wrap",
+            "label": "Overflow",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "wrap"
+          },
+          {
             "key": "iconSize",
             "label": "Icon size (px)",
             "type": "Integer",
@@ -689,6 +703,88 @@
         ]
       },
       {
+        "type": "DataGrid",
+        "name": "Data Grid",
+        "description": "A table of an array, one row per element, with sorting, a filter and a selection. Only the rows in view are drawn, so a list of hundreds stays fast.",
+        "props": [
+          {
+            "key": "items",
+            "label": "Items",
+            "type": "item-list",
+            "group": "Data"
+          },
+          {
+            "key": "columns",
+            "label": "Columns",
+            "type": "item-list",
+            "group": "Data"
+          },
+          {
+            "key": "sortMember",
+            "label": "Sort by",
+            "type": "String",
+            "group": "Sort & filter"
+          },
+          {
+            "key": "sortDirection",
+            "label": "Sort direction",
+            "type": "String",
+            "group": "Sort & filter",
+            "defaultValue": "ascending"
+          },
+          {
+            "key": "filterMember",
+            "label": "Filter member",
+            "type": "String",
+            "group": "Sort & filter"
+          },
+          {
+            "key": "filterValue",
+            "label": "Filter value",
+            "type": "String",
+            "group": "Sort & filter"
+          },
+          {
+            "key": "hideEmpty",
+            "label": "Hide empty",
+            "type": "String",
+            "group": "Sort & filter"
+          },
+          {
+            "key": "valueMember",
+            "label": "Value member",
+            "type": "String",
+            "group": "Selection"
+          },
+          {
+            "key": "selectedValue",
+            "label": "Selected value",
+            "type": "String | Integer",
+            "group": "Selection"
+          },
+          {
+            "key": "onSelect",
+            "label": "On Select",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
         "type": "Icon",
         "name": "Icon",
         "description": "A themeable Phosphor icon at any size and colour.",
@@ -708,6 +804,12 @@
             "key": "color",
             "label": "Color",
             "type": "color"
+          },
+          {
+            "key": "rotation",
+            "label": "Rotation (°)",
+            "type": "Integer",
+            "defaultValue": 0
           },
           {
             "key": "chrome",
@@ -751,6 +853,12 @@
             "label": "Fit",
             "type": "String",
             "defaultValue": "contain"
+          },
+          {
+            "key": "rotation",
+            "label": "Rotation (°)",
+            "type": "Integer",
+            "defaultValue": 0
           },
           {
             "key": "indicators",
@@ -1631,7 +1739,7 @@
           {
             "key": "selectedValue",
             "label": "Selected value",
-            "type": "String",
+            "type": "String | Integer | Float",
             "group": "Data"
           },
           {
@@ -1679,9 +1787,15 @@
             "group": "Content"
           },
           {
+            "key": "maxIndex",
+            "label": "Max index",
+            "type": "Integer",
+            "group": "Data"
+          },
+          {
             "key": "selectedValue",
             "label": "Selected value",
-            "type": "String",
+            "type": "String | Integer | Float",
             "group": "Data"
           },
           {
@@ -1895,7 +2009,7 @@
       {
         "type": "StringInput",
         "name": "String Input",
-        "description": "A text field whose typed value is published for sibling widgets to read.",
+        "description": "A text field that writes what the operator types to a bound variable or input, and publishes it for sibling widgets to read.",
         "props": [
           {
             "key": "label",
@@ -1908,6 +2022,25 @@
             "label": "Placeholder",
             "type": "String",
             "group": "Content"
+          },
+          {
+            "key": "variable",
+            "label": "Variable",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "writeOn",
+            "label": "Write on",
+            "type": "String",
+            "group": "Data",
+            "defaultValue": "commit"
+          },
+          {
+            "key": "value",
+            "label": "Value",
+            "type": "String",
+            "group": "Data"
           },
           {
             "key": "isPassword",

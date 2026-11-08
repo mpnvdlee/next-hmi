@@ -23,9 +23,19 @@ vi.mock('../components/compositions/compositionTreeOps', async (importOriginal) 
 vi.mock('../components/compositions/CompositionPreview', () => ({
   default: () => <div data-testid="preview" />,
 }));
-vi.mock('../components/compositions/CompositionWidgetPanel', () => ({
-  default: ({ comp }: { comp: { id: string } }) => <div data-testid="one">{comp.id}</div>,
-}));
+vi.mock('../components/compositions/CompositionWidgetPanel', async () => {
+  const { useComponentOptions } = await import('../components/editor/WidgetOptionsContext');
+  function CompositionWidgetPanel({ comp }: { comp: { id: string } }) {
+    const options = useComponentOptions();
+    return (
+      <div data-testid="one">
+        {comp.id}
+        <span data-testid="widget-options">{options.map((o) => o.id).join(',')}</span>
+      </div>
+    );
+  }
+  return { default: CompositionWidgetPanel };
+});
 vi.mock('../components/compositions/CompositionMultiWidgetPanel', () => ({
   default: ({
     comps,
@@ -344,5 +354,26 @@ describe('ComponentsView undo history', () => {
     } finally {
       nowSpy.mockRestore();
     }
+  });
+});
+
+describe('ComponentsView $widgetProp options', () => {
+  it("offers the open definition's own widgets that export a property", () => {
+    useComponentStore.setState({
+      components: [
+        {
+          ...definition('A', ['a1']),
+          children: [
+            { id: 'a1', type: 'Button', name: 'a1' },
+            { id: 'pick', type: 'Dropdown', name: 'pick' },
+          ],
+        } as ComponentDefinition,
+      ],
+    });
+    useComponentEditorStore.setState({ selectedIds: ['a1'], selectedId: 'a1' });
+
+    render(<ComponentsView />);
+
+    expect(screen.getByTestId('widget-options').textContent).toBe('pick');
   });
 });

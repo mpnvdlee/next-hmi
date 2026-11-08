@@ -44,7 +44,7 @@ function deriveScalarSources(fieldType: string): PropertySourceKey[] {
 // Editor-kind fields (color/icon/image/option-list) are not plain scalar types
 // and their offered sources are curated explicitly rather than derived.
 const EDITOR_KIND_SOURCES: Record<string, PropertySourceKey[]> = {
-  color: ['$static', '$var', '$if', '$switch', '$widgetProp'],
+  color: ['$static', '$var', '$if', '$switch', '$map', '$widgetProp'],
   icon: ['$static', '$var', '$urlParam', '$if', '$switch', '$page', '$widgetProp'],
   image: ['$static', '$var', '$urlParam', '$if', '$switch', '$widgetProp'],
   video: ['$static', '$var', '$urlParam', '$if', '$switch', '$widgetProp'],

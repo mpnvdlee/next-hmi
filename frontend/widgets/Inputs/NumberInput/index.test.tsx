@@ -137,10 +137,10 @@ describe('NumberInput', () => {
     expect(root.style.getPropertyValue('--hmi-number-input-color')).toBe('var(--hmi-warn)');
   });
 
-  it('groups digits and writes a typographic minus', () => {
+  it('writes a decimal comma, no digit groups, and a typographic minus', () => {
     useVariableStore.setState({ values: { [VAR_KEY]: 4920 } });
     const { unmount } = renderInput({ variable: BINDING });
-    expect(screen.getByRole('textbox')).toHaveValue('4,920');
+    expect(screen.getByRole('textbox')).toHaveValue('4920');
     unmount();
 
     useVariableStore.setState({ values: { [VAR_KEY]: -30 } });
@@ -151,7 +151,7 @@ describe('NumberInput', () => {
     // A value that rounds to zero carries no minus.
     useVariableStore.setState({ values: { [VAR_KEY]: -0.04 } });
     renderInput({ variable: BINDING, decimals: 1 });
-    expect(screen.getByRole('textbox')).toHaveValue('0.0');
+    expect(screen.getByRole('textbox')).toHaveValue('0,0');
   });
 
   it('refuses a numpad entry above the widget max instead of clamping it', async () => {
@@ -229,6 +229,20 @@ describe('NumberInput', () => {
     expect(sentFrame().value).toBe(7);
   });
 
+  it('shows and takes a decimal comma, and writes a plain number', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: 1234.5 } });
+    const user = userEvent.setup();
+    renderInput({ variable: BINDING });
+    expect(screen.getByRole('textbox')).toHaveValue('1234,5');
+
+    await user.click(screen.getByRole('textbox'));
+    for (const key of ['2', ',', '5']) await user.click(screen.getByRole('button', { name: key }));
+    expect(document.querySelector('.hmi-number-input__field')).toHaveValue('2,5');
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
+
+    expect(sentFrame().value).toBe(2.5);
+  });
+
   it('shows and limits the configured decimal places', async () => {
     useVariableStore.setState({ values: { [VAR_KEY]: 2 } });
     const user = userEvent.setup();
@@ -236,7 +250,7 @@ describe('NumberInput', () => {
 
     expect(screen.getByRole('textbox')).toHaveValue('2');
     await user.click(screen.getByRole('textbox'));
-    expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: ',' })).toBeDisabled();
   });
 
   it('disables minus when negatives are not allowed', async () => {
@@ -275,17 +289,17 @@ describe('NumberInput', () => {
     });
     const { container } = renderInput({ variable: BINDING });
 
-    expect(screen.getByRole('textbox')).toHaveValue('9,007,199,254,740,992');
+    expect(screen.getByRole('textbox')).toHaveValue('9007199254740992');
     expect(container.querySelector('.hmi-number-input__field--invalid')).not.toBeNull();
   });
 
-  it('disables the point for an Integer variable', async () => {
+  it('disables the comma for an Integer variable', async () => {
     useVariableStore.setState({ values: { [VAR_KEY]: 3 }, ...scalarMeta({}, 'Integer') });
     const user = userEvent.setup();
     renderInput({ variable: BINDING, decimals: 2 });
 
     await user.click(screen.getByRole('textbox'));
-    expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: ',' })).toBeDisabled();
   });
 
   // Only a $var binding reaches the writer, so any other source must not offer

@@ -132,19 +132,11 @@ describe('RecipeTable — schema', () => {
     expect(params[2]).toMatchObject({ label: 'Pressure', dataType: 'float' });
   });
 
-  it('reorders a parameter from its row', async () => {
+  it('gives every parameter row a ⋮⋮ grip to reorder it by', () => {
     render(<RecipeTable config={config()} selection={selection} filter="" showLive={false} />);
 
-    await userEvent.click(within(paramRow('Temp')).getByTitle('Move down'));
-
-    expect(config().datasetTypes[0].parameters.map((p) => p.id)).toEqual(['note', 'temp']);
-  });
-
-  it('pins the reorder buttons at the ends of the list', () => {
-    render(<RecipeTable config={config()} selection={selection} filter="" showLive={false} />);
-
-    expect(within(paramRow('Temp')).getByTitle('Move up')).toBeDisabled();
-    expect(within(paramRow('Note')).getByTitle('Move down')).toBeDisabled();
+    expect(within(paramRow('Temp')).getByTitle('Drag to reorder')).toBeInTheDocument();
+    expect(within(paramRow('Note')).getByTitle('Drag to reorder')).toBeInTheDocument();
   });
 
   it('removes a parameter', async () => {

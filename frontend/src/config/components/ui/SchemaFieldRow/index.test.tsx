@@ -1,8 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import SchemaFieldRow from './index';
+import { stubIntersectionObserver } from '../../../../test-setup';
+
+beforeAll(stubIntersectionObserver);
 
 const DESC = 'Shown when the dot is not pulsing.';
 
@@ -292,7 +295,7 @@ describe('SchemaFieldRow mixed source badge', () => {
       .closest('button')!;
     expect(pill).toHaveClass('cfg-source-pill--single');
     await userEvent.click(pill);
-    expect(document.querySelector('.cfg-source-pill__option-label')).toBeNull();
+    expect(document.querySelector('.cfg-selection-drawer')).toBeNull();
   });
 
   it('gives a shared static value when Static is picked on a mixed static row', async () => {
@@ -304,7 +307,9 @@ describe('SchemaFieldRow mixed source badge', () => {
         .closest('button')!,
     );
     await userEvent.click(
-      screen.getByText('Static Value', { selector: '.cfg-source-pill__option-label' }),
+      within(document.querySelector<HTMLElement>('.cfg-selection-drawer')!).getByRole('button', {
+        name: /^Static Value/,
+      }),
     );
 
     expect(onChange).toHaveBeenCalledWith('Hello');
@@ -410,7 +415,9 @@ describe('SchemaFieldRow select options that look like a source', () => {
         .closest('button')!,
     );
     await userEvent.click(
-      screen.getByText('Static Value', { selector: '.cfg-source-pill__option-label' }),
+      within(document.querySelector<HTMLElement>('.cfg-selection-drawer')!).getByRole('button', {
+        name: /^Static Value/,
+      }),
     );
 
     expect(onChange).toHaveBeenCalledWith({ $loc: 'status.running' });
@@ -435,7 +442,9 @@ describe('SchemaFieldRow select options that look like a source', () => {
     );
 
     expect(
-      screen.getByText('Variable', { selector: '.cfg-source-pill__option-label' }),
+      within(document.querySelector<HTMLElement>('.cfg-selection-drawer')!).getByRole('button', {
+        name: /^Variable/,
+      }),
     ).toBeInTheDocument();
   });
 

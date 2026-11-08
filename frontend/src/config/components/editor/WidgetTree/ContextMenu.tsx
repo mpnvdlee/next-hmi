@@ -39,6 +39,16 @@ export default function ContextMenu({ menu, onClose, onAction }: ContextMenuProp
       sep('s1'),
       btn('Paste', 'paste'),
     );
+  } else if (menu.kind === 'value-maps-root') {
+    items.push(btn('Add Value Map', 'addValueMap'));
+  } else if (menu.kind === 'value-map') {
+    // No Cut, Copy or Paste: the clipboard carries widgets and pages only.
+    items.push(
+      btn('Rename', 'rename'),
+      btn('Duplicate', 'duplicateValueMap'),
+      sep('s1'),
+      btn('Delete Value Map', 'deleteValueMap', true),
+    );
   } else if (menu.kind === 'page-group') {
     items.push(
       btn('Add Page', 'addPageToPageGroup'),

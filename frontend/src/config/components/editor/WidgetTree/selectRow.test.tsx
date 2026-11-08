@@ -199,11 +199,13 @@ describe('flattenVisibleRows agreement with the rendered tree', () => {
         rightSidebar: state.rightSidebar,
       },
       dialogs: state.dialogs,
+      valueMapIds: state.valueMaps.map((m) => m.id),
       collapsed: new Set<string>(),
       sectionsOpen: new Set(SECTIONS),
       visible: {
         settings: true,
         events: true,
+        valueMaps: true,
         pages: true,
         dialogs: true,
         hiddenShellRegions: new Set(),

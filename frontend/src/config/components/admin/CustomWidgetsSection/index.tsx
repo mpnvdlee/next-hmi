@@ -117,7 +117,7 @@ export default function CustomWidgetsSection({
                   {!w.buildError && (
                     <p className="cfg-admin-error-detail__token-hint">
                       This widget renders, but its exports could not be read, so the editor offers
-                      no property fields and no exported properties for it.
+                      no property fields and no Widget Properties for it.
                     </p>
                   )}
                   <pre className="cfg-admin-error-detail__pre">{detail}</pre>

@@ -48,7 +48,7 @@ Marks where content the caller supplies is rendered. Put one in a reusable compo
 
 ### Container
 
-Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.
+Groups and lays out child widgets in a row, a column or stacked on top of each other. Hosts other widgets; a Button Container does the same and runs actions when pressed.
 
 | Property | Label | Type |
 |---|---|---|
@@ -172,6 +172,8 @@ Runs actions on press and on release, and can write a bound boolean true on pres
 | `borderColor` | Border color | `color` |
 | `align` | Content alignment | `String` |
 | `textTransform` | Text case | `String` |
+| `typography` | Typography | `String` |
+| `wrap` | Overflow | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
 | `momentary` | Momentary | `Boolean` |
@@ -192,6 +194,25 @@ A live clock, formatted with the same patterns as the $time source.
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
+### Data Grid
+
+A table of an array, one row per element, with sorting, a filter and a selection. Only the rows in view are drawn, so a list of hundreds stays fast.
+
+| Property | Label | Type |
+|---|---|---|
+| `items` | Items | `item-list` |
+| `columns` | Columns | `item-list` |
+| `sortMember` | Sort by | `String` |
+| `sortDirection` | Sort direction | `String` |
+| `filterMember` | Filter member | `String` |
+| `filterValue` | Filter value | `String` |
+| `hideEmpty` | Hide empty | `String` |
+| `valueMember` | Value member | `String` |
+| `selectedValue` | Selected value | `String | Integer` |
+| `onSelect` | On Select | `actions` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
 ### Icon
 
 A themeable Phosphor icon at any size and colour.
@@ -201,6 +222,7 @@ A themeable Phosphor icon at any size and colour.
 | `iconName` | Icon | `icon` |
 | `size` | Size (px) | `Integer` |
 | `color` | Color | `color` |
+| `rotation` | Rotation (°) | `Integer` |
 | `chrome` | Chip background | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
@@ -214,6 +236,7 @@ Shows an asset with a fit mode and optional data-driven indicators.
 | `src` | Image | `image` |
 | `alt` | Alt text | `String` |
 | `fit` | Fit | `String` |
+| `rotation` | Rotation (°) | `Integer` |
 | `indicators` | Indicators | `image-indicators` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
@@ -395,7 +418,7 @@ A row of mutually-exclusive buttons — pick 1 of N. Writes the chosen option to
 | `label` | Label | `String` |
 | `options` | Options | `option-list | String[] | Integer[]` |
 | `variable` | Value | `String | Integer | Float` |
-| `selectedValue` | Selected value | `String` |
+| `selectedValue` | Selected value | `String | Integer | Float` |
 | `disabled` | Disabled | `Boolean` |
 | `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |
@@ -409,7 +432,8 @@ Pick one option from a list. Publishes the selection for sibling widgets to read
 |---|---|---|
 | `label` | Label | `String` |
 | `options` | Options | `option-list | String[] | Integer[]` |
-| `selectedValue` | Selected value | `String` |
+| `maxIndex` | Max index | `Integer` |
+| `selectedValue` | Selected value | `String | Integer | Float` |
 | `disabled` | Disabled | `Boolean` |
 | `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |
@@ -457,12 +481,15 @@ Increment / decrement a numeric variable with + / − buttons.
 
 ### String Input
 
-A text field whose typed value is published for sibling widgets to read.
+A text field that writes what the operator types to a bound variable or input, and publishes it for sibling widgets to read.
 
 | Property | Label | Type |
 |---|---|---|
 | `label` | Label | `String` |
 | `placeholder` | Placeholder | `String` |
+| `variable` | Variable | `String` |
+| `writeOn` | Write on | `String` |
+| `value` | Value | `String` |
 | `isPassword` | Password field | `Boolean` |
 | `keyboard` | Keyboard | `String` |
 | `autoFocus` | Focus when shown | `Boolean` |

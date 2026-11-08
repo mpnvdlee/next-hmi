@@ -10,13 +10,15 @@
     "title": {
       "type": "string",
       "label": "Title",
-      "description": "Shown in the title row. Leave the row off for a bare surface."
+      "description": "Shown in the title row. Leave the row off for a bare surface.",
+      "mode": "value"
     },
     "showTitle": {
       "type": "boolean",
       "label": "Show title row",
       "description": "An empty string is truthy, so the row needs its own flag.",
-      "defaultValue": true
+      "defaultValue": true,
+      "mode": "value"
     },
     "action": {
       "type": "widgets",

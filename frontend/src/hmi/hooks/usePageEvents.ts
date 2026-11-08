@@ -6,6 +6,7 @@ import { resolvePageContext } from '@shared/utils/pageTree';
 import { withDeclaredDefaults } from '../utils/componentPropResolution';
 import { useResolvedPageOverlays } from './useOpenOverlays';
 import type { PageNode } from '@shared/types/config';
+import { useHmiStore } from '../store/hmiStore';
 
 /**
  * Nodes left and entered when navigation moves from one page trail to another.
@@ -47,30 +48,37 @@ function resolveTrail(nodes: PageNode[], id: string | undefined): PageNode[] {
  * open still has to fire the onClose it was configured with.
  */
 function useTrailEvents(
-  trail: PageNode[],
+  trail: PageNode[] | null,
   scope: string,
   inputScopes?: ReadonlyMap<string, Record<string, unknown>>,
+  readScopes?: () => Record<string, Record<string, unknown>>,
 ): void {
   const prevTrailRef = useRef<PageNode[]>([]);
   // A closing node's scope is the one it opened with — its overlay entry, and
   // with it the map's current row, may already be gone.
   const prevScopesRef = useRef<ReadonlyMap<string, Record<string, unknown>> | undefined>(undefined);
   useEffect(() => {
+    // Not ready to be entered yet: nothing closes or opens until it is.
+    if (!trail) return;
     const { closed, opened } = diffPageTrail(prevTrailRef.current, trail);
     const prevScopes = prevScopesRef.current;
     prevScopesRef.current = inputScopes;
     if (closed.length === 0 && opened.length === 0) return;
     prevTrailRef.current = trail;
+    const published = readScopes?.();
     for (const node of closed) {
-      const inputScopeProps = prevScopes?.get(node.id);
+      const inputScopeProps = published?.[node.id] ?? prevScopes?.get(node.id);
       executeWidgetActions(node.events?.onClose, { scope, evalCtx: { inputScopeProps } });
     }
     for (const node of opened) {
-      const inputScopeProps = inputScopes?.get(node.id);
+      const inputScopeProps = published?.[node.id] ?? inputScopes?.get(node.id);
       executeWidgetActions(node.events?.onOpen, { scope, evalCtx: { inputScopeProps } });
     }
-  }, [trail, scope, inputScopes]);
+  }, [trail, scope, inputScopes, readScopes]);
 }
+
+/** The routed trail's inputs, read when its events fire. */
+const readRoutedScopes = () => useHmiStore.getState().routedInputScopes;
 
 /**
  * Fires the `onOpen` / `onClose` action lists configured on page and page-group
@@ -91,15 +99,22 @@ function useTrailEvents(
  * Nothing fires for a browser refresh or tab close: an unload handler cannot
  * reliably run an action list.
  */
-export function usePageEvents(scope: string): void {
-  const { id: routeId } = useParams<{ id: string }>();
+export function usePageEvents(scope: string, renderedId?: string): void {
+  const { id: urlId } = useParams<{ id: string }>();
+  // Given the id the page view renders (HmiView's deferred one), the events
+  // read the inputs that view publishes, so they wait until it has published
+  // every node of the trail — on a first load the view mounts only after the
+  // boot screen, well after the route is known.
+  const routeId = renderedId ?? urlId;
+  const published = useHmiStore((s) => s.routedInputScopes);
   const pages = useConfigStore((s) => s.pages);
 
   // Resolve the route the same way HmiView renders it — a route naming a
   // page-group falls back to that group's first child page, and the trail
   // carries the groups it passed through.
   const trail = useMemo<PageNode[]>(() => resolveTrail(pages, routeId), [pages, routeId]);
-  useTrailEvents(trail, scope);
+  const ready = renderedId === undefined || trail.every((node) => node.id in published);
+  useTrailEvents(ready ? trail : null, scope, undefined, readRoutedScopes);
 
   const overlays = useResolvedPageOverlays();
   // Each overlay's own trail, back to back in the stack's open order. Two

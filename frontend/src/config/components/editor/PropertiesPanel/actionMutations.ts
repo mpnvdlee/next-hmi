@@ -39,6 +39,12 @@ export function makeDefaultAction(
         type: 'navigateToPage',
         pageId: context.overlayTargets.pages.find((node) => !isPageGroup(node))?.id ?? '',
       };
+    case 'pageGroupNext':
+      return { type: 'pageGroupNext' };
+    case 'pageGroupPrevious':
+      return { type: 'pageGroupPrevious' };
+    case 'pageGroupGoTo':
+      return { type: 'pageGroupGoTo', index: 0 };
     case 'writeDataVariable':
       return { type: 'writeDataVariable', value: '' };
     case 'if':
@@ -61,6 +67,8 @@ export function makeDefaultAction(
       return { type: 'logoutUser' };
     case 'acknowledgeAllAlarms':
       return { type: 'acknowledgeAllAlarms' };
+    case 'reloadHmi':
+      return { type: 'reloadHmi' };
     case 'runComponentActions':
       return { type: 'runComponentActions', property: '' };
     case 'delay':

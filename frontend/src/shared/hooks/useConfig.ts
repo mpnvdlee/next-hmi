@@ -37,6 +37,7 @@ export async function loadConfigIndex(shouldApply?: () => boolean): Promise<bool
     store.setShell(data.shell ?? {});
     store.setDialogs(data.dialogs ?? []);
     store.setGlobalEvents(data.globalEvents ?? {});
+    store.setValueMaps(data.valueMaps ?? []);
     // setPages marks every page it receives with content dirty (right for an
     // undo snapshot); fresh from the server none is, so a save writes back only
     // what the user touched and leaves other writers' pages alone.

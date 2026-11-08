@@ -46,6 +46,13 @@ describe('Icon', () => {
     });
   });
 
+  it('turns by its Rotation through a custom property', () => {
+    const { container } = renderIcon({ iconName: 'house', rotation: 90 });
+
+    const root = container.querySelector<HTMLElement>('.hmi-icon')!;
+    expect(root.style.getPropertyValue('--hmi-icon-rotation')).toBe('90deg');
+  });
+
   it('renders nothing when no icon name is set', () => {
     const { container } = renderIcon({});
 

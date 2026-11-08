@@ -2,7 +2,8 @@ import type { HmiWidgetProps, WidgetConfig } from '@shared/types/config';
 import { memo, useContext, useMemo } from 'react';
 import { useComponentStore, selectComponentById } from '@shared/store/componentStore';
 import { InputScopeContext } from '../context/InputScopeContext';
-import { withDeclaredDefaults } from '../utils/componentPropResolution';
+import { valueInputSeeds, withDeclaredDefaults } from '../utils/componentPropResolution';
+import { useValueInputs } from '../hooks/useValueInputs';
 import { ComponentSlotContext } from '../context/ComponentSlotContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { PreviewContext } from '@shared/context/PreviewContext';
@@ -28,9 +29,17 @@ function ComponentRenderer({
   const component = isPreview ? (draftComponent ?? savedComponent) : savedComponent;
 
   const declared = component?.componentProperties;
-  const contextValue = useMemo(
-    () => ({ properties: withDeclaredDefaults(properties, declared) }),
+  const supplied = useMemo(
+    () => withDeclaredDefaults(properties, declared),
     [properties, declared],
+  );
+  const seeds = useMemo(() => valueInputSeeds(declared, supplied), [declared, supplied]);
+  // Each Value input is this instance's own state, read once from what the
+  // page passes; the seeder reads it outside the scope published below.
+  const [locals, seeder] = useValueInputs(seeds);
+  const contextValue = useMemo(
+    () => ({ properties: { ...supplied, ...locals } }),
+    [supplied, locals],
   );
 
   // Derived from the definition in hand rather than the widget registry, so the
@@ -55,15 +64,18 @@ function ComponentRenderer({
   }
 
   return (
-    <InputScopeContext.Provider value={contextValue}>
-      <ComponentSlotContext.Provider value={slotContent}>
-        <DefinitionScopeContext.Provider value={true}>
-          {roots.map((child) => (
-            <WidgetRenderer key={child.id} node={child} />
-          ))}
-        </DefinitionScopeContext.Provider>
-      </ComponentSlotContext.Provider>
-    </InputScopeContext.Provider>
+    <>
+      {seeder}
+      <InputScopeContext.Provider value={contextValue}>
+        <ComponentSlotContext.Provider value={slotContent}>
+          <DefinitionScopeContext.Provider value={true}>
+            {roots.map((child) => (
+              <WidgetRenderer key={child.id} node={child} />
+            ))}
+          </DefinitionScopeContext.Provider>
+        </ComponentSlotContext.Provider>
+      </InputScopeContext.Provider>
+    </>
   );
 }
 

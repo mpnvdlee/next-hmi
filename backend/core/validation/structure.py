@@ -51,6 +51,7 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$loc",
     "$if",
     "$switch",
+    "$map",
     "$compare",
     "$not",
     "$and",
@@ -175,6 +176,10 @@ class ValidationContext:
     page_properties: dict[str, dict[str, dict]] = field(default_factory=dict)
     # Dialogs-folder node id -> the page groups it nests in, innermost first.
     dialog_ancestors: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Pages-section node id -> the inputs its enclosing page groups
+    # declare, innermost winning; the node's own go on top. A Binding among
+    # them is flagged once, where it is declared (`page-input-binding`).
+    page_variables: dict[str, dict[str, dict]] = field(default_factory=dict)
     # False while walking a page that has no input scope (see
     # ``navigable_page_ids``); ``validate_page`` sets it on its own copy.
     input_scope: bool = True
@@ -213,6 +218,9 @@ class ValidationContext:
     # required members against one element. build_context shares the index
     # cached with the registry; a hand-built context indexes its own.
     _struct_elements: _StructElements | None = field(default=None, repr=False)
+    # Value map id -> its type ("Color", "String", …), from config.json
+    # `valueMaps`. None where the maps are unknown, which skips the `$map` checks.
+    value_maps: dict[str, str] | None = None
     # Keys of the active (Default) translation dictionary.
     translation_keys: frozenset[str] = field(default_factory=frozenset)
     # Curated built-in icon ids — mirrors frontend/src/shared/config/iconAllowlist.ts.
@@ -578,20 +586,19 @@ def collect_page_property_keys(
 def collect_page_properties(
     config: Any = None, files: list[Path] | None = None
 ) -> dict[str, dict[str, dict]]:
-    """Page or page-group id -> its input-parameter declarations — the
-    declarations behind ``collect_page_property_keys``, resolved the same way."""
+    """Page or page-group id -> its input declarations, in either root: a
+    dialog's are filled by Open Dialog, a page's by Navigate To Page."""
     if config is None:
         config = _read_config()
-    in_dialogs_folder = _index_collect_page_ids(root_nodes(config, "dialogs"))
-    declared: dict[str, dict[str, dict]] = {
-        page_id: {} for page_id in _index_collect_page_ids(root_nodes(config, "pages"))
-    }
-    declared.update(
-        (page_id, decls)
-        for page_id, decls in _scan_page_files(files)[1].items()
-        if page_id in in_dialogs_folder
+    indexed = _index_collect_page_ids(root_nodes(config, "dialogs")) | _index_collect_page_ids(
+        root_nodes(config, "pages")
     )
-    declared.update(collect_page_group_properties(root_nodes(config, "dialogs")))
+    declared: dict[str, dict[str, dict]] = {page_id: {} for page_id in indexed}
+    declared.update(
+        (page_id, decls) for page_id, decls in _scan_page_files(files)[1].items() if page_id in indexed
+    )
+    for root in INDEX_ROOTS:
+        declared.update(collect_page_group_properties(root_nodes(config, root)))
     return declared
 
 
@@ -600,6 +607,22 @@ def collect_dialog_ancestors(config: Any = None) -> dict[str, tuple[str, ...]]:
     if config is None:
         config = _read_config()
     return collect_group_ancestors(root_nodes(config, "dialogs"))
+
+
+def collect_page_variables(config: Any = None) -> dict[str, dict[str, dict]]:
+    """Pages-section node id -> the inputs its enclosing groups declare
+    (see ``ValidationContext.page_variables``)."""
+    if config is None:
+        config = _read_config()
+    nodes = root_nodes(config, "pages")
+    groups = collect_page_group_properties(nodes)
+    scopes: dict[str, dict[str, dict]] = {}
+    for node_id, ancestors in collect_group_ancestors(nodes).items():
+        merged: dict[str, dict] = {}
+        for gid in reversed(ancestors):
+            merged.update(groups.get(gid) or {})
+        scopes[node_id] = merged
+    return scopes
 
 
 _ComponentInterfaces = tuple[dict[str, frozenset[str]], dict[str, frozenset[str]]]
@@ -1149,6 +1172,7 @@ def build_context() -> ValidationContext:
         component_properties=component_properties,
         page_properties=collect_page_properties(config, page_files),
         dialog_ancestors=collect_dialog_ancestors(config),
+        page_variables=collect_page_variables(config),
         project_widgets={
             **{f"page:{pid}": index for pid, index in page_widgets.items()},
             **{f"component:{cid}": index for cid, index in component_widgets.items()},
@@ -1161,7 +1185,19 @@ def build_context() -> ValidationContext:
         image_assets=_collect_asset_names(active_images_dir()),
         video_assets=_collect_asset_names(active_videos_dir()),
         http_allowed_origins=frozenset(listed_origins(config)),
+        value_maps=value_map_types(config.get("valueMaps")),
     )
+
+
+def value_map_types(maps: Any) -> dict[str, str]:
+    """Value map id -> type for a `valueMaps` list; malformed entries are skipped."""
+    if not isinstance(maps, list):
+        return {}
+    return {
+        m["id"]: m["type"]
+        for m in maps
+        if isinstance(m, dict) and isinstance(m.get("id"), str) and isinstance(m.get("type"), str)
+    }
 
 
 def _has_property_source(value: Any) -> bool:
@@ -2059,7 +2095,10 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "height": "Integer",
     },
     "closePageOverlay": {"pageId": "page"},
-    "navigateToPage": {"pageId": "page"},
+    "navigateToPage": {"pageId": "page", "componentProperties": "inputs"},
+    "pageGroupNext": {"groupId": "String"},
+    "pageGroupPrevious": {"groupId": "String"},
+    "pageGroupGoTo": {"groupId": "String", "index": "Integer"},
     "writeDataVariable": {
         "target": "target",
         "value": "writeValue",
@@ -2109,6 +2148,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "onSettled": "actions",
     },
     "acknowledgeAllAlarms": {},
+    "reloadHmi": {},
     "runComponentActions": {"property": "actionsProperty"},
     "delay": {"duration": "Integer"},
     "setLanguage": {"language": "String"},
@@ -2175,7 +2215,7 @@ def _check_overlay_root(
         report.warn(
             path,
             f"page '{page_id}' is in the Dialogs folder — open it with Open Dialog "
-            "instead, which passes its input parameters",
+            "instead, which passes its inputs",
             severity="error",
             code="overlay-wrong-root",
         )
@@ -2232,9 +2272,28 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
         _check_navigate_target(page_id, ctx, f"{path}/pageId", report)
     if kind in ("openDialog", "openPageOverlay") and isinstance(page_id, str) and page_id:
         _check_overlay_root(kind, page_id, ctx, f"{path}/pageId", report)
-    if kind == "openDialog" and isinstance(page_id, str) and page_id:
-        declared = ctx.page_property_keys.get(page_id)
-        declarations = ctx.page_properties.get(page_id) or {}
+    if kind in ("openDialog", "navigateToPage") and isinstance(page_id, str) and page_id:
+        if kind == "openDialog":
+            declared = ctx.page_property_keys.get(page_id)
+            # Inputs the target's enclosing groups declare are filled the same way.
+            # A Pages-section target takes none of them from this action.
+            own = {} if page_id in ctx.navigable_page_ids else ctx.page_properties.get(page_id)
+            declarations = _input_scope(ctx, page_id, own or {})
+            if declared is not None:
+                declared = declared | declarations.keys()
+            when, advice = "when the dialog opens", _KEEP_LIVE_ADVICE
+        else:
+            # The page's Values, its own over its groups': a Binding there is
+            # already an error where it is declared, and no action can fill it.
+            own = ctx.page_properties.get(page_id)
+            declarations = {
+                k: d
+                for k, d in {**ctx.page_variables.get(page_id, {}), **(own or {})}.items()
+                if component_property.input_mode(d) == "value"
+            }
+            declared = declarations.keys() if own is not None else None
+            when = "when the page opens"
+            advice = "a page's input is always a Value; to keep it live, compute it on the page"
         args = action.get("componentProperties")
         if isinstance(args, dict):
             owner_label = f"page '{page_id}'"
@@ -2251,6 +2310,7 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
                     else None
                 )
                 _validate_action_value(arg, schema, ctx, arg_path, report)
+                _check_read_once(arg, decl, when, arg_path, report, advice)
     # Async actions nest follow-up lists (onSuccess/onFailed/onSettled),
     # showAlert nests its button handlers and `if` its two branches — every
     # field the table calls `actions`; they get the same checks as a top-level
@@ -2483,7 +2543,7 @@ def _check_navigate_target(page_id: Any, ctx: ValidationContext, path: str, repo
     if not isinstance(name, str):
         report.warn(
             path,
-            "the page is a fixed page or an input parameter declared as a page — nothing else",
+            "the page is a fixed page or an input declared as a page — nothing else",
             severity="error", code="navigate-target-invalid",
         )
     elif not name:
@@ -2493,7 +2553,7 @@ def _check_navigate_target(page_id: Any, ctx: ValidationContext, path: str, repo
     ):
         report.warn(
             path,
-            f"input parameter '{name}' is not declared here as a page (format: page)",
+            f"input '{name}' is not declared here as a page (format: page)",
             severity="error", code="navigate-input-not-page",
         )
 
@@ -2688,21 +2748,69 @@ def _check_source_type(
 _WRITABLE_SOURCES = frozenset({"$var", "$componentProp", "$repeatItem"})
 
 
+def _reads_variable(value: Any) -> bool:
+    if isinstance(value, dict):
+        return "$var" in value or "$componentProp" in value or any(map(_reads_variable, value.values()))
+    return isinstance(value, list) and any(map(_reads_variable, value))
+
+
+_KEEP_LIVE_ADVICE = "to keep it live, make the input a Binding, pass it the variable and compute inside"
+
+
+def _check_read_once(
+    value: Any,
+    decl: dict | None,
+    when: str,
+    path: str,
+    report: ValidationReport,
+    advice: str = _KEEP_LIVE_ADVICE,
+) -> None:
+    """Flag a computed live value — a formula or condition over a variable —
+    given to a Value input, which reads it once and then keeps its own copy.
+    A bare variable is the deliberate way to hand a Value a starting point."""
+    if not isinstance(decl, dict) or component_property.input_mode(decl) != "value":
+        return
+    source_key = _property_source_key(value) if _has_property_source(value) else None
+    if source_key is None or source_key in _WRITABLE_SOURCES:
+        return
+    if not _reads_variable(value):
+        return
+    report.warn(
+        path,
+        f"this input is a Value, so this live {source_key} is read once {when} — {advice}",
+        severity="warning",
+        code="value-reads-once",
+    )
+
+
 def _check_write_source(
     source_key: str | None, schema_field: dict | None, path: str, report: ValidationReport
 ) -> None:
     """Flag a literal or a computed source (a formula, a condition, …) in a
-    field with `write: true`: the control has no variable to write to."""
-    if not isinstance(schema_field, dict) or schema_field.get("write") is not True:
+    field with `write: true`, where the control has no variable to write to,
+    or given to a Binding input, which reads a variable live."""
+    if not isinstance(schema_field, dict):
+        return
+    writes = schema_field.get("write") is True
+    if not writes and schema_field.get("bindsOnly") is not True:
         return
     if source_key in _WRITABLE_SOURCES:
         return
     what = "a fixed value" if source_key in (None, "$static") else source_key
+    if writes:
+        report.warn(
+            path,
+            f"this field writes to a variable, but holds {what} — bind a variable",
+            severity="error",
+            code="write-source",
+        )
+        return
     report.warn(
         path,
-        f"this field writes to a variable, but holds {what} — bind a variable",
+        f"this input is a Binding, but is given {what} — pass a variable, "
+        "or make the input a Value",
         severity="error",
-        code="write-source",
+        code="binding-source",
     )
 
 
@@ -2743,7 +2851,7 @@ def _check_component_prop(
     if not isinstance(decl, dict):
         report.warn(
             path,
-            f"input parameter '{key}' is not declared here",
+            f"input '{key}' is not declared here",
             severity="warning",
             code="componentprop-unknown",
         )
@@ -2751,12 +2859,27 @@ def _check_component_prop(
     if str(decl.get("type", "")).strip().lower() == "widgets":
         report.warn(
             path,
-            f"input parameter '{key}' is a widget slot — it holds no value to read",
+            f"input '{key}' is a widget slot — it holds no value to read",
             severity="error",
             code="componentprop-type",
         )
         return
-    subject = f"input parameter '{name}'"
+    subject = f"input '{name}'"
+    if (
+        isinstance(schema_field, dict)
+        and schema_field.get("bindsOnly") is True
+        and component_property.input_mode(decl) == "value"
+    ):
+        # Passed on, the Value's local slot would be written by the receiver —
+        # back into this screen's state, which a Value never lets happen.
+        report.warn(
+            path,
+            f"input '{key}' is a Value, and a Binding takes a variable "
+            "or another Binding",
+            severity="error",
+            code="binding-source",
+        )
+        return
     if not member:
         if isinstance(schema_field, dict):
             _report_prop_verdict(
@@ -2770,7 +2893,7 @@ def _check_component_prop(
     if not known:
         report.warn(
             path,
-            f"input parameter '{key}' declares no member '{member}'",
+            f"input '{key}' declares no member '{member}'",
             severity="warning",
             code="componentprop-unknown",
         )
@@ -2832,16 +2955,24 @@ def _widget_prop_problem(
         return node
 
     sub = payload.get("path")
-    subject = f"exported property '{widget_id}.{prop_name}'"
+    subject = f"widget property '{widget_id}.{prop_name}'"
     if isinstance(sub, str) and sub:
         field_decl = next((f for f in fields if f.get("name") == sub), {"name": sub})
         why = component_property.node_verdict(as_node(field_decl), schema_field)
-        subject = f"exported property '{widget_id}.{prop_name}/{sub}'"
+        subject = f"widget property '{widget_id}.{prop_name}/{sub}'"
     else:
-        adapted: dict[str, Any] = {"type": export.get("type") or "string"}
+        # Another widget's state, written through nothing here — never a local Value.
+        adapted: dict[str, Any] = {"mode": "binding"}
         if fields:
             adapted["structSchema"] = [as_node(f) for f in fields]
-        why = component_property.declaration_verdict(adapted, schema_field)
+        # A list-typed export holds any one of them, as the instance decides (a
+        # Dropdown's options): it fits where one of them does (`adaptSchema`).
+        declared = export.get("type") or "string"
+        verdicts = [
+            component_property.declaration_verdict({**adapted, "type": t}, schema_field)
+            for t in (declared if isinstance(declared, list) else [declared])
+        ]
+        why = None if None in verdicts else verdicts[0]
     if why == "read-only":
         return "widgetprop-type", f"{subject} cannot be written, and this field writes to it"
     if why == "type":
@@ -2879,13 +3010,13 @@ def _check_overlay(payload: dict, ctx: ValidationContext, path: str, report: Val
     page, param = payload.get("page"), payload.get("param")
     if not isinstance(page, str) or not page or not isinstance(param, str) or not param:
         report.warn(
-            path, "page or input parameter is empty", severity="warning", code="overlay-empty"
+            path, "page or input is empty", severity="warning", code="overlay-empty"
         )
         return
     if ctx.dialogs_page_ids and page not in ctx.dialogs_page_ids:
         report.warn(
             path,
-            f"page '{page}' is not in the Dialogs folder — only a dialog has input parameters",
+            f"page '{page}' is not in the Dialogs folder — Open Dialog Input reads only a dialog's inputs",
             severity="error", code="overlay-page",
         )
         return
@@ -2893,7 +3024,7 @@ def _check_overlay(payload: dict, ctx: ValidationContext, path: str, report: Val
     if declared is not None and param not in declared:
         report.warn(
             path,
-            f"page '{page}' declares no input parameter '{param}'",
+            f"page '{page}' declares no input '{param}'",
             severity="error", code="overlay-param-unknown",
         )
 
@@ -2905,6 +3036,34 @@ def _takes_only_whole_numbers(schema_field: dict | None) -> bool:
         return False
     accepted = {t.lower() for t in vartype.accepted_value_types(schema_field.get("type"))}
     return "integer" in accepted and not accepted & {"float", "duration"}
+
+
+def _validate_map_ref(
+    payload: dict, schema_field: dict | None, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """A `$map` names a project value map and the value it looks up."""
+    _validate_slot(
+        payload.get("value"), None, ctx, f"{path}/$map/value", report,
+        code="map-value-empty", message="value to look up is unset",
+    )
+    map_id = payload.get("id")
+    if not isinstance(map_id, str) or map_id == "":
+        report.warn(f"{path}/$map/id", "no value map chosen", severity="warning", code="map-empty")
+        return
+    if ctx.value_maps is None:
+        return
+    map_type = ctx.value_maps.get(map_id)
+    if map_type is None:
+        report.warn(path, f"unknown value map '{map_id}'", severity="error", code="map-unknown")
+        return
+    # The same type only (a number also fills a duration), as the editor's map picker lists them.
+    tokens = _type_tokens(schema_field) if isinstance(schema_field, dict) else []
+    if tokens and not any(source_rules.produced_fits(map_type.lower(), t) for t in tokens):
+        report.warn(
+            path,
+            f"value map '{map_id}' gives a {map_type}, which this field does not take",
+            severity="error", code="map-type",
+        )
 
 
 def _validate_property_value(
@@ -3022,6 +3181,8 @@ def _validate_property_value(
                 _validate_slot(when, None, ctx, f"{path}/$switch/{i}/when", report)
                 _validate_slot(then, schema_field, ctx, f"{path}/$switch/{i}/then", report)
         _validate_slot(payload.get("default"), schema_field, ctx, f"{path}/$switch/default", report)
+    elif source_key == "$map" and isinstance(payload, dict):
+        _validate_map_ref(payload, schema_field, ctx, path, report)
     elif source_key == "$compare" and isinstance(payload, dict):
         _validate_slot(
             payload.get("left"), None, ctx, f"{path}/$compare/left", report,
@@ -3130,8 +3291,7 @@ def _validate_property_value(
         elif not ctx.input_scope:
             report.warn(
                 path,
-                f"input parameter '{payload}' reads nothing here — only pages in "
-                "the Dialogs folder take input parameters",
+                f"input '{payload}' reads nothing here — nothing around it declares inputs",
                 severity="warning", code="componentprop-no-scope",
             )
         else:
@@ -3201,13 +3361,21 @@ def validate_widget_node(
                     _warn_unknown_property(report, f"{path}/properties/{key}", key, target)
                 field_schema = schema.get(key) if isinstance(schema, dict) else None
                 prop_path = f"{path}/properties/{key}"
-                _validate_property_value(value, field_schema, prop_ctx, prop_path, report)
+                field_ctx = prop_ctx
+                repeats_over = field_schema.get("repeatsOver") if isinstance(field_schema, dict) else None
+                if isinstance(repeats_over, str) and repeats_over:
+                    # The actions run with the widget's chosen element of that list.
+                    field_ctx = replace(prop_ctx, repeat_scope=True, repeat_items=properties.get(repeats_over))
+                _validate_property_value(value, field_schema, field_ctx, prop_path, report)
+                if is_instance:
+                    decl = (ctx.component_properties.get(_component_id(wtype)) or {}).get(key)
+                    _check_read_once(value, decl, "when the instance appears", prop_path, report)
                 if key == "actions" or (not is_instance and _is_actions_field(field_schema)):
-                    validate_action_targets(value, prop_ctx, prop_path, report)
+                    validate_action_targets(value, field_ctx, prop_path, report)
                 elif _is_actions_field(field_schema):
                     # Typed as actions only by the component's declaration, which
                     # nothing walked before: a missing page is a diagnostic here.
-                    _validate_actions_softly(value, prop_ctx, prop_path, report)
+                    _validate_actions_softly(value, field_ctx, prop_path, report)
     if wtype == "Repeater" and isinstance(properties, dict):
         _validate_placed_items(properties, f"{path}/properties", report)
     # Walk children
@@ -3412,7 +3580,7 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
     if pid is not None and not is_valid_page_id(pid):
         report.add("/id", "invalid page id")
     if pid in ctx.navigable_page_ids:
-        ctx = ctx_for_root(ctx, "pages")
+        ctx = _page_variable_scope(ctx, pid, page)
     elif isinstance(pid, str) and pid in ctx.dialogs_page_ids and ctx.input_scope:
         ctx = replace(ctx, input_schema=_input_scope(ctx, pid, declared_properties(page)))
     ctx = replace(
@@ -3439,18 +3607,28 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
 def ctx_for_root(ctx: ValidationContext, root: str) -> ValidationContext:
     """Narrow a validation context to one index root.
 
-    Only the Dialogs folder's nodes take input parameters, so anything under
-    the navigable root is walked without an input scope — a `$componentProp`
-    read there earns the same componentprop-no-scope warning wherever the walk
-    starts from.
+    Only the Dialogs folder's nodes take every kind of input, so anything under
+    the navigable root is walked without an input scope — a node there reads
+    only its own inputs, which ``ctx_for_page_group`` / ``validate_page``
+    put back per node.
     """
     return ctx if root == "dialogs" else replace(ctx, input_scope=False)
 
 
+def _page_variable_scope(ctx: ValidationContext, node_id: str, node: Any) -> ValidationContext:
+    """A Pages-section node reads its inputs — its own over its enclosing
+    groups' — with `$componentProp`."""
+    scope = {**ctx.page_variables.get(node_id, {}), **declared_properties(node)}
+    return replace(ctx, input_scope=bool(scope), input_schema=scope)
+
+
 def ctx_for_page_group(ctx: ValidationContext, node: Any) -> ValidationContext:
     """The context a page group's own events are walked in: a Dialogs-folder
-    group's input parameters are its declarations over its enclosing groups'."""
+    group's inputs are its declarations over its enclosing groups', a
+    Pages-section group's its own over its enclosing groups'."""
     gid = node.get("id") if isinstance(node, dict) else None
+    if isinstance(gid, str) and gid in ctx.navigable_page_ids:
+        return _page_variable_scope(ctx, gid, node)
     if isinstance(gid, str) and gid in ctx.dialogs_page_ids and ctx.input_scope:
         return replace(ctx, input_schema=_input_scope(ctx, gid, declared_properties(node)))
     return ctx
@@ -3499,13 +3677,45 @@ def validate_global_events(events: Any, ctx: ValidationContext) -> ValidationRep
     return report
 
 
+def validate_value_maps(maps: Any, ctx: ValidationContext) -> ValidationReport:
+    """Validate each value map's outputs against the map's type. Paths are
+    relative to the list itself (``/0/cases/1/then``)."""
+    report = ValidationReport()
+    for i, value_map in enumerate(maps if isinstance(maps, list) else []):
+        if not isinstance(value_map, dict) or not isinstance(value_map.get("type"), str):
+            continue
+        schema = {"type": value_map["type"]}
+        cases = value_map.get("cases")
+        for j, case in enumerate(cases if isinstance(cases, list) else []):
+            if isinstance(case, dict):
+                _validate_slot(case.get("then"), schema, ctx, f"/{i}/cases/{j}/then", report)
+        _validate_slot(value_map.get("default"), schema, ctx, f"/{i}/default", report)
+    return report
+
 def validate_page_node_events(node: Any, ctx: ValidationContext) -> ValidationReport:
     """Validate the action targets in a page or page-group node's ``events``
-    map. Paths are relative to the node itself (``/events/onOpen/0``)."""
+    map and, on a Pages-section node, that every input is a Value. Paths are
+    relative to the node itself (``/events/onOpen/0``)."""
     report = ValidationReport()
     if isinstance(node, dict):
         validate_action_targets(node.get("events"), ctx, "/events", report)
+        if node.get("id") in ctx.navigable_page_ids:
+            _check_page_inputs_are_values(node, report)
     return report
+
+
+def _check_page_inputs_are_values(node: dict, report: ValidationReport) -> None:
+    """Only Navigate To Page fills a Pages-section node's inputs, and the
+    button that navigated is gone by then, so a Binding has nothing to follow
+    or write back to: every input there is a Value."""
+    for key, decl in declared_properties(node).items():
+        if component_property.input_mode(decl) == "binding":
+            report.warn(
+                f"/componentProperties/{key}",
+                f"input '{key}' is a Binding, but a page's inputs are Values only",
+                severity="error",
+                code="page-input-binding",
+            )
 
 
 def _reparented(report: ValidationReport, prefix: str) -> ValidationReport:
@@ -3536,6 +3746,7 @@ def validate_config_areas(config: Any, ctx: ValidationContext) -> ValidationRepo
         return report
     report.extend(validate_shell_areas(config, ctx))
     report.extend(_reparented(validate_global_events(config.get("globalEvents"), ctx), "/globalEvents"))
+    report.extend(_reparented(validate_value_maps(config.get("valueMaps"), ctx), "/valueMaps"))
     for root in INDEX_ROOTS:
         _walk_page_group_events(
             root_nodes(config, root), ctx_for_root(ctx, root), f"/{root}", report

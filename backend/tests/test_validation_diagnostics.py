@@ -708,6 +708,51 @@ def test_and_or_fill_a_boolean_field_and_nest(ctx, key):
     assert _warn(report).code == "source-type"
 
 
+
+def test_map_resolves_a_known_map_of_the_fields_type(ctx):
+    ctx = replace(ctx, value_maps={"severity": "Color", "state": "String"})
+    for field_type, map_id in (("Color", "severity"), ("String", "state"), (["Float", "String"], "state")):
+        report = ValidationReport()
+        _validate_property_value(
+            {"$map": {"id": map_id, "value": {"$static": 1}}}, {"type": field_type}, ctx, "/p", report,
+        )
+        assert report.warnings == [] and report.findings == []
+
+
+def test_map_unknown_and_wrong_type(ctx):
+    ctx = replace(ctx, value_maps={"severity": "Color"})
+    report = ValidationReport()
+    _validate_property_value({"$map": {"id": "gone", "value": {"$static": 1}}}, {"type": "Color"}, ctx, "/p", report)
+    assert (_warn(report).code, _warn(report).severity) == ("map-unknown", "error")
+    report = ValidationReport()
+    _validate_property_value({"$map": {"id": "severity", "value": {"$static": 1}}}, {"type": "String"}, ctx, "/p", report)
+    assert (_warn(report).code, _warn(report).severity) == ("map-type", "error")
+
+
+def test_map_empty_id_and_value(ctx):
+    report = ValidationReport()
+    _validate_property_value({"$map": {"id": "", "value": None}}, {"type": "String"}, ctx, "/p", report)
+    assert report.findings == []
+    assert {w.code for w in report.warnings} == {"map-empty", "map-value-empty"}
+
+
+def test_map_is_not_offered_on_a_field_no_map_type_fits(ctx):
+    report = ValidationReport()
+    _validate_property_value({"$map": {"id": "x", "value": {"$static": 1}}}, {"type": "Icon"}, ctx, "/p", report)
+    assert _warn(report).code == "source-type"
+
+
+def test_value_map_outputs_are_checked_against_the_maps_type(ctx):
+    from core.validation.structure import validate_value_maps
+
+    maps = [{
+        "id": "state", "type": "String",
+        "cases": [{"when": 1, "then": {"$loc": "app.title"}}, {"when": 2, "then": {"$loc": "nope"}}],
+        "default": "",
+    }]
+    report = validate_value_maps(maps, ctx)
+    assert [(w.path, w.code) for w in report.warnings] == [("/0/cases/1/then", "loc-unknown")]
+
 def test_formula_empty(ctx):
     report = ValidationReport()
     _validate_property_value({"$formula": {"expression": " ", "wildcards": {}}}, None, ctx, "/p", report)
@@ -1493,7 +1538,7 @@ def test_toggle_target_naming_a_writable_boolean_input_is_clean():
 @pytest.mark.parametrize(
     "inputs, code",
     [
-        ({"value": {"type": "float"}}, "componentprop-type"),
+        ({"value": {"type": "float", "mode": "binding"}}, "componentprop-type"),
         ({"value": {"type": "string", "write": True}}, "componentprop-type"),
         ({}, "componentprop-unknown"),
     ],

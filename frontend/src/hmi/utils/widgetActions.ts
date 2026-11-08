@@ -8,6 +8,8 @@ import { writeTargetAddress } from '@shared/types/config';
 import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { evaluatePropertyValue, resolveBoundIndex } from '@hmi/utils/propertySourceEval';
+import { toNumber } from '@hmi/utils/coercion';
+import { formatNumber } from '@shared/utils/formatNumber';
 import { substituteBoundIndexes } from '@hmi/utils/boundIndexResolution';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { resolveComponentPropValue } from '@hmi/utils/componentPropResolution';
@@ -19,8 +21,9 @@ import { randomUuid } from '@shared/utils/id';
 import { hasPropertySourceKey } from '@shared/types/propertyValueGuards';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
 import { ackAllAlarms } from '@hmi/components/alarmUtils';
-import { useConfigStore } from '@shared/store/configStore';
-import { findPageNodeById } from '@shared/utils/pageTree';
+import { findValueMap, useConfigStore } from '@shared/store/configStore';
+import { findPageNodeById, findPagePath } from '@shared/utils/pageTree';
+import { inputMode } from '@shared/types/componentProperty';
 
 interface ActionContext {
   scope?: string;
@@ -111,6 +114,7 @@ function storeEvalContext(scope: string): EvaluationContext {
   return {
     resolveVariable: readStoredVariable,
     resolveTranslation: (key) => useTranslationStore.getState().resolve(key),
+    resolveValueMap: findValueMap,
     resolveUser: (field) => resolveUserField(currentUser(), field),
     resolveUserGroups: () => currentUser()?.groups ?? ['guest'],
   };
@@ -139,15 +143,32 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'openDialog' || action.type === 'openPageOverlay') {
-      // Only a Dialogs-folder node declares input parameters, so only
+      // A Pages-section node opened as an overlay takes no inputs, so only
       // `openDialog` carries values to resolve against the opener's scope.
       const supplied = action.type === 'openDialog' ? action.componentProperties : undefined;
+      // The node's own declarations over its enclosing groups', innermost winning.
+      const declared = supplied
+        ? Object.assign(
+            {},
+            ...findPagePath(useConfigStore.getState().dialogs, action.pageId).map(
+              (node) => node.componentProperties,
+            ),
+          )
+        : undefined;
+      // A Binding goes in as the variable it names; a Value is read here, once,
+      // in the opener's context — the dialog keeps what it got.
       const resolvedPageProps = supplied
         ? Object.fromEntries(
-            Object.entries(supplied).map(([k, v]) => [
-              k,
-              resolveComponentPropValue(v, inputScopeProps),
-            ]),
+            Object.entries(supplied).map(([k, v]) => {
+              const resolved = resolveComponentPropValue(v, inputScopeProps);
+              const decl = declared?.[k];
+              return [
+                k,
+                decl && inputMode(decl) === 'value'
+                  ? (evaluatePropertyValue(resolved, evalCtx) ?? null)
+                  : resolved,
+              ];
+            }),
           )
         : {};
       useHmiStore.getState().openPageOverlay({
@@ -183,8 +204,50 @@ export function executeWidgetActions(
     if (action.type === 'navigateToPage') {
       const pageId = String(evaluatePropertyValue(action.pageId, evalCtx) ?? '');
       // Only the `pages` root routes; an input naming nothing there does nothing.
-      if (pageId && findPageNodeById(useConfigStore.getState().pages, pageId)) {
-        useHmiStore.getState().navigateToPage(pageId);
+      const { pages, dialogs } = useConfigStore.getState();
+      if (pageId && findPageNodeById(pages, pageId)) {
+        // A page takes Values only: each is read here, once, in the opener's context.
+        const values = Object.fromEntries(
+          Object.entries(action.componentProperties ?? {}).map(([k, v]) => [
+            k,
+            evaluatePropertyValue(resolveComponentPropValue(v, inputScopeProps), evalCtx) ?? null,
+          ]),
+        );
+        // A dialog that leaves the screen usable stays open, as it was; modal ones close.
+        useHmiStore
+          .getState()
+          .navigateToPage(
+            pageId,
+            (o) => findPageNodeById(dialogs, o.pageId)?.modeless === true,
+            values,
+          );
+      }
+      continue;
+    }
+
+    if (
+      action.type === 'pageGroupNext' ||
+      action.type === 'pageGroupPrevious' ||
+      action.type === 'pageGroupGoTo'
+    ) {
+      // An event outside any widget has no group around it, so it does nothing.
+      const entry = evalCtx.resolvePageGroup?.(action.groupId);
+      if (!entry) continue;
+      const tabs = entry.group.children;
+      const current = tabs.findIndex((c) => c.id === entry.activePage.id);
+      const index =
+        action.type === 'pageGroupGoTo'
+          ? toNumber(evaluatePropertyValue(action.index, evalCtx))
+          : current + (action.type === 'pageGroupNext' ? 1 : -1);
+      // Past either end does nothing: Next and Previous do not wrap round.
+      if (
+        index !== null &&
+        Number.isInteger(index) &&
+        index >= 0 &&
+        index < tabs.length &&
+        index !== current
+      ) {
+        entry.onNavigate(tabs[index].id);
       }
       continue;
     }
@@ -199,9 +262,10 @@ export function executeWidgetActions(
         scope,
         ...address,
         // A sourced value (a dialog's `$componentProp`, a `$var`) is resolved
-        // here; the backend only coerces literals and rejects an object.
+        // here; the backend only coerces literals and rejects an object. A PLC
+        // reads the text, so a number in a `{n}` placeholder keeps its point.
         value: hasPropertySourceKey(action.value)
-          ? evaluatePropertyValue(action.value, evalCtx)
+          ? evaluatePropertyValue(action.value, { ...evalCtx, machineText: true })
           : action.value,
       });
       continue;
@@ -240,12 +304,7 @@ export function executeWidgetActions(
             ? undefined
             : Boolean(evaluatePropertyValue(negative, evalCtx)),
         position: action.position ?? 'center',
-        currentValue:
-          typeof previous === 'number'
-            ? decimals !== undefined
-              ? previous.toFixed(decimals)
-              : String(previous)
-            : undefined,
+        currentValue: typeof previous === 'number' ? formatNumber(previous, decimals) : undefined,
         apply: (value) => {
           const requestId = beginAsyncAction(action, scope, inputScopeProps, { value, previous });
           sendWsMessage({
@@ -318,6 +377,12 @@ export function executeWidgetActions(
       // The backend attributes it to this connection's signed-in user.
       void ackAllAlarms();
       continue;
+    }
+
+    if (action.type === 'reloadHmi') {
+      // The page goes away, so nothing after this action can run.
+      window.location.reload();
+      return;
     }
 
     if (action.type === 'setLanguage') {

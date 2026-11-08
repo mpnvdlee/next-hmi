@@ -38,6 +38,7 @@ _MANIFEST = {
                 {"key": "row", "label": "Row", "type": "Struct",
                  "structSchema": [{"name": "count", "type": "Integer"}]},
                 {"key": "raw", "label": "Raw"},
+                {"key": "choice", "label": "Choice", "type": ["string", "integer"]},
             ],
         },
         "Box": {"name": "Box", "schema": {}, "exportedProperties": []},
@@ -290,6 +291,13 @@ def test_an_instance_value_is_typed_by_the_declaration(card_ctx):
     assert _codes(validate_widget_node(_instance({"count": 3}), card_ctx)) == []
 
 
+def test_an_instance_reads_a_live_formula_into_a_value_once(card_ctx):
+    live = {"$if": {"condition": {"$var": {"path": "PLC:Run"}}, "then": 1, "else": 2}}
+    report = validate_widget_node(_instance({"count": live}), card_ctx)
+    assert "value-reads-once" in _codes(report)
+    assert "value-reads-once" not in _codes(validate_widget_node(_instance({"count": {"$if": {"condition": True, "then": 1, "else": 2}}}), card_ctx))
+
+
 def test_an_instance_binding_is_typed_by_the_declaration(card_ctx):
     report = validate_widget_node(_instance({"count": {"$var": {"path": "PLC:Speed"}}}), card_ctx)
     assert _codes(report) == ["var-type"]
@@ -300,6 +308,32 @@ def test_an_instance_binding_is_typed_by_the_declaration(card_ctx):
     assert _codes(report) == ["source-type"]
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        [{"label": {"$loc": "pack.tray"}, "value": 1}],
+        {"$var": {"path": "PLC:Levels"}},
+    ],
+)
+def test_an_options_input_takes_a_list_or_a_variable(ctx, value):
+    """An Options input has no mode, so a static list passes where a Binding
+    would flag it, and a bound array passes as given."""
+    options_ctx = replace(
+        ctx,
+        component_ids={"card"},
+        component_property_keys={"card": frozenset({"options"})},
+        component_properties={"card": {"options": {"type": "option-list", "label": "Options", "mode": "binding"}}},
+    )
+    assert _codes(validate_widget_node(_instance({"options": value}), options_ctx)) == []
+
+
+def test_an_options_input_fills_a_dropdown(input_ctx):
+    options = replace(input_ctx, input_schema={"options": {"type": "option-list", "label": "Options"}})
+    field = {"type": ["option-list", "string[]", "integer[]"]}
+    assert _codes(_value(options, {"$componentProp": "options"}, field)) == []
+    assert _codes(_value(options, {"$componentProp": "options"}, {"type": "string"})) == ["componentprop-type"]
+
+
 def test_an_instance_of_an_unknown_interface_is_not_typed(ctx):
     unknown = replace(ctx, component_ids={"card"})
     assert _codes(validate_widget_node(_instance({"count": "many"}), unknown)) == []
@@ -308,7 +342,8 @@ def test_an_instance_of_an_unknown_interface_is_not_typed(ctx):
 # ── $componentProp ───────────────────────────────────────────────────────────
 
 _INPUTS = {
-    "setpoint": {"type": "float", "label": "Setpoint"},
+    # A Binding: a Value is written locally, so it would fit a writing field.
+    "setpoint": {"type": "float", "label": "Setpoint", "mode": "binding"},
     "target": {"type": "float", "label": "Target", "write": True},
     "slot": {"type": "widgets", "label": "Slot"},
     "motor": {
@@ -444,6 +479,9 @@ def _widget_page(prop: dict, field: str = "text", *, source: str = "dd") -> dict
     [
         ({"property": "selectedValue"}, "text"),
         ({"property": "raw"}, "text"),
+        # A list-typed export holds whichever type its instance's options do.
+        ({"property": "choice"}, "text"),
+        ({"property": "choice"}, "size"),
         ({"property": "row", "path": "count"}, "size"),
         ({"property": "row", "path": "undeclared"}, "size"),
     ],
@@ -519,6 +557,111 @@ def test_open_dialog_inputs_are_typed_by_the_target(ctx):
     assert _codes(_action(dialog, action)) == ["var-type"]
     action["componentProperties"] = {"motorId": {"$var": {"path": "PLC:Count"}}}
     assert _codes(_action(dialog, action)) == []
+
+
+def test_open_dialog_fills_inputs_the_targets_groups_declare(ctx):
+    dialog = replace(
+        _dialog_ctx(ctx),
+        page_ids={"detail", "grp"},
+        page_property_keys={"detail": frozenset({"n"}), "grp": frozenset({"title", "n"})},
+    )
+    action = {"type": "openDialog", "pageId": "detail", "componentProperties": {"title": "Motor 1"}}
+    assert _codes(_action(dialog, action)) == []
+    action["componentProperties"] = {"zzz": "x"}
+    assert _codes(_action(dialog, action)) == ["prop-unknown"]
+    # Typed by the innermost declaration: the page's own `n` is an Integer.
+    dialog.page_properties["detail"] = {"n": {"type": "integer", "label": "N"}}
+    action["componentProperties"] = {"n": "x"}
+    assert _codes(_action(dialog, action)) == ["literal-type"]
+
+
+@pytest.mark.parametrize(
+    ("value", "codes"),
+    [
+        ({"$var": {"path": "PLC:Count"}}, []),
+        ({"$componentProp": "target"}, []),
+        (3, ["binding-source"]),
+        ({"$formula": {"expression": "{1} * 2", "wildcards": {"1": {"$var": {"path": "PLC:Count"}}}, "round": True}}, ["binding-source"]),
+        # A Value passed on would let the dialog write the opener's own state.
+        ({"$componentProp": "setpoint_value"}, ["binding-source"]),
+    ],
+)
+def test_a_binding_input_takes_only_a_variable(input_ctx, value, codes):
+    dialog = replace(
+        input_ctx,
+        page_ids={"detail"},
+        page_property_keys={"detail": frozenset({"count"})},
+        page_properties={"detail": {"count": {"type": "integer", "label": "Count", "mode": "binding"}}},
+        input_schema={
+            **_INPUTS,
+            "target": {"type": "integer", "label": "Target", "mode": "binding"},
+            "setpoint_value": {"type": "integer", "label": "Setpoint", "mode": "value"},
+        },
+    )
+    action = {"type": "openDialog", "pageId": "detail", "componentProperties": {"count": value}}
+    assert _codes(_action(dialog, action)) == codes
+
+
+def test_a_value_input_takes_anything_and_reads_a_live_formula_once(ctx):
+    dialog = replace(
+        ctx,
+        page_ids={"detail"},
+        page_property_keys={"detail": frozenset({"jog"})},
+        page_properties={"detail": {"jog": {"type": "float", "label": "Jog", "write": True, "mode": "value"}}},
+    )
+    action = {"type": "openDialog", "pageId": "detail", "componentProperties": {"jog": 0.5}}
+    assert _codes(_action(dialog, action)) == []
+    action["componentProperties"] = {"jog": {"$var": {"path": "PLC:Speed"}}}
+    assert _codes(_action(dialog, action)) == []
+    formula = {"$formula": {"expression": "{1} * 0.5", "wildcards": {"1": {"$var": {"path": "PLC:Speed"}}}}}
+    action["componentProperties"] = {"jog": formula}
+    assert _codes(_action(dialog, action)) == ["value-reads-once"]
+
+
+def test_navigate_to_page_fills_the_pages_and_its_groups_value_inputs(ctx):
+    pages = replace(
+        ctx,
+        page_ids={"recipes", "line"},
+        navigable_page_ids=frozenset({"recipes", "line"}),
+        page_properties={
+            "recipes": {
+                "filter": {"type": "string", "label": "Filter", "mode": "value"},
+                "live": {"type": "integer", "label": "Live", "mode": "binding"},
+            },
+            "line": {"shift": {"type": "integer", "label": "Shift", "mode": "value"}},
+        },
+        page_variables={"recipes": {"shift": {"type": "integer", "label": "Shift", "mode": "value"}}},
+    )
+    action = {"type": "navigateToPage", "pageId": "recipes", "componentProperties": {"filter": "Espresso", "shift": 2}}
+    assert _codes(_action(pages, action)) == []
+    # Any source is taken; a bare variable is read once without a word.
+    action["componentProperties"] = {"shift": {"$var": {"path": "PLC:Count"}}}
+    assert _codes(_action(pages, action)) == []
+    action["componentProperties"] = {"shift": "night"}
+    assert _codes(_action(pages, action)) == ["literal-type"]
+    # A Binding is no input of a page, and a name it does not declare is unknown.
+    action["componentProperties"] = {"live": 1, "zzz": "x"}
+    assert _codes(_action(pages, action)) == ["prop-unknown", "prop-unknown"]
+    formula = {"$formula": {"expression": "{1} * 2", "wildcards": {"1": {"$var": {"path": "PLC:Count"}}}, "round": True}}
+    action["componentProperties"] = {"shift": formula}
+    report = _action(pages, action)
+    assert _codes(report) == ["value-reads-once"]
+    assert "compute it on the page" in report.warnings[0].message
+
+
+def test_a_pages_node_declares_values_only(ctx):
+    pages = replace(ctx, navigable_page_ids=frozenset({"recipes"}))
+    page = {
+        "id": "recipes",
+        "componentProperties": {
+            "filter": {"type": "string", "label": "Filter", "mode": "value"},
+            "live": {"type": "integer", "label": "Live", "mode": "binding"},
+        },
+    }
+    report = validate_page_node_events(page, pages)
+    assert [(w.code, w.path) for w in report.warnings] == [("page-input-binding", "/componentProperties/live")]
+    # The same declaration in the Dialogs folder is fine.
+    assert validate_page_node_events(page, ctx).warnings == []
 
 
 def test_an_action_value_reads_the_surrounding_inputs(input_ctx):
@@ -734,7 +877,7 @@ def test_a_builtin_export_list_wins_over_a_stale_custom_row(ctx):
         },
     }
     stale = replace(ctx, widget_schemas=manifest)
-    assert [e["key"] for e in stale.widget_exports("Dropdown")] == ["selectedValue", "row", "raw"]
+    assert [e["key"] for e in stale.widget_exports("Dropdown")] == ["selectedValue", "row", "raw", "choice"]
     report = validate_page(_widget_page({"property": "nope"}), stale)
     assert _codes(report) == ["widgetprop-unknown"]
 

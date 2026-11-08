@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { BranchEditor, WildcardCard } from './shared';
 import { LocPlaceholdersContext } from '../locPlaceholdersContext';
-import type { PropertySource } from '../../propertyValueUtils';
+import { PAGE_FIELD_OPTIONS, type PropertySource } from '../../propertyValueUtils';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import ReadOnlyValue from '../../../ui/ReadOnlyValue';
@@ -712,18 +712,6 @@ const ALARM_COUNT_FILTER_OPTIONS = [
   { value: 'error', label: 'Error level only' },
   { value: 'warning', label: 'Warning level only' },
   { value: 'info', label: 'Info level only' },
-];
-
-const PAGE_FIELD_OPTIONS: { value: PageField; label: string }[] = [
-  { value: 'title', label: 'Title' },
-  { value: 'breadcrumbLabel', label: 'Breadcrumb label' },
-  { value: 'description', label: 'Description' },
-  { value: 'icon', label: 'Icon' },
-  { value: 'id', label: 'Page id' },
-  { value: 'parentId', label: 'Parent id' },
-  { value: 'depth', label: 'Depth' },
-  { value: 'pathString', label: 'Path string' },
-  { value: 'pathSegments', label: 'Path segments (JSON)' },
 ];
 
 export function PageEditor({

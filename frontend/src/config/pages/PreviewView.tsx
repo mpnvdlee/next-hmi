@@ -459,6 +459,7 @@ export default function PreviewView() {
         store.setRightSidebar(event.data.rightSidebar ?? []);
         store.setShell(event.data.shell ?? {});
         store.setGlobalEvents(event.data.globalEvents ?? {});
+        store.setValueMaps(event.data.valueMaps ?? []);
         return;
       }
 
@@ -663,6 +664,7 @@ export default function PreviewView() {
                             navigate(`/preview/${pageId}`, { replace: replace ?? false })
                           }
                           emptyMessage="No page found."
+                          readsArrivals
                         />
                       ) : null}
                       {floatingBars.header && headerRegion}

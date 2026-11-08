@@ -37,7 +37,7 @@ export const schema = {
 };
 
 export const description =
-  'Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.';
+  'Groups and lays out child widgets in a row, a column or stacked on top of each other. Hosts other widgets; a Button Container does the same and runs actions when pressed.';
 export const category = 'Layout & structure';
 export const icon = { type: 'builtin', name: 'stack' } as const;
 /** Nodes of this type carry a `children` array; the renderer hands them in

@@ -60,9 +60,6 @@ export default function HmiView() {
   const scope = `runtime:${hmiKeyRef.current}`;
 
   useGlobalEvents(scope);
-  // After useGlobalEvents deliberately: effects run in declaration order, so
-  // the project-wide onPageLoaded fires before the page's own onOpen.
-  usePageEvents(scope);
 
   const { id } = useParams<{ id: string }>();
   // Render the (potentially heavy) page from a deferred id so switching pages
@@ -70,6 +67,10 @@ export default function HmiView() {
   // the outgoing page's teardown run at low priority. `pageSwitching` is true
   // during that window so we can cover the swap with a spinner overlay.
   const deferredId = useDeferredValue(id);
+  // After useGlobalEvents deliberately: effects run in declaration order, so
+  // the project-wide onPageLoaded fires before the page's own onOpen. On the
+  // rendered id, so the page's inputs are in place when its events read them.
+  usePageEvents(scope, deferredId);
   const pageSwitching = id !== deferredId;
   const navigate = useNavigate();
   const pages = useConfigStore((s) => s.pages);
@@ -234,6 +235,7 @@ export default function HmiView() {
         // requestedId keeps the actual page render/teardown at low priority.
         navigate(`/pages/${pageId}`, { replace: replace ?? false });
       }}
+      readsArrivals
     />
   );
 

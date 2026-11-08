@@ -18,9 +18,3 @@ button.cfg-var-list__pick {
 .cfg-var-list__popup {
   min-width: max-content;
 }
-
-/* Move-up reuses the down chevron, turned over — the same trick the Select
-   trigger uses for its open state, so both arrows keep one stroke weight. */
-.cfg-var-list__up {
-  transform: rotate(180deg);
-}

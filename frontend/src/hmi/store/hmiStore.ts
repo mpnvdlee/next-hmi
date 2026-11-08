@@ -108,6 +108,18 @@ export interface NumpadRequest {
   apply: (value: number) => void;
 }
 
+/** The inputs a `navigateToPage` action passed, already read in the opener's
+ *  context. Never in the URL: a refresh or a browser back starts at defaults. */
+export interface PageArrival {
+  /** Counts every navigation, so the same values passed again are read again. */
+  seq: number;
+  /** The page or page group the action named. */
+  pageId: string;
+  values: Record<string, unknown>;
+}
+
+let arrivalSeq = 0;
+
 interface HmiStore {
   openPageOverlays: PageOverlayEntry[];
   pendingAlerts: AlertEntry[];
@@ -115,6 +127,12 @@ interface HmiStore {
   numpadRequest: NumpadRequest | null;
   /** A page a `navigateToPage` action routes to; `ActionNavigation` takes it. */
   pendingNavigation: string | null;
+  /** What that action passed the page, until the page view has read it. */
+  pageArrival: PageArrival | null;
+  /** The routed trail's inputs per page or group id, as its widgets read them,
+   *  for its events (published by the main page view). A node that just left
+   *  holds the values it had, its local copies being gone. */
+  routedInputScopes: Record<string, Record<string, unknown>>;
   pendingToasts: ToastEntry[];
   currentUsersByScope: Record<string, UserIdentity>;
   loginErrorsByScope: Record<string, string | null>;
@@ -125,8 +143,13 @@ interface HmiStore {
   updatePageOverlay: (overlayId: string, nextPageId: string) => void;
   showAlert: (entry: AlertEntry) => void;
   openNumpad: (request: NumpadRequest | null) => void;
-  /** Closes every open overlay, then queues the route change. */
-  navigateToPage: (pageId: string) => void;
+  /** Closes every open overlay but those `keepOpen` picks, then queues the
+   *  route change and the inputs the page reads on arrival. */
+  navigateToPage: (
+    pageId: string,
+    keepOpen?: (entry: PageOverlayEntry) => boolean,
+    values?: Record<string, unknown>,
+  ) => void;
   dismissAlert: (id: string) => void;
   showToast: (entry: ToastEntry) => void;
   dismissToast: (id: string) => void;
@@ -139,6 +162,8 @@ export const useHmiStore = create<HmiStore>((set) => ({
   pendingAlerts: [],
   numpadRequest: null,
   pendingNavigation: null,
+  pageArrival: null,
+  routedInputScopes: {},
   pendingToasts: [],
   currentUsersByScope: {},
   loginErrorsByScope: {},
@@ -200,7 +225,12 @@ export const useHmiStore = create<HmiStore>((set) => ({
     }),
   showAlert: (entry) => set((state) => ({ pendingAlerts: [...state.pendingAlerts, entry] })),
   openNumpad: (request) => set({ numpadRequest: request }),
-  navigateToPage: (pageId) => set({ openPageOverlays: [], pendingNavigation: pageId }),
+  navigateToPage: (pageId, keepOpen = () => false, values = {}) =>
+    set((state) => ({
+      openPageOverlays: state.openPageOverlays.filter(keepOpen),
+      pendingNavigation: pageId,
+      pageArrival: { seq: ++arrivalSeq, pageId, values },
+    })),
   dismissAlert: (id) =>
     set((state) => ({
       pendingAlerts: state.pendingAlerts.filter((a) => a.id !== id),

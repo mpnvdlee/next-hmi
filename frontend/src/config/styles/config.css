@@ -1664,14 +1664,16 @@
 
 /* Switch/case list — a list section (see `.cfg-editor-actions`) whose entries
    are collapsible FieldGroup rows, so the list itself carries no chrome. The
-   NavigationMenu manual item list is the same shape. */
+   NavigationMenu manual item list and the list drawer's options and columns
+   are the same shape. */
 .cfg-switch-cases,
 .cfg-menu-items {
   margin-bottom: var(--cfg-space-2);
 }
 
-.cfg-switch-cases > .cfg-field-group,
-.cfg-menu-items > .cfg-field-group {
+.cfg-switch-cases > .cfg-sortable-row > .cfg-sortable-row__body > .cfg-field-group,
+.cfg-menu-items > .cfg-sortable-row > .cfg-sortable-row__body > .cfg-field-group,
+.cfg-list-drawer > .cfg-sortable-row > .cfg-sortable-row__body > .cfg-field-group {
   margin-bottom: 0;
 }
 

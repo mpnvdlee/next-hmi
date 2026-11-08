@@ -22,6 +22,7 @@ from .structure import (
     collect_dialog_ancestors,
     collect_page_properties,
     collect_page_property_keys,
+    collect_page_variables,
     component_slot_property_gaps,
     component_undeclared_slots,
     ctx_for_page_group,
@@ -37,6 +38,7 @@ from .structure import (
     validate_shell_regions,
     validate_var_ref,
     validate_widget_node,
+    value_map_types,
 )
 from .variable_fields import (
     CORE_WRITABLE_FIELDS,
@@ -59,6 +61,7 @@ __all__ = [
     "collect_dialog_ancestors",
     "collect_page_properties",
     "collect_page_property_keys",
+    "collect_page_variables",
     "component_slot_property_gaps",
     "component_undeclared_slots",
     "ctx_for_page_group",
@@ -86,4 +89,5 @@ __all__ = [
     "validate_var_ref",
     "validate_variable_write_fields",
     "validate_widget_node",
+    "value_map_types",
 ]

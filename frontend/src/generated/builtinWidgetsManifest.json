@@ -82,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "5e46acc42abfd10a",
+    "buildTs": "d30a6a8963c98ed1",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -120,6 +120,12 @@
         "type": "string"
       },
       "textTransform": {
+        "type": "string"
+      },
+      "typography": {
+        "type": "string"
+      },
+      "wrap": {
         "type": "string"
       },
       "iconSize": {
@@ -169,6 +175,58 @@
     "schemaError": null
   },
   {
+    "key": "Content/DataGrid",
+    "name": "DataGrid",
+    "group": "Content",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "56d043c9ab3ccca5",
+    "displayName": "Data Grid",
+    "hostsChildren": null,
+    "flowsChildren": null,
+    "repeatsChildren": null,
+    "category": "Content & controls",
+    "schema": {
+      "items": {
+        "type": "item-list"
+      },
+      "columns": {
+        "type": "item-list"
+      },
+      "sortMember": {
+        "type": "string"
+      },
+      "sortDirection": {
+        "type": "String"
+      },
+      "filterMember": {
+        "type": "string"
+      },
+      "filterValue": {
+        "type": "string"
+      },
+      "hideEmpty": {
+        "type": "string"
+      },
+      "valueMember": {
+        "type": "string"
+      },
+      "selectedValue": {
+        "type": [
+          "string",
+          "integer"
+        ]
+      },
+      "onSelect": {
+        "type": "actions"
+      }
+    },
+    "schemaError": null
+  },
+  {
     "key": "Content/Icon",
     "name": "Icon",
     "group": "Content",
@@ -177,7 +235,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "5e6a7df8dc0db2a2",
+    "buildTs": "07efc508a04a4bd6",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -192,6 +250,9 @@
       },
       "color": {
         "type": "color"
+      },
+      "rotation": {
+        "type": "integer"
       },
       "chrome": {
         "type": "boolean"
@@ -208,7 +269,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "99af36140d4c145d",
+    "buildTs": "1197f14c363d1c52",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -223,6 +284,9 @@
       },
       "fit": {
         "type": "string"
+      },
+      "rotation": {
+        "type": "integer"
       },
       "indicators": {
         "type": "image-indicators"
@@ -375,7 +439,7 @@
     "hasFonts": false,
     "usesRecharts": true,
     "buildOk": true,
-    "buildTs": "21b287560789008f",
+    "buildTs": "a1ebcb3af54e536a",
     "displayName": "Trend Chart",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -418,7 +482,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "727fc91e198eaa78",
+    "buildTs": "e1e10d331fd9d3a8",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -535,7 +599,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "afa75e2c661031e6",
+    "buildTs": "9d92125ed88bc23f",
     "displayName": "Web Frame",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -684,7 +748,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "960fda05a02cada5",
+    "buildTs": "2223650b36013a92",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -752,7 +816,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "f02a298c1cb874e5",
+    "buildTs": "be7628ea8f412a4c",
     "displayName": "Progress Bar",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -807,7 +871,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "fb95fb32628b5af0",
+    "buildTs": "6162bbb83fbd9075",
     "displayName": "Ring Gauge",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -893,7 +957,7 @@
     "hasFonts": false,
     "usesRecharts": true,
     "buildOk": true,
-    "buildTs": "4fa187eac72ae511",
+    "buildTs": "a8d3732e773af09c",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -933,7 +997,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "dabc1a4ea1db99a4",
+    "buildTs": "f4d77aa70a36dae8",
     "displayName": "Value Display",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -968,7 +1032,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "0506222783f0abc4",
+    "buildTs": "4ad45eeb67de58b1",
     "displayName": "Button Row",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -994,7 +1058,11 @@
         "write": true
       },
       "selectedValue": {
-        "type": "string"
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
       },
       "disabled": {
         "type": "boolean"
@@ -1014,7 +1082,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "ba035769cbc00049",
+    "buildTs": "a0abe7d472247559",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1031,8 +1099,15 @@
           "integer[]"
         ]
       },
+      "maxIndex": {
+        "type": "integer"
+      },
       "selectedValue": {
-        "type": "string"
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
       },
       "disabled": {
         "type": "boolean"
@@ -1052,7 +1127,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "460d03913f430f8a",
+    "buildTs": "ed63067037486ee0",
     "displayName": "Number Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1111,7 +1186,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "66595ccd0488d2fe",
+    "buildTs": "2e5aacce46359e41",
     "displayName": "Numeric Stepper",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1163,7 +1238,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "df5b803a7e1b208a",
+    "buildTs": "340130831d6b542b",
     "displayName": "String Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1174,6 +1249,16 @@
         "type": "string"
       },
       "placeholder": {
+        "type": "string"
+      },
+      "variable": {
+        "type": "string",
+        "write": true
+      },
+      "writeOn": {
+        "type": "string"
+      },
+      "value": {
         "type": "string"
       },
       "isPassword": {
@@ -1268,7 +1353,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e8636cd2e5923563",
+    "buildTs": "8a94858d09990346",
     "displayName": "Button Container",
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1330,7 +1415,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "6b9d05afa9e78366",
+    "buildTs": "c2a1a538f73604ad",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1386,7 +1471,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "28c9cd4d847073cb",
+    "buildTs": "d296bb3defba9fca",
     "displayName": "Image Container",
     "hostsChildren": true,
     "flowsChildren": null,
@@ -1597,7 +1682,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "4bf952a244745d03",
+    "buildTs": "272cb53b1283e3ca",
     "displayName": "Navigation Menu",
     "hostsChildren": null,
     "flowsChildren": null,

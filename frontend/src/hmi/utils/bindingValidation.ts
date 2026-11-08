@@ -24,7 +24,7 @@ import {
   type VarType,
 } from '@shared/types/varType';
 import { acceptedValueTypes } from '@shared/utils/valueTypes';
-import { useVariableStore } from '../store/variableStore';
+import { isLocalInputKey, useVariableStore } from '../store/variableStore';
 import type { VarMeta } from '../store/variableStore';
 import { structShapeElementPath } from './repeatItemResolution';
 import { resolveComponentPropValue } from './componentPropResolution';
@@ -154,7 +154,8 @@ function buildBindingSpecs(
     if (covered.has(id)) continue;
     specs.push({ id, accept: [] });
   }
-  return specs;
+  // A Value input's local slot has no metadata or connection to judge.
+  return specs.filter((spec) => !isLocalInputKey(spec.id));
 }
 
 // The evaluator's own recursion cap (`MAX_SOURCE_RECURSION_DEPTH`).

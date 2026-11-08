@@ -6,8 +6,15 @@ export const schema = {
     label: 'Options',
     group: 'Content',
   },
+  maxIndex: {
+    type: 'integer' as const,
+    label: 'Max index',
+    description:
+      'Show the options up to and including this position, counted from 0. Empty shows all.',
+    group: 'Data',
+  },
   selectedValue: {
-    type: 'string' as const,
+    type: ['string', 'integer', 'float'] as const,
     label: 'Selected value',
     description: 'Initial selection; also re-selects when the bound value changes.',
     group: 'Data',
@@ -17,7 +24,8 @@ export const schema = {
 };
 
 export const exportedProperties: ExportedProperty[] = [
-  { key: 'selectedValue', label: 'Selected Value', type: 'string' },
+  // The picked option's own value: a number for a numbered list.
+  { key: 'selectedValue', label: 'Selected Value', type: ['string', 'integer', 'float'] },
 ];
 
 export const description =
@@ -28,6 +36,8 @@ export const icon = { type: 'builtin', name: 'list' } as const;
 interface ItemEntry {
   label: string;
   value: string;
+  /** The option's value as listed, before it is matched as text. */
+  raw: unknown;
 }
 
 interface PopupRect {
@@ -47,20 +57,6 @@ interface MenuKeyEvent {
   preventDefault(): void;
 }
 
-function toEntries(list: unknown[]): ItemEntry[] {
-  return list.map((el) => {
-    if (el !== null && typeof el === 'object') {
-      const entry = el as Record<string, unknown>;
-      return {
-        label: String(entry.label ?? entry.value ?? ''),
-        value: String(entry.value ?? entry.label ?? ''),
-      };
-    }
-    const text = el === null || el === undefined ? '' : String(el);
-    return { label: text, value: text };
-  });
-}
-
 function readTriggerRect(trigger: HTMLButtonElement | null): PopupRect | null {
   if (!trigger) return null;
   const rect = trigger.getBoundingClientRect();
@@ -75,7 +71,9 @@ function readTriggerRect(trigger: HTMLButtonElement | null): PopupRect | null {
 export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
-  const propSelectedValue = usePropString(properties, 'selectedValue', '');
+  // As stored, not usePropString's decimal comma: it is matched against option values.
+  const rawSelected = usePropVar(properties, 'selectedValue');
+  const propSelectedValue = rawSelected == null ? '' : String(rawSelected);
   const [selected, setSelected] = useState<string>(propSelectedValue);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -88,14 +86,19 @@ export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
   const disabled = getPropBoolean(properties, 'disabled', false, evalCtx);
 
   // Every list source (a bound array, users, languages, an export, a static
-  // list) resolves through the shared hook, the way the Repeater reads its items.
-  const { items } = useItemListProp(properties, 'options');
+  // list) resolves through the shared hook, labels evaluated ($loc included).
+  const optionList = useOptionListProp(properties, 'options');
+  const maxIndex = usePropNumber(properties, 'maxIndex', null);
 
   const options = useMemo(
-    () => toEntries(items).filter((option) => option.label.trim().length > 0),
-    [items],
+    () =>
+      optionList
+        .slice(0, maxIndex === null ? undefined : Math.max(0, maxIndex + 1))
+        .map((option) => ({ label: option.label, value: String(option.value), raw: option.value }))
+        .filter((option) => option.label.trim().length > 0),
+    [optionList, maxIndex],
   );
-  const menuOptions = useMemo(() => [{ label: '—', value: '' }, ...options], [options]);
+  const menuOptions = useMemo(() => [{ label: '—', value: '', raw: '' }, ...options], [options]);
   const selectedIndex = menuOptions.findIndex((option) => option.value === selected);
   const selectedOption = selectedIndex >= 0 ? menuOptions[selectedIndex] : menuOptions[0];
   const listboxId = `hmi-dropdown-${id}-listbox`;
@@ -164,7 +167,7 @@ export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
     }
   }, [open, activeIndex, popupRect, menuOptions]);
 
-  usePublishWidgetProp(id, 'selectedValue', selected);
+  const publishSelected = usePublishWidgetProp(id, 'selectedValue', selectedOption.raw);
 
   function openMenu(direction: 1 | -1 = 1) {
     if (disabled) return;
@@ -181,6 +184,7 @@ export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
     const option = menuOptions[index];
     if (option && option.value !== selected) {
       setSelected(option.value);
+      publishSelected(option.raw);
       const actions = (properties?.onChange as ActionsConfig | undefined)?.onChange;
       executeWidgetActions(actions, { scope, evalCtx });
     }

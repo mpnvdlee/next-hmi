@@ -370,10 +370,10 @@ export default function TranslationInput({
         )}
       </div>
       {mode === 'translation' && translationOnly && isTranslation && (
-        <FieldActions>
-          {value.$loc in translations && editButton}
-          {clearButton}
-        </FieldActions>
+        <>
+          <FieldActions>{value.$loc in translations && editButton}</FieldActions>
+          <FieldActions clear>{clearButton}</FieldActions>
+        </>
       )}
       {editing &&
         isTranslation &&

@@ -99,9 +99,16 @@ interface WidgetPropPickerOptions {
   label?: string;
   /** Clears the binding (mirrors the field's own clear action). */
   onClear?: () => void;
-  /** Row key the field is bound to today (see `widgetPropRowKey`) — preselected
-   *  when the picker opens. */
+  /** Row key the field is bound to today (see `widgetPropRowKey` /
+   *  `inputRowKey`) — preselected when the picker opens. */
   currentKey?: string;
+  /** The surrounding scope's Inputs, offered as a group of their own beside
+   *  the Widget Properties; `first` puts them on top. */
+  inputs?: {
+    properties: Record<string, ComponentPropertySchema>;
+    onPick: (key: string) => void;
+    first: boolean;
+  };
 }
 
 interface WidgetPropPickerTarget extends WidgetPropPickerOptions {
@@ -256,6 +263,7 @@ export const useEditorDomainStore = create<EditorDomainStore>((set, get) => ({
         label: options?.label,
         onClear: options?.onClear,
         currentKey: options?.currentKey,
+        inputs: options?.inputs,
       },
     }),
   closeWidgetPropPicker: () => set({ widgetPropPickerOpen: false, widgetPropPickerTarget: null }),

@@ -12,6 +12,19 @@ const properties: Record<string, ComponentPropertySchema> = {
 };
 
 describe('ComponentPropertiesEditor', () => {
+  it('sums each property up as its name, type and default', () => {
+    render(
+      <ComponentPropertiesEditor
+        properties={{ recipe: { type: 'string', label: 'recipe', defaultValue: 'espresso' } }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(document.querySelector('.cfg-component-prop-summary')?.textContent).toBe(
+      'recipe · String · "espresso"',
+    );
+  });
+
   it('states the key and type but does not offer them for editing', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
@@ -38,18 +51,83 @@ describe('ComponentPropertiesEditor', () => {
     });
   });
 
-  it('marks a property as needing write access', async () => {
+  it('marks a Binding as needing write access', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
-    render(<ComponentPropertiesEditor properties={properties} onChange={onChange} />);
+    const binding = { motorSpeed: { ...properties.motorSpeed, mode: 'binding' as const } };
+    render(<ComponentPropertiesEditor properties={binding} onChange={onChange} />);
 
     await user.click(screen.getByText('Motor speed'));
     const row = screen.getByText('Write access').closest('.cfg-field-group') as HTMLElement;
     await user.click(within(row).getByRole('button', { name: 'Yes' }));
 
     expect(onChange).toHaveBeenCalledWith({
-      motorSpeed: { type: 'float', label: 'Motor speed', write: true },
+      motorSpeed: { type: 'float', label: 'Motor speed', mode: 'binding', write: true },
     });
+  });
+
+  it('makes an input a Binding, which takes no default and offers write access', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const withDefault = { motorSpeed: { ...properties.motorSpeed, defaultValue: 10 } };
+    const { rerender } = render(
+      <ComponentPropertiesEditor properties={withDefault} onChange={onChange} />,
+    );
+
+    await user.click(screen.getByText('Motor speed'));
+    expect(screen.queryByText('Write access')).not.toBeInTheDocument();
+    const row = screen.getByText('Kind').closest('.cfg-field-group') as HTMLElement;
+    await user.click(within(row).getByRole('combobox'));
+    await user.click(screen.getByRole('option', { name: 'Binding' }));
+
+    const next = onChange.mock.calls[onChange.mock.calls.length - 1]?.[0];
+    expect(next).toEqual({
+      motorSpeed: { type: 'float', label: 'Motor speed', mode: 'binding', defaultValue: undefined },
+    });
+    rerender(<ComponentPropertiesEditor properties={next} onChange={onChange} />);
+    expect(screen.getByText('Write access')).toBeInTheDocument();
+    expect(screen.queryByText('Default value')).not.toBeInTheDocument();
+  });
+
+  it('gives an Options input no kind and a list editor for its default', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const options = { options: { type: 'option-list', label: 'Choices' } };
+    render(<ComponentPropertiesEditor properties={options} onChange={onChange} />);
+
+    await user.click(screen.getByText('Choices'));
+    expect(screen.getByText('Options')).toBeInTheDocument();
+    expect(screen.queryByText('Kind')).not.toBeInTheDocument();
+    await user.click(screen.getByTitle('Add option'));
+
+    expect(onChange).toHaveBeenCalledWith({
+      options: { type: 'option-list', label: 'Choices', defaultValue: [{ label: '', value: '' }] },
+    });
+  });
+
+  it('offers no Value or Binding choice on a page of the Pages section', async () => {
+    const user = userEvent.setup();
+    render(<ComponentPropertiesEditor properties={properties} owner="page" onChange={vi.fn()} />);
+
+    await user.click(screen.getByText('Motor speed'));
+
+    expect(screen.queryByText('Kind')).not.toBeInTheDocument();
+    expect(screen.getByText(/Set by Navigate To Page\./)).toBeInTheDocument();
+    expect(screen.getByText(/in the Navigate To Page action\./)).toBeInTheDocument();
+    expect(screen.queryByText(/an instance leaves/)).not.toBeInTheDocument();
+  });
+
+  it('says how a dialog input is set, and words its help for the Open Dialog action', async () => {
+    const user = userEvent.setup();
+    render(<ComponentPropertiesEditor properties={properties} owner="dialog" onChange={vi.fn()} />);
+
+    await user.click(screen.getByText('Motor speed'));
+
+    expect(screen.getByText('Kind')).toBeInTheDocument();
+    expect(screen.getByText('Set by Open Dialog.')).toBeInTheDocument();
+    expect(screen.getByText(/in the Open Dialog action\./)).toBeInTheDocument();
+    expect(screen.queryByText(/component is placed/)).not.toBeInTheDocument();
   });
 
   it('offers no write-access toggle for a struct property, which declares it per field', async () => {
@@ -71,7 +149,7 @@ describe('ComponentPropertiesEditor', () => {
     const user = userEvent.setup();
     render(<ComponentPropertiesEditor properties={{}} onChange={onChange} />);
 
-    await user.click(screen.getByTitle('Add component property'));
+    await user.click(screen.getByTitle('Add input'));
     await user.type(screen.getByPlaceholderText('e.g. motorVar'), 'title');
     const row = screen.getByText('Default value').closest('.cfg-field-group') as HTMLElement;
     await user.type(within(row).getByRole('textbox'), 'Boiler');
@@ -87,7 +165,7 @@ describe('ComponentPropertiesEditor', () => {
     const user = userEvent.setup();
     render(<ComponentPropertiesEditor properties={{}} onChange={onChange} />);
 
-    await user.click(screen.getByTitle('Add component property'));
+    await user.click(screen.getByTitle('Add input'));
     await user.type(screen.getByPlaceholderText('e.g. motorVar'), 'title');
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
@@ -129,7 +207,7 @@ describe('ComponentPropertiesEditor', () => {
     const user = userEvent.setup();
     render(<ComponentPropertiesEditor properties={{}} onChange={vi.fn()} />);
 
-    await user.click(screen.getByTitle('Add component property'));
+    await user.click(screen.getByTitle('Add input'));
     await user.click(screen.getByRole('combobox'));
 
     expect(screen.getByRole('option', { name: 'String' })).toBeInTheDocument();
@@ -246,7 +324,8 @@ describe('ComponentPropertiesEditor — select option values', () => {
 
     await user.click(screen.getByText('Mode'));
     const row = screen.getByText('Options').closest('.cfg-field-group') as HTMLElement;
+    await user.click(within(row).getByTitle('Edit option'));
 
-    expect(within(row).getByRole('spinbutton')).toHaveValue(10);
+    expect(screen.getByRole('spinbutton')).toHaveValue(10);
   });
 });

@@ -17,7 +17,10 @@
     "height": "Integer"
   },
   "closePageOverlay": { "pageId": "page" },
-  "navigateToPage": { "pageId": "page" },
+  "navigateToPage": { "pageId": "page", "componentProperties": "inputs" },
+  "pageGroupNext": { "groupId": "String" },
+  "pageGroupPrevious": { "groupId": "String" },
+  "pageGroupGoTo": { "groupId": "String", "index": "Integer" },
   "writeDataVariable": {
     "target": "target",
     "value": "writeValue",
@@ -67,6 +70,7 @@
     "onSettled": "actions"
   },
   "acknowledgeAllAlarms": {},
+  "reloadHmi": {},
   "runComponentActions": { "property": "actionsProperty" },
   "delay": { "duration": "Integer" },
   "setLanguage": { "language": "String" },

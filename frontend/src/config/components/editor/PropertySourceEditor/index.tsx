@@ -31,6 +31,7 @@ import {
   CompareEditor,
   ConditionListEditor,
   IfEditor,
+  MapEditor,
   NotEditor,
   SwitchEditor,
 } from './editors/conditional';
@@ -133,6 +134,14 @@ const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
       onOpenBindingPicker={onOpenBindingPicker}
     />
   ),
+  $map: ({ value, onChange, fieldType, onOpenBindingPicker }) => (
+    <MapEditor
+      value={value}
+      onChange={onChange}
+      fieldType={fieldType}
+      onOpenBindingPicker={onOpenBindingPicker}
+    />
+  ),
   $user: ({ value, onChange, schema, fieldType }) => (
     <UserFieldEditor
       value={value}
@@ -165,7 +174,13 @@ const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
   ),
   $recipeList: ({ value, onChange }) => <RecipeListEditor value={value} onChange={onChange} />,
   $componentProp: ({ value, onChange, schema, slot }) => (
-    <ComponentPropEditor value={value} onChange={onChange} schema={schema} slot={slot} />
+    <ComponentPropEditor
+      value={value}
+      onChange={onChange}
+      schema={schema}
+      slot={slot}
+      withWidgetProps
+    />
   ),
   $page: ({ value, onChange, fieldType }) => (
     <PageEditor value={value} onChange={onChange} fieldType={fieldType} />

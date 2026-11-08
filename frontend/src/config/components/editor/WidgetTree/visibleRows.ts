@@ -4,6 +4,7 @@ import {
   EDITOR_NODE_IDS,
   makePageGroupAreaId,
   makePageSectionId,
+  makeValueMapNodeId,
   makeWidgetSlotId,
 } from '@shared/constants/editorSentinels';
 import {
@@ -33,6 +34,8 @@ import { isPageGroup, pageHasExplicitSections, pageSectionGroups } from '@shared
 export type VisibleRowKind =
   | 'settings'
   | 'events'
+  | 'value-maps-section'
+  | 'value-map'
   | 'shell-section'
   | 'pages-section'
   | 'dialogs-section'
@@ -101,6 +104,8 @@ export interface VisibleRowsInput {
   shell: Record<ShellRegionId, WidgetConfig[]>;
   /** Post-search Dialogs-folder nodes — pass `filteredDialogs`. */
   dialogs: PageNode[];
+  /** The ids of the project's value maps. */
+  valueMapIds: readonly string[];
   /** Pass `effectiveCollapsed`, not the raw collapse set. */
   collapsed: ReadonlySet<string>;
   /** Pass `effectiveSectionsOpen`. */
@@ -108,6 +113,7 @@ export interface VisibleRowsInput {
   visible: {
     settings: boolean;
     events: boolean;
+    valueMaps: boolean;
     pages: boolean;
     dialogs: boolean;
     /** Shell regions the search has filtered away entirely. */
@@ -116,7 +122,7 @@ export interface VisibleRowsInput {
 }
 
 export function flattenVisibleRows(input: VisibleRowsInput): VisibleRow[] {
-  const { pages, shell, dialogs, collapsed, sectionsOpen, visible } = input;
+  const { pages, shell, dialogs, valueMapIds, collapsed, sectionsOpen, visible } = input;
   const rows: VisibleRow[] = [];
 
   const push = (id: string, kind: VisibleRowKind, depth: number): void => {
@@ -170,6 +176,12 @@ export function flattenVisibleRows(input: VisibleRowsInput): VisibleRow[] {
 
   if (visible.settings) push(EDITOR_NODE_IDS.SETTINGS, 'settings', 0);
   if (visible.events) push(EDITOR_NODE_IDS.EVENTS, 'events', 0);
+  if (visible.valueMaps) {
+    push(EDITOR_NODE_IDS.VALUE_MAPS, 'value-maps-section', 0);
+    if (sectionsOpen.has(EDITOR_NODE_IDS.VALUE_MAPS)) {
+      for (const id of valueMapIds) push(makeValueMapNodeId(id), 'value-map', 1);
+    }
+  }
 
   for (const region of SHELL_REGION_IDS) {
     if (visible.hiddenShellRegions.has(region)) continue;

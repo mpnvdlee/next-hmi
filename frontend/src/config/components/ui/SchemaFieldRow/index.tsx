@@ -21,6 +21,7 @@ import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useContext } from 'react';
 import PropertySourceEditor, { type OpenBindingPicker } from '../../editor/PropertySourceEditor';
 import { ParentPathContext } from '../../editor/PropertySourceEditor/parentPathContext';
+import { RepeatItemsScope } from '../../editor/PropertySourceEditor/RepeatEditorScopeProvider';
 import PropertySourceSelector, { type PropertySource } from '../../editor/PropertySourceSelector';
 import PropertySourceBadge from '../../editor/PropertySourceSelector/PropertySourceBadge';
 import { getPropertySource } from '../../editor/propertyValueUtils';
@@ -215,7 +216,7 @@ export default function SchemaFieldRow({
   // formula, a literal or any other computed source leaves the control nothing
   // to write — so it binds like a struct: `$var`, or a scope source standing in
   // for one.
-  const writesBack = schema.write === true && isSourceCapable;
+  const writesBack = (schema.write === true || schema.bindsOnly === true) && isSourceCapable;
   const bindsOnly = isStruct || writesBack;
   // The row's own union — exported as `bindsVariable` so the panels that decide
   // whether to *offer* the picker ask exactly the question this row answers.
@@ -271,17 +272,24 @@ export default function SchemaFieldRow({
   // sandbox's trigger-block: a plain header line directly above the action list,
   // no wrapping box for the group itself.
   if (fieldType === 'actions') {
+    const actions = (
+      <ActionsInput
+        value={value as ActionsConfig | undefined}
+        onChange={onChange}
+        eventKey={schema.event ?? 'onPress'}
+        eventLabel={titleText}
+        headerTitle={titleText}
+        description={schema.description}
+        pathPrefix={path}
+      />
+    );
     return (
       <div className="cfg-field-group">
-        <ActionsInput
-          value={value as ActionsConfig | undefined}
-          onChange={onChange}
-          eventKey={schema.event ?? 'onPress'}
-          eventLabel={titleText}
-          headerTitle={titleText}
-          description={schema.description}
-          pathPrefix={path}
-        />
+        {schema.repeatsOver ? (
+          <RepeatItemsScope items={allProperties?.[schema.repeatsOver]}>{actions}</RepeatItemsScope>
+        ) : (
+          actions
+        )}
       </div>
     );
   }
@@ -372,7 +380,13 @@ export default function SchemaFieldRow({
         staticEditor={
           currentSource === 'static' ? (
             fieldType === 'item-list' ? (
-              <ItemListInput value={effectiveValue} onChange={onChange} />
+              <ItemListInput
+                value={effectiveValue}
+                onChange={onChange}
+                columns={schema.format === 'columns'}
+                // A columns list reads the elements of its own widget's `items`.
+                rows={allProperties.items}
+              />
             ) : fieldType === 'option-list' ? (
               <ItemsInput
                 value={effectiveValue as ItemEntry[] | undefined}

@@ -57,10 +57,14 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
   const arrayCapable = isScalarType(type);
   const finalType = arrayCapable && isArray ? `${type}[]` : type;
   const declared = type === 'page' ? PAGE_INPUT : { type: finalType };
-  // A select has no options until its row is expanded, and an array default
-  // would need a list editor — both are set on the row once the property exists.
+  // A select has no options until its row is expanded, and an array or option
+  // list default needs a list editor — both are set on the row once the
+  // property exists.
   const takesDefault =
-    !VALUELESS_PROPERTY_TYPES.has(type) && type !== 'select' && finalType === type;
+    !VALUELESS_PROPERTY_TYPES.has(type) &&
+    type !== 'select' &&
+    type !== 'option-list' &&
+    finalType === type;
 
   function handleTypeChange(next: string) {
     setType(next);
@@ -89,7 +93,7 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
       dialogClassName="cfg-drawer cfg-drawer--sm property-dialog"
     >
       <div className="cfg-modal-header">
-        <PickerTitle context={contextName} action="Add property" />
+        <PickerTitle context={contextName} action="Add input" />
         <ModalCloseButton onClose={onCancel} />
       </div>
 

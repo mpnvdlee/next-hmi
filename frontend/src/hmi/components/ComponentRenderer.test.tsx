@@ -318,3 +318,121 @@ describe('ComponentRenderer actions', () => {
     expect(useHmiStore.getState().numpadRequest?.title).toBe('Set Max pressure');
   });
 });
+
+describe('ComponentRenderer nested inputs', () => {
+  it('keeps a $componentProp nested in another source live, in properties and layout', async () => {
+    const { act } = await import('@testing-library/react');
+    const { useVariableStore } = await import('@hmi/store/variableStore');
+    useVariableStore.setState({ values: { 'PLC:M1/Run': false } });
+    const running = { $componentProp: 'device/Run' };
+    defineComponent([
+      {
+        id: 'root',
+        type: 'Container',
+        name: 'Root',
+        layout: { width: { $if: { condition: running, true: '200px', false: '100px' } } },
+        properties: { showWhenEmpty: true },
+        children: [
+          {
+            id: 'state',
+            type: 'Label',
+            name: 'State',
+            properties: { text: { $if: { condition: running, true: 'on', false: 'off' } } },
+          },
+        ],
+      },
+    ]);
+    const { container } = render(
+      <MemoryRouter>
+        <ComponentRenderer _widgetId="cmp" properties={{ device: { $var: { path: 'PLC:M1' } } }} />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(container.textContent).toBe('off'));
+    const root = () => container.querySelector('.hmi-container') as HTMLElement;
+    expect(root().style.width).toBe('100px');
+
+    await act(async () => {
+      useVariableStore.setState((s) => ({ values: { ...s.values, 'PLC:M1/Run': true } }));
+    });
+
+    expect(container.textContent).toBe('on');
+    expect(root().style.width).toBe('200px');
+  });
+});
+
+describe('ComponentRenderer Value and Binding inputs', () => {
+  async function renderTile(properties: Record<string, unknown>) {
+    const { act } = await import('@testing-library/react');
+    const { useVariableStore } = await import('@hmi/store/variableStore');
+    const { sendWsMessage } = await import('@hmi/hooks/useWebSocket');
+    useComponentStore.setState({
+      components: [
+        {
+          id: 'cmp',
+          name: 'Tile',
+          componentProperties: {
+            name: { type: 'string', label: 'Name', mode: 'value' },
+            state: { type: 'string', label: 'State', mode: 'binding' },
+          },
+          children: [
+            { id: 'n', type: 'Label', name: 'N', properties: { text: { $componentProp: 'name' } } },
+            {
+              id: 's',
+              type: 'Label',
+              name: 'S',
+              properties: { text: { $componentProp: 'state' } },
+            },
+          ],
+        } as unknown as ComponentDefinition,
+      ],
+      draftComponents: {},
+    });
+    const view = render(
+      <MemoryRouter>
+        <ComponentRenderer _widgetId="cmp" properties={properties} />
+      </MemoryRouter>,
+    );
+    const set = (values: Record<string, unknown>) =>
+      act(async () => {
+        useVariableStore.setState((s) => ({ values: { ...s.values, ...values } }));
+      });
+    const localKey = () =>
+      Object.keys(useVariableStore.getState().values).find((k) => k.startsWith('$input:'));
+    return { ...view, set, localKey, sendWsMessage, act, useVariableStore };
+  }
+
+  it('reads a Value once, keeps writes local, and follows a Binding live', async () => {
+    const { useVariableStore } = await import('@hmi/store/variableStore');
+    useVariableStore.setState({ values: { 'PLC:Name': 'Pump', 'PLC:State': 'off' } });
+    const t = await renderTile({
+      name: { $var: { path: 'PLC:Name' } },
+      state: { $var: { path: 'PLC:State' } },
+    });
+    await waitFor(() => expect(t.container.textContent).toBe('Pumpoff'));
+
+    await t.set({ 'PLC:Name': 'Fan', 'PLC:State': 'on' });
+    expect(t.container.textContent).toBe('Pumpon');
+
+    const [, path] = t.localKey()!.split(':');
+    await t.act(async () => {
+      t.sendWsMessage({ type: 'write_field', datasource: '$input', path, value: 'Mine' });
+    });
+    expect(t.container.textContent).toBe('Mineon');
+    expect(useVariableStore.getState().values['PLC:Name']).toBe('Fan');
+
+    t.unmount();
+    expect(t.localKey()).toBeUndefined();
+  });
+
+  it('waits for a variable that has not arrived before reading a Value', async () => {
+    const { useVariableStore } = await import('@hmi/store/variableStore');
+    useVariableStore.setState({ values: {} });
+    const t = await renderTile({ name: { $var: { path: 'PLC:Name' } }, state: 'x' });
+    await waitFor(() => expect(t.container.textContent).toBe('x'));
+
+    await t.set({ 'PLC:Name': 'Pump' });
+    expect(t.container.textContent).toBe('Pumpx');
+    await t.set({ 'PLC:Name': 'Fan' });
+    expect(t.container.textContent).toBe('Pumpx');
+  });
+});

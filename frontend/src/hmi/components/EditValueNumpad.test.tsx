@@ -57,8 +57,8 @@ describe('editValue', () => {
     act(() => executeWidgetActions([edit()], { scope: 'runtime' }));
 
     expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('120');
-    // An Integer variable takes no decimal point.
-    expect(screen.getByRole('button', { name: '.' })).toHaveProperty('disabled', true);
+    // An Integer variable takes no decimal comma.
+    expect(screen.getByRole('button', { name: ',' })).toHaveProperty('disabled', true);
     press('1', '5', '0', 'Enter');
 
     expect(sendWsMessage).toHaveBeenCalledWith({

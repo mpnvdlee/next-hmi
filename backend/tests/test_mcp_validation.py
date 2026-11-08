@@ -727,3 +727,31 @@ def test_repeat_scope_follows_the_declaration_not_the_type_name(ctx):
     )
     assert report.ok
     assert "repeatitem-no-scope" not in _warning_codes(report)
+
+
+def test_actions_declared_repeats_over_scope_repeat_item_to_the_widgets_own_list(ctx):
+    """A Data Grid's On Select runs with the chosen row: `$repeatItem` there is
+    in scope and typed against the grid's own items, and only there."""
+    ctx.widget_schemas["builtin"]["Grid"] = {
+        "name": "Grid",
+        "schema": {
+            "items": {"type": "item-list"},
+            "title": {"type": "string"},
+            "onSelect": {"type": "actions", "event": "onSelect", "repeatsOver": "items"},
+        },
+    }
+    write = {
+        "type": "writeDataVariable",
+        "target": {"$var": {"path": "PLC:Motor/Speed"}},
+        "value": {"$repeatItem": {"field": "value", "member": "Name"}},
+    }
+    node = {
+        "type": "Grid",
+        "properties": {
+            "items": {"$var": {"path": "PLC:Motors"}},
+            "title": {"$repeatItem": {}},
+            "onSelect": {"onSelect": [write]},
+        },
+    }
+    findings = validate_widget_node(node, ctx).warnings
+    assert [w.path for w in findings if w.code == "repeatitem-no-scope"] == ["/properties/title"]

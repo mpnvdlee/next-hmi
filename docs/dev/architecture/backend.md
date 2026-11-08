@@ -448,7 +448,6 @@ Reusable components are individual JSON files under `active_components_dir()` (t
 
 Two component rules are advisory rather than blocking, both reported by `POST /api/config/validate`:
 
-- `componentprop-nested` — a `$componentProp` that is not a property's whole value (nested in another source, or on a non-`properties` key such as `layout`). Only the bare `{"$componentProp": "<key>"}` shape is substituted before render, so anything else resolves once and stops updating. Detected by `component_nested_prop_paths()` in `core/component_validation.py`, which walks the definition's tree node-aware (position matters) and its `componentProperties[*].defaultValue` as bare values.
 - `slot-unknown` / `slot-empty` — a `$component:` instance's child naming a slot the definition does not declare, or an empty slot name. Warnings, not errors: such a child still renders in the definition's first slot, so trimming a definition must not take the pages using it down with it. A child on a component that declares no slots renders nowhere and gets `slot-unknown` on the `children` array itself. `build_context()` collects each component's slot names by walking its tree for `ComponentSlot` nodes (`_collect_component_interfaces()`, fingerprint-cached alongside the declared property names).
 - `slot-property-unmatched` — a definition declaring a `widgets` component property that no `ComponentSlot` names. The property is the declared name of a slot, so without the widget it promises a slot the definition cannot render and the editor shows no row for it. A warning, not an error: declaring the property before placing the widget is the natural authoring order. `component_slot_property_gaps()` in `core/validation/structure.py`, reported from `_validate_component_tree()`.
 - `slot-undeclared` — the reverse half: a `ComponentSlot` whose name matches no `widgets` property. The slot still renders, but no instance gets a panel row for it, so it is reachable only from the widget tree. `component_undeclared_slots()`, same call site. A blank slot name falls back to `content` and is reported under that name.
@@ -495,8 +494,8 @@ left as clean as it started — the zip from step 1 is the only durable record.
 `main.py`'s lifespan logs the version span, the file count, the backup path and
 every step diagnostic under the `nexthmi.migration` logger.
 
-`PROJECT_FORMAT_VERSION` is `11`, stamped beside `PROJECT_FORMAT_MIN_APP`
-(`"1.1.0"`). What each of the five `_STEPS` rewrites on disk is in
+`PROJECT_FORMAT_VERSION` is `12`, stamped beside `PROJECT_FORMAT_MIN_APP`
+(`"1.2.0"`). What each of the six `_STEPS` rewrites on disk is in
 [data-formats.md](data-formats.md#format-versions).
 
 Adding a step and bumping the version is described in the module docstring; the

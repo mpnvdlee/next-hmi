@@ -40,13 +40,6 @@ interface Sample {
   v: number;
 }
 
-// Same guard as ValueDisplay: `decimals` is expression-capable, and toFixed
-// throws a RangeError outside 0–100.
-function formatValue(value: number, decimals: number): string {
-  if (!Number.isFinite(value)) return '---';
-  return value.toFixed(Math.min(6, Math.max(0, Math.trunc(decimals))));
-}
-
 export default function Trend({ properties, layout }: HmiWidgetProps) {
   const { LineChart, Line, XAxis, YAxis, ResponsiveContainer } = Recharts;
 
@@ -70,7 +63,7 @@ export default function Trend({ properties, layout }: HmiWidgetProps) {
     });
   }, [value, historyLength]);
 
-  const displayValue = value !== null ? formatValue(value, decimals) : '---';
+  const displayValue = value !== null ? formatNumber(value, decimals) : '---';
 
   return (
     <div className="hmi-component hmi-trend" style={selfLayoutStyle(layout)}>

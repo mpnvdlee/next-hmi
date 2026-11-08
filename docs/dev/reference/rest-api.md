@@ -120,6 +120,7 @@ Base prefix: `/api/config`. Page index, shared shell areas, dictionaries and tra
       "shell": {},
       "dialogs": [],
       "globalEvents": {},
+      "valueMaps": [],
       "mcpEnabled": false,
       "revision": "<sha256>",
       "pageRevisions": { "home": "<sha256>" }
@@ -128,11 +129,12 @@ Base prefix: `/api/config`. Page index, shared shell areas, dictionaries and tra
 
   - `pages` and `dialogs` are the two index roots, with the same node shape: `pages` is the navigable tree, `dialogs` the pages that only open as an overlay (their documents live in `dialogs/`).
   - `globalEvents` is an object keyed by lifecycle event name; each value is an array of action objects.
-  - `revision` hashes the fields `PUT /api/config/config` writes (`pages`, `dialogs`, the shell areas, `shell`, `globalEvents`), so a theme or `mcpEnabled` change does not move it. `pageRevisions` holds a hash of each index page's document bytes (`"missing"` when its file is absent). Both are read before the content, and an editor sends them back on save.
+  - `valueMaps` is the project's value maps, read by `$map` — shape in [data-formats.md](../architecture/data-formats.md).
+  - `revision` hashes the fields `PUT /api/config/config` writes (`pages`, `dialogs`, the shell areas, `shell`, `globalEvents`, `valueMaps`), so a theme or `mcpEnabled` change does not move it. `pageRevisions` holds a hash of each index page's document bytes (`"missing"` when its file is absent). Both are read before the content, and an editor sends them back on save.
 
 - `PUT /api/config/config`
-  - Body must contain a `pages` array; `header`, `footer`, `leftSidebar`, `rightSidebar`, `shell`, `dialogs`, `globalEvents`, `mcpEnabled` are accepted optionally. An omitted `mcpEnabled` keeps the stored value; the embedded `project` metadata block and `httpAllowedOrigins` (set through [`/api/config/http-origins`](#allowed-origins-for-http)) are always kept.
-  - The shell areas and `globalEvents` are validated before anything is written; a blocking finding is `422`.
+  - Body must contain a `pages` array; `header`, `footer`, `leftSidebar`, `rightSidebar`, `shell`, `dialogs`, `globalEvents`, `valueMaps`, `mcpEnabled` are accepted optionally. An omitted `mcpEnabled` or `valueMaps` keeps the stored value; the embedded `project` metadata block and `httpAllowedOrigins` (set through [`/api/config/http-origins`](#allowed-origins-for-http)) are always kept.
+  - The shell areas and `globalEvents` are validated before anything is written; a blocking finding is `422`. So are the `valueMaps` entries: a malformed one or a duplicate id is `422`.
   - Index validation rules (`422` on failure):
     - Each entry must be an object with a string `id`.
     - IDs must be unique across the entire (recursive) index.
@@ -160,7 +162,7 @@ it is in now.
   - `422` if `page_id` doesn't match `[A-Za-z0-9_-]{1,128}`.
 - `PUT /api/config/pages/{page_id}` · `PUT /api/config/dialogs/{page_id}`
   - Body is merged into the persisted file; only these keys are kept on disk:
-    `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`, `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`, `componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `tapThrough`, `showModalHeader`, `sections`.
+    `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`, `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`, `componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `tapThrough`, `draggable`, `modeless`, `showModalHeader`, `sections`.
   - An explicit `null` for a key removes it from the stored document.
   - `sections` (when supplied) must be an object whose values are arrays. A section may not list a `type: "page-group"` node — nest a group inside another group instead (`422`).
   - An optional `revision` (from `pageRevisions` or the last save; `"missing"` for a page the client creates) that no longer matches the stored document returns `409` and writes nothing. Without `revision` there is no check.
@@ -186,7 +188,7 @@ Both endpoints are read-only: they never persist, recompile, or rewrite anything
 `sourcePath` is a JSON Pointer into the posted draft; `widgetId` / `propKey` / `breadcrumb` are recovered by walking that pointer against the tree, so the same shape works for every artifact kind. `nested` marks a finding inside a sub-slot of a property (an `$if` condition, say) rather than on the property's own value.
 
 - `POST /api/config/validate`
-  - Body: `{ "kind": "page" | "shell" | "globalEvents" | "component", "draft": { ... } }`.
+  - Body: `{ "kind": "page" | "shell" | "globalEvents" | "component", "draft": { ... }, "valueMaps"?: [ ... ] }`. `valueMaps`, the editor's unsaved maps, stands in for the saved ones when a `$map` is checked.
   - Validates the posted *unsaved* draft, so it covers edits the editor hasn't saved. Disk is read only for context (widget registry, translations, assets).
   - `422` when `kind` is not one of the four, or `draft` is not an object.
   - Returns `{ "diagnostics": [ ... ] }`.

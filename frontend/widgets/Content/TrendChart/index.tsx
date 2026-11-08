@@ -243,8 +243,10 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
     setLiveBuffers((prev) => {
       let next = (prev[varKey] || []).concat({ t, v: value });
       if (windowSec > 0) {
-        const cutoff = t - windowSec;
-        next = next.filter((pt) => pt.t >= cutoff);
+        // Keep the newest point before the window too, so the line enters
+        // from the left edge rather than starting at its first change inside.
+        const firstInside = next.findIndex((pt) => pt.t >= t - windowSec);
+        next = next.slice(Math.max(0, firstInside - 1));
       }
       if (next.length > cap) next = next.slice(next.length - cap);
       return { ...prev, [varKey]: next };
@@ -261,9 +263,23 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
     });
   }, [variables]);
 
+  // A value that holds still sends no sample, so a clock carries each line's
+  // last value on to now and slides the window along.
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    if (!isLive) return;
+    const id = setInterval(() => setNow(Date.now() / 1000), 1000);
+    return () => clearInterval(id);
+  }, [isLive]);
+
   const liveSeries = useMemo<Series[]>(
-    () => variables.map((variable) => ({ variable, data: liveBuffers[variable] || [] })),
-    [variables, liveBuffers],
+    () =>
+      variables.map((variable) => {
+        const data = liveBuffers[variable] || [];
+        const last = data[data.length - 1];
+        return { variable, data: last && now > last.t ? [...data, { t: now, v: last.v }] : data };
+      }),
+    [variables, liveBuffers, now],
   );
 
   const fetchData = useCallback(async () => {
@@ -320,6 +336,11 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
     return Object.values(merged).sort((a, b) => a.t - b.t);
   }, [activeSeries]);
 
+  // Live: a fixed time base, the last Live window seconds up to now.
+  const lastT = chartData.length ? chartData[chartData.length - 1].t : 0;
+  const xDomain =
+    isLive && liveWindow > 0 ? [lastT - liveWindow * 1000, lastT] : ['dataMin', 'dataMax'];
+
   const formatTime = useCallback(
     (ts: number) => {
       // A live buffer spans minutes, not hours: minute resolution would label
@@ -335,7 +356,7 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
     (value: unknown, name: unknown) => {
       const idx = parseInt(String(name).replace('v', ''), 10);
       const label = activeSeries[idx]?.variable || String(name);
-      return [typeof value === 'number' ? value.toFixed(2) : String(value), label];
+      return [typeof value === 'number' ? formatNumber(value, 2) : String(value), label];
     },
     [activeSeries],
   );
@@ -423,7 +444,10 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
             tickLine={false}
             axisLine={false}
             type="number"
-            domain={['dataMin', 'dataMax']}
+            domain={xDomain}
+            // The point kept from before the window lies outside it: clip it
+            // rather than widen the axis to fit.
+            allowDataOverflow
             scale="time"
             minTickGap={40}
           />
@@ -435,6 +459,7 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
             // Wide enough for a 4-5 digit reading; 40px clipped the leading
             // digit off values like 1400 and rendered them as "400".
             width={56}
+            tickFormatter={(v: number) => formatNumber(v)}
             // Recharts defaults to [0, 'auto'], which flattens every process
             // value that lives far from zero — 1200 bph draws as a straight
             // line pinned to the top of the plot. Scale to the data instead.
@@ -460,7 +485,9 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
           {activeSeries.map((s, i) => (
             <Recharts.Line
               key={s.variable}
-              type="linear"
+              // A live sample is a change: the value held until it, so the line
+              // steps there instead of ramping from the previous change.
+              type={isLive ? 'stepAfter' : 'linear'}
               dataKey={`v${i}`}
               stroke={colors[i % colors.length]}
               fill="none"

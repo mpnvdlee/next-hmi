@@ -18,7 +18,7 @@ This is the panel that answers "why is my tag not updating?" — if the path is 
 
 Every widget found in the project's `custom-widgets/` folder, with its build **Status** (OK / failed / unknown), whether it has CSS, and when it was compiled. **Recompile** one, or **Recompile all** — the route out of a stale build after editing files on disk. A failed build shows the compiler's own error message. See [Building your own widgets](custom-widgets.md).
 
-A third state sits between the two: **No schema**. The widget compiled and renders fine, but its `schema` / `exportedProperties` exports could not be read, so the editor offers no property fields and no exported properties for it. The message underneath says why. Other widgets are unaffected — an unreadable widget costs only its own schema.
+A third state sits between the two: **No schema**. The widget compiled and renders fine, but its `schema` / `exportedProperties` exports could not be read, so the editor offers no property fields and no Widget Properties for it. The message underneath says why. Other widgets are unaffected — an unreadable widget costs only its own schema.
 
 ### Connected Runtimes
 
@@ -49,10 +49,9 @@ It reports things that are wrong but not fatal — a `$var` binding that names a
 
 One finding means a whole file is lost: **"alarms.json does not load (…)"**, and the same for `recipes.json`. A hand-edited file that breaks the alarm or recipe format — a misspelt key, a field in the wrong place — is replaced by an empty one when the project starts, so the runtime has no alarms or recipes at all. The finding names the field the format rejects; fix it there and restart the project. The application log records the same failure at startup.
 
-Two findings are specific to reusable components:
+One finding is specific to reusable components:
 
 - **"component has no slot 'x'"** — the widget names a slot the component no longer declares, so it renders in the component's first slot instead. Drag it into the group you meant, or put the slot back. A widget placed on a component that declares *no* slots renders nowhere and is flagged the same way.
-- **"`$componentProp` is only substituted as a property's whole value"** — inside the component, a `$componentProp` is nested in another source or sits on a Layout field. It fills in once and then stops updating. Inside an action list — a Button's **Actions**, a String Input's **On Submit**, an **If** or an **On Success** in them — nesting is fine and not flagged: an action reads its fields when it fires. See [Passing values into components](properties.md#passing-values-into-components).
 
 > [!NOTE]
 > While you have unsaved edits, the pill can only re-check the artifact you have open. Save to get the whole project re-validated.

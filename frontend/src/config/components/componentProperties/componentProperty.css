@@ -1,24 +1,17 @@
 /* Component-property authoring styles — uses --cfg-* design tokens.
  * Consumed by ComponentPropertiesEditor, PropertyModal, StructSchemaModal. */
 
-/* ── Section header: title + add control on one row (mirrors the action
-      list's `cfg-editor-actions__title-row`) ─────────────────────────────── */
-
-.cfg-component-props__title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--cfg-space-2);
-  padding-bottom: 6px;
-}
-
-.cfg-component-props__title-row .cfg-section__title {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-}
-
 /* ── Component-property rows (schema editor) ──────────────────────────────────── */
+
+/* A collapsed row reads as one line like an action's: the name, then its type
+   and default quieter, wrapping as a summary does rather than cutting it. */
+.cfg-component-prop-summary__meta {
+  color: var(--cfg-text-muted);
+}
+
+.cfg-component-prop-summary__default {
+  font-family: var(--cfg-font-mono);
+}
 
 /* A stated row carries the label of a `PropRow` and the vertical rhythm of the
    field boxes it sits between, but no box of its own. */

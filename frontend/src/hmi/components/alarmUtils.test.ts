@@ -127,14 +127,14 @@ describe('useAlarmText placeholders', () => {
 
   it('reads an active alarm live and re-renders when its variable ticks', () => {
     const { result } = renderHook(() => useAlarmText());
-    expect(result.current(TEXT, active)).toBe('Temp 91.3 at 2');
+    expect(result.current(TEXT, active)).toBe('Temp 91,3 at 2');
     act(() => useVariableStore.setState({ values: { 'DS:Temp': 12, 'DS:Arr': [1, 2] } }));
-    expect(result.current(TEXT, active)).toBe('Temp 12.0 at 2');
+    expect(result.current(TEXT, active)).toBe('Temp 12,0 at 2');
   });
 
   it('shows the value stored at fire time once cleared, and — without one', () => {
     const { result } = renderHook(() => useAlarmText());
-    expect(result.current(TEXT, { id: 'hist-1', values: [80.04, 'x'] })).toBe('Temp 80.0 at x');
+    expect(result.current(TEXT, { id: 'hist-1', values: [80.04, 'x'] })).toBe('Temp 80,0 at x');
     expect(result.current(TEXT, { id: 'hist-2', values: [] })).toBe('Temp — at —');
     expect(result.current(TEXT)).toBe(TEXT);
   });
@@ -169,19 +169,19 @@ describe('useAlarmText placeholders on array and struct-array elements', () => {
 
   it('reads them live, following the member, the array and a bound index', () => {
     const { result } = renderHook(() => useAlarmText());
-    expect(result.current(TEXT, active)).toBe('33 / 2.5 / 3.5 / 1.5');
+    expect(result.current(TEXT, active)).toBe('33 / 2,5 / 3,5 / 1,5');
     act(() =>
       useVariableStore.setState({
         values: { ...values, 'DS:Stations/Stations[3]/Temp': 40, 'DS:Idx': 0 },
       }),
     );
-    expect(result.current(TEXT, active)).toBe('40 / 2.5 / 3.5 / 0.5');
+    expect(result.current(TEXT, active)).toBe('40 / 2,5 / 3,5 / 0,5');
   });
 
   it('shows the values captured at fire time once cleared', () => {
     const { result } = renderHook(() => useAlarmText());
     expect(result.current(TEXT, { id: 'hist-1', values: [33, 2.5, 3.5, 1.5] })).toBe(
-      '33 / 2.5 / 3.5 / 1.5',
+      '33 / 2,5 / 3,5 / 1,5',
     );
   });
 });

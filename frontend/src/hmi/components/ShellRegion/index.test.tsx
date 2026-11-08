@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useVariableStore } from '@hmi/store/variableStore';
@@ -115,6 +115,20 @@ describe('ShellRegion', () => {
 
     const region = container.querySelector('[data-region="leftSidebar"]') as HTMLElement;
     expect(region.style.width).toBe('320px');
+  });
+
+  it('hugs a collapsed Navigation Menu, and takes its Expanded size back when it opens', async () => {
+    const { container } = renderRegion({ expandedSize: '250px' });
+    const region = container.querySelector('[data-region="leftSidebar"]') as HTMLElement;
+    const menu = screen.getByText('Sidebar content');
+    menu.className = 'hmi-navmenu';
+    expect(region.style.width).toBe('250px');
+
+    menu.classList.add('hmi-navmenu--collapsed');
+    await waitFor(() => expect(region.style.width).toBe('max-content'));
+
+    menu.classList.remove('hmi-navmenu--collapsed');
+    await waitFor(() => expect(region.style.width).toBe('250px'));
   });
 
   it('marks a bound `floating` region floating, in its own slot', () => {

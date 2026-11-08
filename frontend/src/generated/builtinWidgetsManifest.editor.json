@@ -292,6 +292,59 @@
           }
         ]
       },
+      "typography": {
+        "format": "select",
+        "label": "Typography",
+        "group": "Appearance",
+        "defaultValue": "body",
+        "options": [
+          {
+            "label": "Heading",
+            "value": "heading"
+          },
+          {
+            "label": "Subheading",
+            "value": "subheading"
+          },
+          {
+            "label": "Body",
+            "value": "body"
+          },
+          {
+            "label": "Caption",
+            "value": "caption"
+          },
+          {
+            "label": "Code",
+            "value": "code"
+          },
+          {
+            "label": "Value",
+            "value": "value"
+          },
+          {
+            "label": "Label",
+            "value": "label"
+          }
+        ]
+      },
+      "wrap": {
+        "format": "select",
+        "label": "Overflow",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "wrap",
+        "options": [
+          {
+            "label": "Wrap",
+            "value": "wrap"
+          },
+          {
+            "label": "Truncate",
+            "value": "truncate"
+          }
+        ]
+      },
       "iconSize": {
         "label": "Icon size (px)",
         "min": 8,
@@ -346,6 +399,100 @@
       }
     }
   },
+  "Content/DataGrid": {
+    "description": "A table of an array, one row per element, with sorting, a filter and a selection. Only the rows in view are drawn, so a list of hundreds stays fast.",
+    "icon": {
+      "type": "builtin",
+      "name": "table"
+    },
+    "exportedProperties": [
+      {
+        "key": "selectedItem",
+        "label": "Selected Item",
+        "type": "Struct"
+      },
+      {
+        "key": "selectedIndex",
+        "label": "Selected Index",
+        "type": "integer"
+      },
+      {
+        "key": "selectedValue",
+        "label": "Selected Value",
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
+      }
+    ],
+    "schema": {
+      "items": {
+        "label": "Items",
+        "group": "Data",
+        "description": "The array shown, one row per element — a struct array from the PLC, say."
+      },
+      "columns": {
+        "format": "columns",
+        "label": "Columns",
+        "group": "Data",
+        "description": "One entry per column: the member it shows, its title from any source, a width — Fill shares the free space, Fixed is a length such as 60px — and its alignment. Empty shows a column per member of the first row."
+      },
+      "sortMember": {
+        "label": "Sort by",
+        "group": "Sort & filter",
+        "description": "The member the rows are sorted on at first. A click on a column header sorts on that column instead, and a second click reverses it."
+      },
+      "sortDirection": {
+        "format": "select",
+        "label": "Sort direction",
+        "group": "Sort & filter",
+        "defaultValue": "ascending",
+        "options": [
+          {
+            "label": "Ascending",
+            "value": "ascending"
+          },
+          {
+            "label": "Descending",
+            "value": "descending"
+          }
+        ]
+      },
+      "filterMember": {
+        "label": "Filter member",
+        "group": "Sort & filter",
+        "description": "Shows only the rows whose value for this member contains Filter value, ignoring case."
+      },
+      "filterValue": {
+        "label": "Filter value",
+        "group": "Sort & filter",
+        "description": "The text Filter member must contain — bind it to a search field. Empty shows every row."
+      },
+      "hideEmpty": {
+        "label": "Hide empty",
+        "group": "Sort & filter",
+        "description": "Hides the rows whose value for this member is empty, such as the unused slots of a fixed PLC array."
+      },
+      "valueMember": {
+        "label": "Value member",
+        "group": "Selection",
+        "description": "The member whose value is the Selected value. Empty uses the row's index."
+      },
+      "selectedValue": {
+        "label": "Selected value",
+        "group": "Selection",
+        "description": "Selects the row whose Value member equals this and scrolls it into view; re-selects when a bound value changes."
+      },
+      "onSelect": {
+        "label": "On Select",
+        "group": "Actions",
+        "event": "onSelect",
+        "repeatsOver": "items",
+        "description": "Runs when the operator picks a row. Repeat item reads that row."
+      }
+    }
+  },
   "Content/Icon": {
     "description": "A themeable Phosphor icon at any size and colour.",
     "icon": {
@@ -366,6 +513,12 @@
       "color": {
         "label": "Color",
         "defaultToken": "--hmi-text"
+      },
+      "rotation": {
+        "label": "Rotation (°)",
+        "defaultValue": 0,
+        "step": 90,
+        "description": "Turns the icon clockwise. Bind it to show one asset in any orientation."
       },
       "chrome": {
         "format": "show",
@@ -413,6 +566,12 @@
             "value": "scale-down"
           }
         ]
+      },
+      "rotation": {
+        "label": "Rotation (°)",
+        "defaultValue": 0,
+        "step": 90,
+        "description": "Turns the picture clockwise. Bind it to show one asset in any orientation."
       },
       "indicators": {
         "label": "Indicators"
@@ -1838,7 +1997,11 @@
       {
         "key": "selectedValue",
         "label": "Selected value",
-        "type": "string"
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
       }
     ],
     "schema": {
@@ -1879,7 +2042,11 @@
       {
         "key": "selectedValue",
         "label": "Selected Value",
-        "type": "string"
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ]
       }
     ],
     "schema": {
@@ -1890,6 +2057,11 @@
       "options": {
         "label": "Options",
         "group": "Content"
+      },
+      "maxIndex": {
+        "label": "Max index",
+        "description": "Show the options up to and including this position, counted from 0. Empty shows all.",
+        "group": "Data"
       },
       "selectedValue": {
         "label": "Selected value",
@@ -2052,7 +2224,7 @@
     }
   },
   "Inputs/StringInput": {
-    "description": "A text field whose typed value is published for sibling widgets to read.",
+    "description": "A text field that writes what the operator types to a bound variable or input, and publishes it for sibling widgets to read.",
     "icon": {
       "type": "builtin",
       "name": "text-t"
@@ -2072,6 +2244,34 @@
       "placeholder": {
         "label": "Placeholder",
         "group": "Content"
+      },
+      "variable": {
+        "label": "Variable",
+        "description": "Shows this text and writes what the operator types back to it.",
+        "group": "Data"
+      },
+      "writeOn": {
+        "format": "select",
+        "label": "Write on",
+        "description": "Every key suits a search field that filters as the operator types.",
+        "display": "button-text",
+        "group": "Data",
+        "defaultValue": "commit",
+        "options": [
+          {
+            "label": "Enter or leave",
+            "value": "commit"
+          },
+          {
+            "label": "Every key",
+            "value": "change"
+          }
+        ]
+      },
+      "value": {
+        "label": "Value",
+        "description": "What the field starts with when no Variable is bound.",
+        "group": "Data"
       },
       "isPassword": {
         "label": "Password field",
@@ -2261,7 +2461,7 @@
     }
   },
   "Layout/Container": {
-    "description": "Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
+    "description": "Groups and lays out child widgets in a row, a column or stacked on top of each other. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
     "icon": {
       "type": "builtin",
       "name": "stack"

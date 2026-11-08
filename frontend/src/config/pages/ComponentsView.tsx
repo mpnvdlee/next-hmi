@@ -54,6 +54,10 @@ import { findComponentById } from '@shared/utils/widgetTree';
 import { usePanelDiagnostics, type DiagnosticsArtifact } from '@config/hooks/usePanelDiagnostics';
 import ConfigLayout from '../components/ui/ConfigLayout';
 import CompositionWidgetPanel from '../components/compositions/CompositionWidgetPanel';
+import {
+  WidgetOptionsContext,
+  buildComponentOptions,
+} from '../components/editor/WidgetOptionsContext';
 import CompositionMultiWidgetPanel from '../components/compositions/CompositionMultiWidgetPanel';
 import CompositionSchemaEditor from '../components/compositions/CompositionSchemaEditor';
 import PanelDiagnosticsBanner from '../components/editor/PropertiesPanel/PanelDiagnosticsBanner';
@@ -620,6 +624,12 @@ export default function ComponentsView() {
       .filter((w): w is WidgetConfig => w !== null);
   }, [activeComponent, selectedIdsInOrder]);
 
+  // The definition's own widgets are what its `$widgetProp`s name.
+  const widgetOptions = useMemo(
+    () => buildComponentOptions(activeComponent ? componentChildren(activeComponent) : []),
+    [activeComponent],
+  );
+
   const rightPanelBody = (() => {
     if (!activeComponent) {
       return (
@@ -661,7 +671,9 @@ export default function ComponentsView() {
   const rightPanel = (
     <>
       <PanelDiagnosticsBanner />
-      {rightPanelBody}
+      <WidgetOptionsContext.Provider value={widgetOptions}>
+        {rightPanelBody}
+      </WidgetOptionsContext.Provider>
     </>
   );
 

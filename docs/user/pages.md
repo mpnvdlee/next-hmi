@@ -44,7 +44,7 @@ opposite: it duplicates, giving the copy fresh ids. Either way the move is a sin
 undo step.
 
 > [!NOTE]
-> **A dialog is an ordinary page.** The Dialogs folder's `+` and its right-click menu offer **Add Dialog** and **Add Dialog Group** — the same two verbs as the Pages section, under the names the operator meets them by — and a dialog is edited on the same canvas as any other page. What the folder decides is that the page is never navigated to — it has no place in menus, breadcrumbs or the URL — and that it can take **input parameters** and carry its own **overlay** settings. Because of that, a field that *navigates* — a menu item, the Breadcrumb's home page — does not offer these pages at all, and the warnings pill flags a project that names one anyway. Drag a row between the two sections, or `Cut` and `Paste` it, to move a screen from one to the other.
+> **A dialog is an ordinary page.** The Dialogs folder's `+` and its right-click menu offer **Add Dialog** and **Add Dialog Group** — the same two verbs as the Pages section, under the names the operator meets them by — and a dialog is edited on the same canvas as any other page. What the folder decides is that the page is never navigated to — it has no place in menus, breadcrumbs or the URL — and that its inputs can be Bindings too and it carries its own **overlay** settings. Because of that, a field that *navigates* — a menu item, the Breadcrumb's home page — does not offer these pages at all, and the warnings pill flags a project that names one anyway. Drag a row between the two sections, or `Cut` and `Paste` it, to move a screen from one to the other.
 
 **Reacting to arrival and departure.** Pages and groups both carry an **Events** section
 — action lists that run when the operator arrives at that node and when they leave it.
@@ -69,6 +69,18 @@ popover then closes it *and* reaches whatever lies under it — tap the next mac
 symbol and its own popover opens in the same tap. All three are on unless you turn them
 off; a dimmed backdrop only ever closes.
 
+Two more settings there are off unless you turn them on. **Draggable** lets the operator
+drag the dialog by its header bar, with a mouse or a finger; it stays where it was put
+until it closes, and its header bar, × included, never leaves the screen. **Background usable** keeps the screen under the dialog working while
+it is open — no dim, and buttons, sliders and scrolling beside the dialog work as
+usual. The dialog stays open until its own × or a **Close Dialog/Overlay**, so **Close
+on backdrop** and **Tap through** leave the panel. A jog box beside the machine picture
+or an alarm panel kept open while operating are what it is for. With several dialogs
+open the screen is only usable when all of them have it on: one ordinary dialog still
+blocks it. Such a dialog also stays open when the operator moves to another page — same
+place, same size, same values — even when its own button navigates; put a **Close
+Dialog/Overlay** before **Navigate To Page** to close it on the way.
+
 **Show header bar** in the same section hides the card's title strip, × included — for a
 keypad or an access panel that should be all content. The page then needs its own
 **Close Dialog/Overlay** button, unless a backdrop click closes it. It is on unless you
@@ -76,28 +88,52 @@ turn it off, and it is the one Overlay setting a navigable page opened with **Op
 As Overlay** has too. On a page group the group's setting counts, not its pages'.
 
 **Opening a dialog that is already on top swaps its inputs.** The card stays, takes the
-new input parameters and moves to the new anchor, rather than stacking a second copy.
+new inputs and moves to the new anchor, rather than stacking a second copy.
 
-**Parameters make one page serve many.** A page in the **Dialogs** folder declares
-**input parameters** in its own panel — the same mechanism a Component uses. Declare
+**Inputs make one page serve many.** A page in the **Dialogs** folder declares
+**Inputs** in its own panel, under its own **Inputs** title at the bottom of the **Dialog** section — the same block a Component has at the bottom of its **Identity** section. Each line shows an input's name, type and default; › opens the rest. Declare
 `motorId`, and the widgets inside read it with `$componentProp`; the **Open Dialog**
 action that opens the page fills the value in. One "Motor detail" page then serves every
 motor on the plant instead of one page per machine. The values belong to the overlay, so
 navigating inside it keeps them.
 
-Each parameter also takes a **default value**, which applies whenever nothing supplied one.
-A parameter of type **Page** gets a page picker in the Open Dialog action, and a
+Each input is a **Value** or a **Binding** ([Value or Binding](properties.md#value-or-binding)).
+A Value is read once as the dialog opens and is then the dialog's own: a field inside can
+change it for this screen, and closing the dialog throws it away. A Binding is a variable the
+opener passes, live, and writing it writes the controller. A Value also takes a **default
+value**, which applies whenever nothing supplied one.
+An input of type **Page** gets a page picker in the Open Dialog action, and a
 **Navigate To Page** action inside the dialog can go to whatever page the caller picked.
 
 > [!NOTE]
-> **Input parameters and overlay settings appear only inside the Dialogs folder.** A page
-> in the **Pages** section is a navigation destination: it is reached from a menu or a URL,
-> where there is no action to hand it values. It can still be opened as an overlay — it
-> just takes no parameters, and uses the default close behaviour.
+> **Overlay settings appear only inside the Dialogs folder.** A page in the **Pages**
+> section is a navigation destination. It can still be opened as an overlay — it then
+> takes no inputs, and uses the default close behaviour.
+
+**A page in Pages has inputs too.** The same **Inputs** block sits at the bottom of its
+**Page** section, and every entry is a Value — there is no Kind to choose. A **Navigate To
+Page** that goes to the page lists one field per input under **Inputs**: a fixed value, a
+variable, a Widget Property or any other source, read once in the screen that navigates. An
+input left empty there starts at its default. After that the input is the page's own: a
+field or a Write on the page changes it, and nothing goes back. A search box and the list it
+filters can share one this way, per screen, with nothing stored on the server. When an input
+is read:
+
+| The operator arrives… | The page's inputs |
+|---|---|
+| through a **Navigate To Page** | take what the action passed, the default where it passed nothing |
+| through a **Navigate To Page** to the page already showing | read the new values again |
+| any other way — a menu, a Tab Bar, **Page Group: Next**, **Previous** or **Go To**, the browser's back and forward | start at their defaults |
+| by refreshing the browser | start at their defaults: inputs are never in the URL |
+
+A page group's inputs keep their values while the operator moves between its pages, and go
+back to their defaults once the operator leaves the group; a Navigate To Page into the group
+changes only the group inputs it fills. State the whole machine shares belongs in a static
+datasource instead.
 
 **A whole page group can be opened too.** The group's active page shows inside the group's
 header and footer, so the operator gets the tabs as well — one parameterised, tabbed modal
-instead of one overlay per tab. A page group declares input parameters in its own panel
+instead of one overlay per tab. A page group declares Inputs in its own panel
 just like a page, and the values reach every page in the group as well as the group's own
 header and footer widgets. Switching tabs inside the overlay keeps them.
 
@@ -117,6 +153,15 @@ You don't hand-wire links. Navigation widgets read the page tree and stay in syn
   group, in tree order. **Previous enabled** and **Next enabled** each take a binding, so a step can hold
   one control shut until the operator has filled something in while the other stays live;
   **Show previous** and **Show next** drop a control altogether rather than disabling it.
+
+To build a tab bar of your own, use Buttons with the **Page Group: Next**, **Page Group:
+Previous** and **Page Group: Go To** [actions](actions.md#screens), and read the position
+from `$page`: **Page group index** is the open page of the group, counted from 0, and
+**Page group last index** the last one. A tab Button lights up with
+`$compare($page Page group index = 1)`; a Next Button greys out with
+`$compare($page Page group index < $page Page group last index)` on **Interactable**, and a
+Label shows *Tab 2 / 4* with a `$formula` on Page group index + 1 and Page group last
+index + 1.
 
 Put these in a **shell region** (see [Layout](layout.md)) so they persist while operators move between screens.
 

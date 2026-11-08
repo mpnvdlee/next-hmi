@@ -74,6 +74,8 @@ const HeaderSearch = forwardRef<HTMLInputElement, Props>(function HeaderSearch(
             event.preventDefault();
             onEnter();
           } else if (event.key === 'Escape') {
+            // A first Escape clears the query and keeps a drawer around it open.
+            if (value) event.preventDefault();
             onChange('');
             event.currentTarget.blur();
           }

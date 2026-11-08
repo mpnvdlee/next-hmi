@@ -62,6 +62,16 @@ describe('ButtonRow', () => {
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['en-EN', 'nl-NL']);
   });
 
+  it('shows a translated option label in the active language', () => {
+    useTranslationStore.setState({
+      translations: { 'mode.auto': { nl: 'Automatisch' } },
+      activeLanguage: 'nl',
+    } as never);
+    renderRow({ options: [{ label: { $loc: 'mode.auto' }, value: 2 }] });
+
+    expect(screen.getByRole('button')).toHaveTextContent('Automatisch');
+  });
+
   it('writes the chosen option with a correlating requestId', async () => {
     const user = userEvent.setup();
     renderRow({ options: OPTIONS, variable: BINDING });
@@ -91,7 +101,7 @@ describe('ButtonRow', () => {
     useVariableStore.setState({ values: { [VAR_KEY]: 2 } });
     renderRow({ options: OPTIONS, variable: BINDING });
 
-    expect(useComponentPropStore.getState().props.modes.selectedValue).toBe('2');
+    expect(useComponentPropStore.getState().props.modes.selectedValue).toBe(2);
   });
 
   it('tracks and publishes the selection locally when nothing is bound', async () => {
@@ -101,7 +111,7 @@ describe('ButtonRow', () => {
     await user.click(screen.getByRole('button', { name: 'Auto' }));
 
     expect(sendWsMessage).not.toHaveBeenCalled();
-    expect(useComponentPropStore.getState().props.modes.selectedValue).toBe('2');
+    expect(useComponentPropStore.getState().props.modes.selectedValue).toBe(2);
     expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('aria-pressed', 'true');
   });
 

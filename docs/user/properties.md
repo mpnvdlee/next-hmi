@@ -30,8 +30,8 @@ A `Byte` is a whole number from 0 to 255 — what an OPC-UA `Byte` tag holds, a 
 | `$var` | flexible | A live datasource / OPC-UA variable. |
 | `$if` | flexible | One of two values chosen by a condition. |
 | `$switch` | flexible | One of many values chosen by a key. |
-| `$widgetProp` | flexible | A value exported by a sibling widget on the page. |
-| `$componentProp` | flexible | A value passed in from outside — by the parent component, or by the **Open Dialog** action that opened this dialog. |
+| `$widgetProp` | flexible | **Widget Property** — what another widget on this screen publishes, like a Dropdown's selection. |
+| `$componentProp` | flexible | **Input** — what comes in from whoever places this component or opens this dialog or page: the parent component, **Open Dialog** or **Navigate To Page**. |
 | `$overlay` | flexible | An input of a dialog while it is open, empty once it closes — so a symbol can light up while its own popover shows: compare `$overlay` (dialog *device*, input *device*) with the symbol's number. |
 | `$result` | flexible | A field of an action's result (in its handlers only). |
 | `$repeatItem` | flexible | The element a Repeater copy draws, one member of it, or its index (inside a Repeater only). |
@@ -45,6 +45,7 @@ A `Byte` is a whole number from 0 to 255 — what an OPC-UA `Byte` tag holds, a 
 | `$time` · `$random` · `$alarmCount` | DateTime, Date, Time or String / Integer or Float / Integer | The clock as text in the format you pick, a random number, a live alarm count. |
 | `$page` · `$languages` | String / Integer / String[] | Page metadata, and the configured language list. |
 | `$recipe` · `$recipeList` | String / Boolean / Record[] | Recipe state, and the saved-recipe grid. |
+| `$map` | the map's type | A value looked up in one of the project's [value maps](#reuse-a-lookup-value-maps-map). |
 
 A source with a **Field** choice — Page, Viewport, Recipe, User, Device — lists only the fields that fit the property: on a whole-number property Page offers just **Depth**, Viewport just **Width** and **Height**.
 
@@ -92,6 +93,20 @@ Three sources cover almost every "it depends" on a screen, and they are usually 
 
 Cases are tried in order and the first match wins. Both `when` and `then` are full properties, so a case can match against a tag and return another one. A `$switch` with three cases replaces the three-deep nest of `$if`s that would otherwise be needed — reach for it as soon as there is a third branch.
 
+## Reuse a lookup: value maps (`$map`)
+
+When the same `$switch` turns up on many screens — an alarm severity that becomes a colour, a machine state that becomes text — define it once as a **value map** and point each property at it.
+
+In the editor tree, **Value Maps** sits under **Global Events**. Press **+**, or right-click it › **Add Value Map**, to add a map; right-click a map to **Rename**, **Duplicate** or **Delete** it. In the properties panel give it an **Id**, a **Type** (Color, String, Boolean, Integer or Float), its **When → then** cases and a **Default**. On a String map a `then` can be a translation key. The maps are saved with the project, in `config.json`.
+
+On a property, choose **Value Map** as the source, pick the map and set the **Value** it looks up — usually a tag:
+
+```
+"color": { "$map": { "id": "alarm-severity", "value": { "$var": { "path": "LinePLC:Alarms/Severity" } } } }
+```
+
+Only maps of the property's own type are offered. Cases are tried in order like a `$switch`'s, and with no match the map gives its default; a map without a default leaves the property empty, so the widget shows its own default. A property that names a map that is gone, or one of another type, shows up in the diagnostics. Renaming a map — in the tree or through its **Id** — takes every property that uses it along, on every page, dialog and component.
+
 ## Build a string from parts: `$stringExpr`
 
 `$stringExpr` is a template with numbered placeholders, each filled by its own binding:
@@ -114,8 +129,10 @@ A placeholder may wrap its value in transform functions, applied inside-out:
 |---|---|
 | `ToLower` · `ToUpper` · `Capitalize` · `Trim` | Case and whitespace. |
 | `Round` · `Round1` · `Round2` · `Round3` · `Round4` | Nearest integer, or one to four decimals. |
-| `Thousands` | Digit grouping — `41280` → `41,280`. It keeps the decimals its input has: `{Thousands(Round1(1))}` → `41,280.0`. |
-| `Signed` | Always show the sign — `6` → `+6`, `-4` → `−4`, `0` stays `0`. Put it outermost so it keeps the decimals of an inner round: `{Signed(Round1(1))}` → `+6.0`. |
+| `Thousands` | Digit grouping with a point — `41280` → `41.280`. It keeps the decimals its input has: `{Thousands(Round1(1))}` → `41.280,0`. |
+| `Signed` | Always show the sign — `6` → `+6`, `-4` → `−4`, `0` stays `0`. Put it outermost so it keeps the decimals of an inner round: `{Signed(Round1(1))}` → `+6,0`. |
+
+A number goes into the text with a decimal comma and no thousands separator, as every widget shows one: `Tank {1} l` with 3.5 reads `Tank 3,5 l`. Text from a wildcard stays as it is. Text a machine reads is the exception, so a number keeps its decimal point there: an **API request**'s URL, headers and body, the value a **Write Data Variable** sends, and the URL or source of a Web Frame, Video or Image.
 
 A placeholder whose wildcard is missing is left in the text as-is, so a typo shows up on screen rather than silently blanking the label.
 
@@ -143,17 +160,33 @@ A bit read this way gives 1 or 0. A formula only reads: to show or switch one bi
 
 ## Passing values into components
 
-A reusable **Component** declares **input properties** the parent fills in. Inside, children read them with `$componentProp` — the whole struct, or one member by slash-path (`sensor/fValue`). Every member a struct input declares is required: the instance's binding picker confirms only a struct variable that carries each of them with a fitting type, and write access where a member asks for it. A member can still be absent at runtime — a disabled leaf, a value not yet arrived — so the widgets inside should not depend on it being there. Sibling widgets can read each other's exported state with `$widgetProp`. This is how one "Motor" component drives many motors from different tags.
+A reusable **Component** declares **Inputs** the parent fills in. Inside, children read them with the **Input** source (`$componentProp`) — the whole struct, or one member by slash-path (`sensor/fValue`). Every member a struct input declares is required: the instance's binding picker confirms only a struct variable that carries each of them with a fitting type, and write access where a member asks for it. A member can still be absent at runtime — a disabled leaf, a value not yet arrived — so the widgets inside should not depend on it being there. Sibling widgets can read what another widget publishes — a Dropdown's selection, say — with the **Widget Property** source (`$widgetProp`). This is how one "Motor" component drives many motors from different tags.
 
-Both reads are typed. The `$componentProp` and `$widgetProp` pickers judge each input or exported value against the field it would fill, exactly as the variable picker judges a tag — one that does not fit is marked ✗ and cannot be confirmed — and the value an instance puts into an input is checked against the input's type like any widget property. The warnings pill flags a stored read or value that does not fit.
+Both reads are typed. Both open one picker, with an **Inputs** group — when the component, dialog or page declares any — and a **Widget Properties** group, the source the field holds on top; picking a row in the other group switches the field to that source. The picker judges each input or published value against the field it would fill, exactly as the variable picker judges a tag — one that does not fit is marked ✗ and cannot be confirmed — and the value an instance puts into an input is checked against the input's type like any widget property. The warnings pill flags a stored read or value that does not fit.
 
-An action inside the component can write through an input, too. Declare the input with **write** access — a **Float** input `value` with write ticked, say — and set the action's **Variable** row (Write Data Variable, Toggle Boolean Variable, Edit Value) to the input's source pill: the action writes whatever variable the instance passed in. One parameter-row component with an **Edit Value** button then edits a different setpoint per instance. The picker lists only inputs declared writable with a type the action writes, and the warnings pill flags one that is not. In the file:
+### Value or Binding
+
+Every input — of a component, a dialog, a page or a page group — has a **Kind**, chosen on its row:
+
+| | **Value** | **Binding** |
+|---|---|---|
+| Whoever places or opens it passes | anything: text, a translation, a formula, a variable | a variable only, or a Binding it received itself |
+| Read | once, when the instance appears or the dialog opens | live |
+| A Write, Toggle, Edit Value or input field inside changes | its own copy, in this screen or instance only | the variable, on the controller |
+| Goes back to whoever passed it | never | through the variable |
+| Lasts | until the dialog closes, the page is left or the instance goes; opening again reads again | as long as the variable |
+
+A **Value** is the screen's own state: a search filter on a recipe page, a jog speed in a motor dialog, a session flag inside a component. A second panel showing the same screen has its own copy and does not move along. A **Binding** is a tag: what it shows is what the controller has, and writing it writes the controller. A **Struct** input is always a Binding, and **Actions**, **Widget slot**, **Icon**, **Image**, **Video** and **Options** inputs have no kind — they pass through as given. Only a Binding takes **Write access** or loses its **Default value**: a Value is always writable, and a Binding gets its value from the variable.
+
+Where an input is a Binding, the instance's or Open Dialog's row offers only the variable picker, and the warnings pill flags a fixed value, a formula or a Value input passed to it. A formula given to a Value is read once, and the warnings pill says so: to keep it live, pass the variable as a Binding and do the computing inside, with `$componentProp` in an `$if`, `$compare` or string expression. A page of the **Pages** section has only Values, and its **Inputs** row shows no Kind: only **Navigate To Page** fills them, and by the time the page shows, the button that navigated is gone, so there is nothing to write back to. The warnings pill flags a Binding declared there. See [Pages](pages.md) for when a page input is read.
+
+An action inside the component can write through an input, too. Declare the input as a **Binding** with **write** access — a **Float** input `value`, say — and set the action's **Variable** row (Write Data Variable, Toggle Boolean Variable, Edit Value) to the input's source pill: the action writes whatever variable the instance passed in. One parameter-row component with an **Edit Value** button then edits a different setpoint per instance. The picker lists only Values and inputs declared writable, with a type the action writes, and the warnings pill flags one that is not. Point the same action at a Value input and it changes the instance's own copy instead. In the file:
 
 ```json
 { "type": "editValue", "target": { "$componentProp": "value" } }
 ```
 
-The same works in a dialog, on an input parameter the opener fills with a variable.
+The same works in a dialog, on an input the opener fills with a variable.
 
 Each input can carry a **description** (one line shown under the field) and a **default value**, used wherever an instance leaves the property empty — the default is what the component really renders with, not just an editor hint.
 
@@ -161,16 +194,17 @@ An input of type **Page** holds a page from the **Pages** section: whoever place
 
 An input of type **Select (enum)** gives whoever places the component a fixed list of choices instead of a free field. **Option values** decides what a choice actually hands over: **String**, **Integer**, **Float**, **Boolean** or **Localisable text**. Pick the kind that matches what the component does with it — a size list should pass a real number, a caption list a translation — so the value arrives usable rather than as text that has to be read back as a number. Change the kind later and the option labels stay put while their values clear, since a value written for the old kind means nothing under the new one.
 
-Pages and page groups declare their **input parameters** in the same panel (see [Pages](pages.md)), so the option kinds apply there too.
+An input of type **Options** passes a whole option list — `{ label, value }` pairs — so one dropdown component can offer a different list per instance. Inside, set the Dropdown's or Button Row's **Options** to `$componentProp: options`; each instance fills it with its own list, a bound array or another source the **Options** field takes, and the input's **Default value** is the list an instance that sets none gets. A label may be a translation, `{ "label": { "$loc": "pack.tray" }, "value": 1 }`, and shows in the active language; the list shows one line per option, value first, then the label; drag a line by its **⋮⋮** grip to move it, and click it to edit the option in the panel's drawer — the field's **⤢** opens every option there — where the label's source badge switches it between **Static Value** and **Localizable Text**.
 
-> [!IMPORTANT]
-> **`$componentProp` has to be the whole value of a property.** Use it directly — a Label's **Text** set to `$componentProp: title` — and it stays live. Bury it inside another source (as one arm of an `$if`, a wildcard of a string expression) or put it on a **Layout** field, and it fills in once and then stops updating. The warnings pill flags this. Actions are the exception: an action reads its fields when it fires, so inside an action list — an Edit Value **Title** of `Set {1}` with `{1}` the input, a Show Toast message — the input can sit anywhere and is always current. Elsewhere, do the thinking on the *instance* instead: the instance may bind `$var`, compare, format — then pass the finished value in through a plain `$componentProp`.
+Pages and page groups declare their **Inputs** in the same panel (see [Pages](pages.md)), so the option kinds apply there too.
+
+A Binding input stays live wherever it sits: as a property's whole value (a Label's **Text** set to `$componentProp: title`), inside another source — the condition of an `$if`, a `$compare` operand, a wildcard of a string expression — or on a **Layout** field. A slash-path reaches into a struct input from there too, so a component given one device folder can colour a button with `$if` on `device/Func/stJogForward/bValue` and follow the tag as it changes. Inside an action list the input is read when the action fires.
 
 ### Passing widgets into a component (slots)
 
-Input properties pass *values* in. A **slot** passes *widgets* in — the way you hand a card shell its body without the shell knowing what the body is.
+Inputs pass *values* in. A **slot** passes *widgets* in — the way you hand a card shell its body without the shell knowing what the body is.
 
-1. **Name it** — In the component's **Properties** list, add a property of type **Widget slot** — `body`, say, labelled "Body". It takes no default and no value; it exists to name the slot so a **Component Slot** widget can pick it.
+1. **Name it** — In the component's **Inputs** list, add an input of type **Widget slot** — `body`, say, labelled "Body". It takes no default and no value; it exists to name the slot so a **Component Slot** widget can pick it.
 2. **Place it** — Add a **Component Slot** widget where the caller's content belongs and pick that property as its **Slot name**. Add as many as you need. In the editor's preview an empty slot is drawn as a labelled outline so you can see and size the hole you are authoring; on an operator screen an unfilled slot renders nothing at all.
 3. **Fill it** — Place the component on a page. The instance gains a **Body** section in the widget tree: drop, drag, paste or right-click widgets there, or drop them straight into the slot in the preview. The slot holds widgets, not a value, so it gets no row in the properties panel.
 4. **Who owns what** — Widgets you put in a slot stay yours: they select, bind and get properties on the page they live on. Everything the component itself draws is not selectable from the page — click it and the whole instance is selected. Edit those in the **Components** area.
@@ -201,7 +235,17 @@ Inside an **Image Container**, **Place copies: At item x / y** draws each copy a
 In the editor the first copy is the one you edit; the others are drawn dimmed and select the first when clicked. With no data yet, one copy is still drawn so there is something to edit.
 
 > [!NOTE]
-> **Repeat Item only means something inside a Repeater.** Anywhere else it is empty, and the warnings pill says so. A Repeater inside a Repeater reads its own elements — the outer one's are out of reach from inside it.
+> **Repeat Item only means something inside a Repeater**, and in a Data Grid's **On Select**. Anywhere else it is empty, and the warnings pill says so. A Repeater inside a Repeater reads its own elements — the outer one's are out of reach from inside it.
+
+## Showing an array as a table (Data Grid)
+
+A **Data Grid** shows an array as rows and columns — the recipe list, the event log — without a widget per row. It draws only the rows in view, so a PLC array of 500 elements stays fast.
+
+1. **Pick the array** — **Items** takes the same sources as a Repeater's: an array tag, a typed-in list, an API response, the saved recipes.
+2. **List the columns** — **Columns** lists one line per column, named by its title or else its member, as the **Options** list does: drag a line by its **⋮⋮** grip to move it, click it to open that column in the panel's drawer, or press the field's **⤢** to open them all, each folded to its line (`1 Id · 60px · right`), and **+ Add** to add one. In the drawer each column is a row you remove with its **×** and fold open or shut with its **›**. Each row sets the **member** it shows — picked from the struct when the grid knows the Items' members, typed otherwise — its **title**, from any source like a String property (text, a translation, a tag, a formula), a **width** — **Fill** shares the room the others leave, **Fixed** sets it in px — and its **align**ment, left, center or right. **Edit as JSON** shows the same list as `{"member": "nId", "title": "Id", "width": "60px", "align": "right"}` entries. Left empty, the grid shows a column per member of the first row. Text too long for its cell is cut off; every row has the same height.
+3. **Sort and filter** — **Sort by** and **Sort direction** set the order the grid opens in. The operator clicks a header to sort on that column, and again to reverse it. **Filter member** with **Filter value** shows only the rows whose member contains the text, capitals or not — for a search field, add a page input such as `RecipeFilter`, bind both **Filter value** and a String Input's **Variable** to it, and set the String Input's **Write on** to **Every key** so the list narrows as the operator types; a ✕ Button beside it with a **Write Data Variable** of `""` to the same page input clears both. **Hide empty** drops every row whose member is empty, such as the unused slots of a fixed array.
+4. **Selection** — **Value member** names the member that identifies a row (the recipe id). The picked row is published for other widgets as **Selected Item**, **Selected Index** (its position in Items, from 0) and **Selected Value** (the Value member as the row holds it, so a number id writes to an Integer tag); bind **Selected value** to a tag and the grid selects that row and scrolls it into view whenever the tag changes. Up, Down, Home and End move the selection from the keyboard.
+5. **On Select** — runs when the operator picks a row. **Repeat Item** reads that row there: a **Write Data Variable** with the value `{"$repeatItem": {"member": "nId"}}` sends the picked recipe id to the PLC.
 
 ## Reading a value from an API (`$http`)
 
@@ -243,5 +287,5 @@ directly.
 - **A variable must match the field's type exactly.** A `Float` field takes no `Integer` tag and a `String` field no `Boolean` one; the binding picker will not confirm a tag that does not fit. A field that takes either lists both types.
 - **A field that writes back takes only a tag.** A value field that a control writes to — a Button Row's value, a Video's state variable — offers just the **Variable** source (or Repeat Item / an input property standing in for one): no fixed value, formula or condition, since the control would have nothing to write to.
 - **A widget reading a number** takes a number as-is, and text only when it is a clean decimal number (`"42"`, `"-1.5"`); anything else is *absent* and the field falls back. Nothing is rounded.
-- **A widget reading text** turns a number or a boolean into its plain text (`3.5`, `true`); decimals and units are the widget's own formatting.
+- **A widget reading text** shows a number with a decimal comma (`3.5` reads `3,5`) and a boolean as its plain text (`true`); fixed decimals and units are the widget's own formatting. A selection or a text a control writes back keeps the number as stored.
 - Impossible bindings (image → Float) are rejected by the editor at bind time — never at runtime.

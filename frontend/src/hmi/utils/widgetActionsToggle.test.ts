@@ -59,6 +59,26 @@ describe('writeDataVariable value resolution', () => {
     );
   });
 
+  it('fills a number into a Text Expression with its decimal point', () => {
+    executeWidgetActions(
+      [
+        {
+          type: 'writeDataVariable',
+          target: { $var: { path: 'PLC:Setpoint' } },
+          value: {
+            $if: {
+              condition: { $static: true },
+              true: { $stringExpr: { template: '{1}', wildcards: { '1': { $static: 2.5 } } } },
+              false: '',
+            },
+          },
+        } as unknown as ButtonAction,
+      ],
+      { scope: 'runtime' },
+    );
+    expect(sendWsMessage).toHaveBeenCalledWith(expect.objectContaining({ value: '2.5' }));
+  });
+
   it('sends a literal array untouched', () => {
     executeWidgetActions(
       [{ type: 'writeDataVariable', target: { $var: { path: 'PLC:Arr' } }, value: [1, 2] }],

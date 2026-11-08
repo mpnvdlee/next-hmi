@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import type { SchemaField } from '@shared/types/widgetSchema';
-import FieldGroup, { FieldHeaderActions } from './index';
+import FieldGroup, { FieldActions, FieldHeaderActions } from './index';
+import { PickerField } from '../PathInputField';
 
 const SCHEMA: SchemaField = { type: 'string', label: 'Speed' };
 
@@ -98,6 +99,17 @@ describe('FieldGroup — click state machine', () => {
     expect(document.activeElement?.tagName).not.toBe('INPUT');
   });
 
+  it('click-1 on an unselected field leaves a draggable row its mousedown, so the first drag starts', () => {
+    render(
+      <FieldGroup label="Options" tier={1} selection={{ path: ['options'], schema: SCHEMA }}>
+        <div draggable>Row</div>
+        <input aria-label="Plain" />
+      </FieldGroup>,
+    );
+    expect(fireEvent.mouseDown(screen.getByText('Row'))).toBe(true);
+    expect(fireEvent.mouseDown(screen.getByLabelText('Plain'))).toBe(false);
+  });
+
   it('sourceless hides the badge even when one is passed', () => {
     render(
       <FieldGroup
@@ -158,5 +170,57 @@ describe('FieldHeaderActions', () => {
 
     expect(document.querySelector('.cfg-field-group__header')).toBeNull();
     expect(screen.getByTestId('add').parentElement).toHaveClass('cfg-field-group__header-actions');
+  });
+});
+
+describe('FieldGroup — hideClear', () => {
+  function renderPath(hideClear: boolean) {
+    return render(
+      <FieldGroup label="Then" tier={1} hideClear={hideClear}>
+        <PickerField
+          displayText="PLC: speed"
+          pickTitle="Pick"
+          onPick={() => {}}
+          onClear={() => {}}
+        />
+      </FieldGroup>,
+    );
+  }
+
+  it("drops the value's clear × but keeps its other buttons", () => {
+    renderPath(true);
+    expect(screen.queryByTitle('Clear')).toBeNull();
+    expect(screen.getByTitle('Pick')).toBeTruthy();
+  });
+
+  it('shows the clear × by default', () => {
+    renderPath(false);
+    expect(screen.getByTitle('Clear')).toBeTruthy();
+  });
+});
+
+describe('FieldGroup — actions', () => {
+  it('ends the row with its own actions, after the buttons its editor portals in', () => {
+    render(
+      <FieldGroup
+        label="Then"
+        tier={1}
+        actions={
+          <button type="button" title="Remove">
+            ×
+          </button>
+        }
+      >
+        <FieldActions>
+          <button type="button" title="Translate">
+            T
+          </button>
+        </FieldActions>
+      </FieldGroup>,
+    );
+    const titles = [...document.querySelectorAll('.cfg-field-group__actions button')].map((b) =>
+      b.getAttribute('title'),
+    );
+    expect(titles).toEqual(['Translate', 'Remove']);
   });
 });

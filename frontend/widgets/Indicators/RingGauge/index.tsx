@@ -46,14 +46,6 @@ export const description =
 export const category = 'Indicators';
 export const icon = { type: 'builtin', name: 'arrows-clockwise' } as const;
 
-// The schema's min/max on `decimals` are editor hints, and the property is
-// expression-capable: a binding can deliver anything, and toFixed throws a
-// RangeError outside 0–100.
-function formatValue(value: number, decimals: number): string {
-  if (!Number.isFinite(value)) return '---';
-  return value.toFixed(Math.min(3, Math.max(0, Math.trunc(decimals))));
-}
-
 export default function RingGauge({ properties, layout }: HmiWidgetProps) {
   const raw = usePropVar(properties, 'value');
   const numeric = readNumberValue(raw);
@@ -81,7 +73,7 @@ export default function RingGauge({ properties, layout }: HmiWidgetProps) {
     <div className="hmi-component hmi-ring-gauge" style={style}>
       <div className="hmi-ring-gauge__hole">
         <span className="hmi-ring-gauge__value">
-          {raw == null ? '---' : formatValue(value, decimals)}
+          {raw == null ? '---' : formatNumber(value, Math.min(3, decimals))}
           {unit && <span className="hmi-ring-gauge__unit">{unit}</span>}
         </span>
         {caption && <span className="hmi-ring-gauge__caption">{caption}</span>}

@@ -429,6 +429,9 @@ describe('containerLayoutProps', () => {
       'data-flow-direction': 'row',
       'data-flow-align': 'center',
     });
+    expect(containerLayoutProps({ direction: 'stack' })).toMatchObject({
+      'data-flow-direction': 'stack',
+    });
   });
 
   it('falls back to row/stretch for a property-sourced direction/align — resolve before calling', () => {
@@ -906,6 +909,7 @@ describe('usePropString', () => {
   it('reads a static value as its text', () => {
     expect(read({ s: 'Pump' }).current).toBe('Pump');
     expect(read({ s: { $static: 42 } }).current).toBe('42');
+    expect(read({ s: -1234.5 }).current).toBe('-1234,5');
     expect(read({ s: false }).current).toBe('false');
   });
 
@@ -920,6 +924,8 @@ describe('usePropString', () => {
     expect(result.current).toBe('Running');
     act(() => useVariableStore.getState().setScalar('PLC:State', 42));
     expect(result.current).toBe('42');
+    act(() => useVariableStore.getState().setScalar('PLC:State', 3.5));
+    expect(result.current).toBe('3,5');
     act(() => useVariableStore.getState().setScalar('PLC:State', true));
     expect(result.current).toBe('true');
     act(() => useVariableStore.getState().setScalar('PLC:State', null));
@@ -1056,6 +1062,16 @@ describe('usePropString / usePropBoolean / usePropNumber', () => {
         expect(result.current.hook).toEqual(result.current.old);
       }
     }
+  });
+});
+
+describe('getPropString for a machine', () => {
+  it('keeps the decimal point of a number, also one in a Text Expression', () => {
+    const ctx = { machineText: true };
+    const url = { $stringExpr: { template: 'cam/{1}', wildcards: { 1: { $static: 2.5 } } } };
+    expect(getPropString({ url }, 'url', '', ctx)).toBe('cam/2.5');
+    expect(getPropString({ url }, 'url', '', {})).toBe('cam/2,5');
+    expect(getPropString({ n: { $static: 3.5 } }, 'n', '', ctx)).toBe('3.5');
   });
 });
 

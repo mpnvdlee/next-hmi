@@ -3,7 +3,8 @@ import type { ComponentPropertySchema } from './componentProperty';
 
 export interface LayoutConfig {
   // ── Container — flex arrangement of children ───────────────────────────────
-  direction?: 'row' | 'column';
+  /** `stack` puts every child in the same spot, one on top of the next. */
+  direction?: 'row' | 'column' | 'stack';
   gap?: string;
   wrap?: boolean;
   align?: string;
@@ -226,6 +227,25 @@ export interface SwitchSource {
   };
 }
 
+/** $map: looks `value` up in the project value map `id` (see `ValueMap`). */
+export interface MapSource {
+  $map: { id: string; value: unknown };
+}
+
+export const VALUE_MAP_TYPES = ['Color', 'String', 'Boolean', 'Integer', 'Float'] as const;
+
+/**
+ * A project-wide lookup table in config.json `valueMaps`: the first case whose
+ * `when` equals the input gives `then`, else `default`. A String map's `then`
+ * may be a `$loc`. Mirrors backend/models/value_map.py.
+ */
+export interface ValueMap {
+  id: string;
+  type: (typeof VALUE_MAP_TYPES)[number];
+  cases: Array<{ when: string | number | boolean; then: unknown }>;
+  default?: unknown;
+}
+
 /** $user: current logged-in user data (username, groups, or full user list for items fields) */
 export interface UserSource {
   $user: {
@@ -344,7 +364,9 @@ export type PageField =
   | 'depth'
   | 'parentId'
   | 'pathString'
-  | 'pathSegments';
+  | 'pathSegments'
+  | 'groupIndex'
+  | 'groupLastIndex';
 
 /**
  * $page: read metadata of the active page (default) or any named page.
@@ -352,6 +374,9 @@ export type PageField =
  * `pathSegments` returns a JSON-stringified array of `{ id, label }` objects
  * so it can flow through the same string-typed expression channel; consumers
  * that need structured segments can call `useEvalContext().resolvePage` directly.
+ * `groupIndex` is the page's position among its group's children, counted from 0,
+ * and `groupLastIndex` the last position. Without `pageId` they read the active tab of
+ * the group the widget sits in — the group the tab actions switch.
  */
 export interface PageSource {
   $page: {
@@ -464,6 +489,14 @@ interface PageNodeBase {
    *  it — so tapping the next hotspot closes this popover and opens its own in
    *  one tap. Read only for a node in the Dialogs folder; absent = it does. */
   tapThrough?: boolean;
+  /** Whether the operator can drag the card by its header bar; it stays where
+   *  it was dragged until it closes. Read only for a node in the Dialogs
+   *  folder; absent = it cannot. */
+  draggable?: boolean;
+  /** Whether the screen under the card stays usable while it is open: no dim,
+   *  and presses beside the card reach the screen instead of closing it.
+   *  Read only for a node in the Dialogs folder; absent = it does not. */
+  modeless?: boolean;
   /** Whether the modal card shows its header bar (title and close button) while
    *  this node is open as a page overlay, from either root; absent = shown. */
   showModalHeader?: boolean;
@@ -573,7 +606,7 @@ export type ButtonAction =
       /** Target node id — a page, or a page group (its active child renders
        *  inside the group's header/footer chrome), in the Dialogs folder. */
       pageId: string;
-      /** Input-parameter values for the declarations the target carries. */
+      /** Input values for the declarations the target carries. */
       componentProperties?: Record<string, unknown>;
       size?: OverlaySize;
       placement?: OverlayPlacement;
@@ -603,10 +636,24 @@ export type ButtonAction =
   | { type: 'closePageOverlay'; pageId?: string }
   | {
       /** Closes every open overlay, then navigates to a page or page group in
-       *  the `pages` root: a fixed id, or a dialog input parameter declared
+       *  the `pages` root: a fixed id, or a dialog input declared
        *  `format: 'page'`. One that resolves to no navigable page does nothing. */
       type: 'navigateToPage';
       pageId: string | { $componentProp: string };
+      /** Values for the inputs a fixed target and its groups declare, read once
+       *  in the opener's context; one left out starts at its default. */
+      componentProperties?: Record<string, unknown>;
+    }
+  /** Switch a page group's tab: the group the widget sits in, or `groupId`
+   *  (`'$parent'` or a group id), as for a Tab Bar. Next and Previous stop at
+   *  the last and first tab; they do not wrap. */
+  | { type: 'pageGroupNext'; groupId?: string }
+  | { type: 'pageGroupPrevious'; groupId?: string }
+  | {
+      /** `index` counts from 0; one outside the group's tabs does nothing. */
+      type: 'pageGroupGoTo';
+      groupId?: string;
+      index: unknown;
     }
   | {
       type: 'writeDataVariable';
@@ -688,6 +735,8 @@ export type ButtonAction =
       onSettled?: ButtonAction[];
     }
   | { type: 'acknowledgeAllAlarms' }
+  /** Reloads the HMI in this browser, as a page refresh does. */
+  | { type: 'reloadHmi' }
   | { type: 'delay'; duration: number }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }
@@ -772,6 +821,7 @@ export interface PagesConfig {
   /** Right-sidebar components — array form, rendered as the right sidebar content when shell.rightSidebar.component is absent. */
   rightSidebar?: WidgetConfig[];
   globalEvents?: GlobalEventsConfig;
+  valueMaps?: ValueMap[];
 }
 
 /**
@@ -790,6 +840,7 @@ export interface PagesBootstrapResponse {
   leftSidebar?: WidgetConfig[];
   rightSidebar?: WidgetConfig[];
   globalEvents?: GlobalEventsConfig;
+  valueMaps?: ValueMap[];
   /** Revision of the index's editable fields, sent back on save. */
   revision?: string;
   /** Revision of each page document, by page id, sent back on save. */

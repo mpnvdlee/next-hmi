@@ -188,25 +188,14 @@
                               "label": {
                                 "$loc": "Setpoint"
                               },
-                              "text": {
-                                "$stringExpr": {
-                                  "template": "{Round1(1)} °C",
-                                  "wildcards": {
-                                    "1": {
-                                      "$var": {
-                                        "path": "Brew:Boiler/Setpoint"
-                                      }
-                                    }
-                                  }
-                                }
-                              },
                               "value": {
                                 "$var": {
                                   "path": "Brew:Boiler/Setpoint"
                                 }
                               },
                               "max": 120,
-                              "color": "var(--hmi-ok)"
+                              "color": "var(--hmi-ok)",
+                              "unit": "°C"
                             },
                             "layout": {
                               "widthMode": "fill",
@@ -221,25 +210,14 @@
                               "label": {
                                 "$loc": "Pump pressure"
                               },
-                              "text": {
-                                "$stringExpr": {
-                                  "template": "{Round1(1)} bar",
-                                  "wildcards": {
-                                    "1": {
-                                      "$var": {
-                                        "path": "Brew:Pump/Pressure"
-                                      }
-                                    }
-                                  }
-                                }
-                              },
                               "value": {
                                 "$var": {
                                   "path": "Brew:Pump/Pressure"
                                 }
                               },
                               "max": 12,
-                              "color": "var(--hmi-accent)"
+                              "color": "var(--hmi-accent)",
+                              "unit": "bar"
                             },
                             "layout": {
                               "widthMode": "fill",
@@ -254,25 +232,14 @@
                               "label": {
                                 "$loc": "Dose"
                               },
-                              "text": {
-                                "$stringExpr": {
-                                  "template": "{Round1(1)} g",
-                                  "wildcards": {
-                                    "1": {
-                                      "$var": {
-                                        "path": "Brew:Hopper/Dose"
-                                      }
-                                    }
-                                  }
-                                }
-                              },
                               "value": {
                                 "$var": {
                                   "path": "Brew:Hopper/Dose"
                                 }
                               },
                               "max": 25,
-                              "color": "var(--hmi-warn)"
+                              "color": "var(--hmi-warn)",
+                              "unit": "g"
                             },
                             "layout": {
                               "widthMode": "fill",
@@ -1243,25 +1210,15 @@
                           "label": {
                             "$loc": "Water tank"
                           },
-                          "text": {
-                            "$stringExpr": {
-                              "template": "{Round(1)} %",
-                              "wildcards": {
-                                "1": {
-                                  "$var": {
-                                    "path": "Brew:Tank/WaterLevel"
-                                  }
-                                }
-                              }
-                            }
-                          },
                           "value": {
                             "$var": {
                               "path": "Brew:Tank/WaterLevel"
                             }
                           },
                           "max": 100,
-                          "color": "var(--hmi-accent)"
+                          "color": "var(--hmi-accent)",
+                          "unit": "%",
+                          "decimals": 0
                         },
                         "layout": {
                           "widthMode": "fill",
@@ -1276,25 +1233,15 @@
                           "label": {
                             "$loc": "Bean hopper"
                           },
-                          "text": {
-                            "$stringExpr": {
-                              "template": "{Round(1)} %",
-                              "wildcards": {
-                                "1": {
-                                  "$var": {
-                                    "path": "Brew:Hopper/BeanLevel"
-                                  }
-                                }
-                              }
-                            }
-                          },
                           "value": {
                             "$var": {
                               "path": "Brew:Hopper/BeanLevel"
                             }
                           },
                           "max": 100,
-                          "color": "var(--hmi-warn)"
+                          "color": "var(--hmi-warn)",
+                          "unit": "%",
+                          "decimals": 0
                         },
                         "layout": {
                           "widthMode": "fill",

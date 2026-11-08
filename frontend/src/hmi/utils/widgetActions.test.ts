@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ButtonAction } from '@shared/types/config';
 import { useHmiStore } from '@hmi/store/hmiStore';
+import { useVariableStore } from '@hmi/store/variableStore';
+import { useConfigStore } from '@shared/store/configStore';
 import { executeWidgetActions } from './widgetActions';
 
 function anchorElement(rect: Partial<DOMRect>): HTMLElement {
@@ -64,6 +66,36 @@ describe('executeWidgetActions — anchored placement', () => {
   });
 });
 
+describe('executeWidgetActions — navigateToPage inputs', () => {
+  it('reads each input once, in the opener’s context, and queues it with the route', () => {
+    useConfigStore.setState({
+      pages: [{ id: 'recipes', title: 'Recipes', type: 'page', sections: { content: [] } }],
+      dialogs: [],
+    });
+    useVariableStore.setState({ values: { 'PLC:Name': 'Espresso' } });
+    const action: ButtonAction = {
+      type: 'navigateToPage',
+      pageId: 'recipes',
+      componentProperties: {
+        filter: { $var: { path: 'PLC:Name' } },
+        slot: { $componentProp: 'which' },
+      },
+    };
+    executeWidgetActions([action], { evalCtx: { inputScopeProps: { which: 3 } } });
+
+    const { pendingNavigation, pageArrival } = useHmiStore.getState();
+    expect(pendingNavigation).toBe('recipes');
+    expect(pageArrival).toMatchObject({
+      pageId: 'recipes',
+      values: { filter: 'Espresso', slot: 3 },
+    });
+    // Another navigation counts again, so the same values are read again.
+    executeWidgetActions([action], { evalCtx: { inputScopeProps: { which: 3 } } });
+    expect(useHmiStore.getState().pageArrival!.seq).toBe(pageArrival!.seq + 1);
+    useConfigStore.setState({ pages: [] });
+  });
+});
+
 describe('executeWidgetActions — openDialog component properties', () => {
   beforeEach(() => {
     useHmiStore.setState({ openPageOverlays: [] });
@@ -81,6 +113,68 @@ describe('executeWidgetActions — openDialog component properties', () => {
       motorId: 'M7',
       speed: { $var: { path: 'PLC:Speed' } },
     });
+  });
+
+  it('reads a Value input once, in the opener’s context, and passes a Binding as its variable', () => {
+    useConfigStore.setState({
+      dialogs: [
+        {
+          id: 'p1',
+          title: 'Motor',
+          type: 'page',
+          sections: { content: [] },
+          componentProperties: {
+            jog: { type: 'float', label: 'Jog', mode: 'value' },
+            speed: { type: 'float', label: 'Speed', mode: 'binding' },
+          },
+        },
+      ],
+    });
+    useVariableStore.setState({ values: { 'PLC:Speed': 20 } });
+    const speed = { $var: { path: 'PLC:Speed' } };
+    const action: ButtonAction = {
+      type: 'openDialog',
+      pageId: 'p1',
+      componentProperties: {
+        jog: { $formula: { expression: '{1} * 0.5', wildcards: { '1': speed } } },
+        speed,
+      },
+    };
+    executeWidgetActions([action], {});
+
+    expect(useHmiStore.getState().openPageOverlays[0].componentProperties).toEqual({
+      jog: 10,
+      speed,
+    });
+    useConfigStore.setState({ dialogs: [] });
+  });
+
+  it('reads a Value input an enclosing group declares in the opener’s context', () => {
+    useConfigStore.setState({
+      dialogs: [
+        {
+          id: 'g1',
+          title: 'Devices',
+          type: 'page-group',
+          componentProperties: { zone: { type: 'string', label: 'Zone', mode: 'value' } },
+          children: [{ id: 'p1', title: 'Motor', type: 'page', sections: { content: [] } }],
+        } as never,
+      ],
+    });
+    useVariableStore.setState({ values: { 'PLC:Zone': 'A' } });
+    executeWidgetActions(
+      [
+        {
+          type: 'openDialog',
+          pageId: 'p1',
+          componentProperties: { zone: { $var: { path: 'PLC:Zone' } } },
+        },
+      ],
+      {},
+    );
+
+    expect(useHmiStore.getState().openPageOverlays[0].componentProperties).toEqual({ zone: 'A' });
+    useConfigStore.setState({ dialogs: [] });
   });
 
   it('forwards the firing site’s own props through a $componentProp value', () => {

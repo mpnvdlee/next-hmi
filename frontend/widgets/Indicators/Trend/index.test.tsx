@@ -90,6 +90,6 @@ describe('Trend', () => {
     useVariableStore.setState({ values: { [VAR]: 1.23456789 } });
     const { container } = renderTrend({ variable: BINDING, decimals: 42 });
 
-    expect(container.querySelector('.hmi-trend__value')?.textContent).toBe('1.234568');
+    expect(container.querySelector('.hmi-trend__value')?.textContent).toBe('1,234568');
   });
 });

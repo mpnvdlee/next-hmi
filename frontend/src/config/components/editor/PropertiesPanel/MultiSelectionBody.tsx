@@ -15,7 +15,7 @@ import WidgetIcon from '../../ui/WidgetIcon';
 import { LayoutFields } from '../../ui/LayoutFields';
 import { slotFilter } from '../PropertySourceEditor/editors/utils';
 import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefaultTokens';
-import { usesFlexLayout } from '@shared/utils/parentFlow';
+import { repeatItemsKey, usesFlexLayout } from '@shared/utils/parentFlow';
 import { commonSchemaOf } from './commonSchema';
 import { mixedLayoutMap, multiValueOf } from './multiValue';
 
@@ -160,6 +160,7 @@ export default function MultiSelectionBody({
           // writes through `onChange`, so it lands on every selected widget.
           componentId={bindingPicker ? comps[0].id : undefined}
           mixedLayout={mixedLayout}
+          noStack={comps.some((c) => repeatItemsKey(c.type) !== null)}
           tokenValues={tokenValues}
         />
       </Section>

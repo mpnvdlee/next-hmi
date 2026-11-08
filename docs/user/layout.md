@@ -4,7 +4,7 @@ Layout is flex-based, not pixel-nailed. You group widgets in containers, decide 
 
 ## Build layout with containers
 
-1. **Add a Container** — Drop a **Container** where you want a group. Set its **Direction** — row or column — plus **Gap** and **Align**.
+1. **Add a Container** — Drop a **Container** where you want a group. Set its **Direction** — row, column or stack — plus **Gap** and **Align**.
 2. **Nest your widgets** — Move widgets into the container in the tree. They flow in order along the direction you chose.
 3. **Tune each child** — Select a child and set its **Width** and **Height** to **Hug**, **Fill** or **Fixed**. This is how you get "this panel fixed, that one fills the rest".
 
@@ -59,6 +59,10 @@ Two rows of icons, one question each:
 - **Distribute** — where they sit *along* the direction of flow, plus **Space between** and **Space around** for spreading them out instead of bunching them together.
 
 Each icon draws the arrangement it picks, and both rows follow the container's **Direction**: in a row the Align icons move children up and down, in a column they move them left and right. Hover an icon and it names the position you will get — Top, Middle, Bottom or Left, Center, Right — so you never have to work out which CSS property the direction turned it into.
+
+### Stack
+
+**Direction: Stack** puts every child in the same spot, each drawn on top of the one before it in the tree — a product icon over a mat icon, a status badge over a picture. The container is as big as its largest child, and a child with **Width: Fill** or **Height: Fill** stretches over the whole container on that axis. **Align** places each child top to bottom, **Distribute** left to right; Gap and Wrap leave the panel, since a stack neither spaces nor wraps. A Repeater has no Stack: its copies would all land on one spot. Hide a child with **Visible** and the ones under it show through.
 
 ### Padding
 

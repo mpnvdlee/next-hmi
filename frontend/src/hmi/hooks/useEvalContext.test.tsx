@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useConfigStore } from '@shared/store/configStore';
 import { HostPageContext } from '../context/HostPageContext';
+import { PageGroupStackContext } from '../components/PageGroupStackContext';
 import { useHmiStore } from '../store/hmiStore';
 import { evaluatePropertyValue } from '../utils/propertySourceEval';
 import { useEvalContext } from './useEvalContext';
@@ -202,5 +203,44 @@ describe('useEvalContext $overlay', () => {
     const { result } = renderHook(() => useEvalContext(), { wrapper: wrapper('/pages/line') });
     expect(result.current.resolveOverlayParam?.('device', 'mode')).toBe('view');
     expect(result.current.resolveOverlayParam?.('other', 'mode')).toBeNull();
+  });
+});
+
+describe('useEvalContext $page groupIndex / groupLastIndex', () => {
+  const scope = { id: 'scope', type: 'page' as const, title: 'Scope' };
+  const params = { id: 'params', type: 'page' as const, title: 'Params' };
+  const info = { id: 'info', type: 'page' as const, title: 'Info' };
+  const device = {
+    id: 'device',
+    type: 'page-group' as const,
+    title: 'Device',
+    children: [scope, params, info],
+  };
+
+  beforeEach(() => {
+    useConfigStore.setState({ pages: [device] as never, dialogs: [] });
+  });
+
+  it('reads the active tab of the group the widget sits in, counted from 0', () => {
+    const stack = [{ group: device, activePage: params, onNavigate: () => {} }] as never;
+    const { result } = renderHook(() => useEvalContext(), {
+      wrapper: ({ children }) => (
+        <MemoryRouter initialEntries={['/pages/params']}>
+          <PageGroupStackContext.Provider value={stack}>{children}</PageGroupStackContext.Provider>
+        </MemoryRouter>
+      ),
+    });
+    expect(result.current.resolvePage?.('groupIndex')).toBe(1);
+    expect(result.current.resolvePage?.('groupLastIndex')).toBe(2);
+  });
+
+  it("reads a named page's own position, and nothing for a page outside a group", () => {
+    useConfigStore.setState({
+      pages: [device, { id: 'home', type: 'page', title: 'Home' }] as never,
+    });
+    const { result } = renderHook(() => useEvalContext(), { wrapper: wrapper('/pages/home') });
+    expect(result.current.resolvePage?.('groupIndex', 'info')).toBe(2);
+    expect(result.current.resolvePage?.('groupLastIndex', 'info')).toBe(2);
+    expect(result.current.resolvePage?.('groupIndex')).toBeNull();
   });
 });

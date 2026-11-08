@@ -61,7 +61,7 @@ describe('Gauge', () => {
       max: 2 ** 54,
     });
 
-    expect(container.querySelector('.hmi-gauge__value')?.textContent).toBe('9007199254740992.0');
+    expect(container.querySelector('.hmi-gauge__value')?.textContent).toBe('9007199254740992,0');
     expect(fillEnds(container)).toEqual(
       fillEnds(renderGauge({ variable: 50, max: 100 }).container),
     );

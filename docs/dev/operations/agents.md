@@ -82,7 +82,7 @@ npm run build                         # also regenerates the tracked widget mani
 | Changed | Also run |
 |---|---|
 | A built-in widget's registry entry or schema | `npm run docs:widgets` — regenerates `docs/user/catalog.md`, `docs/user/generated/widgets.json`, `docs/user/generated/property-sources.json`; commit them |
-| Anything under `frontend/widgets/` | `npm run build:builtin-widgets` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.builtin-widgets.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 111.6 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
+| Anything under `frontend/widgets/` | `npm run build:builtin-widgets` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.builtin-widgets.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 119 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
 | A property source | `npm run docs:widgets` (the source table is generated too) + backend validation tests |
 | Anything under `project-testbench/` diagnostics | `pytest backend/tests/test_project_testbench_diagnostics.py` — a golden snapshot; a new finding must be regenerated deliberately |
 | OPC-UA browse, the browse import (`buildFromBrowse`), or datasource read/write/subscribe | `pytest backend/tests/test_opcua_plc_profiles.py` and `npm test -- --run src/config/components/ui/opcuaBrowseProfiles.test.ts`. Both halves are held to `frontend/src/shared/types/__fixtures__/opcuaBrowseProfiles.json`: the backend proves each PLC-shaped server (CODESYS, S7-1500, TwinCAT, Kepware, B&R, edge cases, every NodeId type) browses to its `browse`, the frontend that `browse` imports to its `tree`, and the backend runs `tree` live. A deliberate change regenerates both halves, after reading the diff: `python -m tests.opcua_plc_profiles` from `backend/`, then the frontend test with `NEXTHMI_WRITE_FIXTURE=1` |
@@ -214,16 +214,17 @@ Inline styles and property parsing are in [Hard rules](#hard-rules). Beyond thos
 
 Every property has a **type** (`String`, `Integer`, `Float`, `Boolean`,
 `DateTime`, …) and a **source**. The canonical sources are: `$static`, `$var`,
-`$loc`, `$if`, `$switch`, `$compare`, `$not`, `$and`, `$or`, `$formula`, `$random`, `$user`, `$userGroups`,
+`$loc`, `$if`, `$switch`, `$map`, `$compare`, `$not`, `$and`, `$or`, `$formula`, `$random`, `$user`, `$userGroups`,
 `$device`, `$time`, `$urlParam`, `$pageIsActive`, `$widgetProp`,
 `$componentProp`, `$overlay`, `$languages`, `$stringExpr`, `$http`, `$alarmCount`,
 `$recipe`, `$recipeList`, `$page`, `$viewport`, `$result`, `$repeatItem`.
 
 Icons and images are plain `$static` values carrying a structured payload
-(`{ type, name }` / `{ path }`). `$componentProp` reads a value passed in by the
-parent component, or an input parameter the Open Dialog action filled in for
-the dialog page it sits in; `$widgetProp` reads a property exported by a
-sibling component.
+(`{ type, name }` / `{ path }`). `$componentProp` (editor label **Input**) reads a value
+passed in by the parent component, by the Open Dialog action that opened the
+dialog it sits in, or by the Navigate To Page that went to its page;
+`$widgetProp` (**Widget Property**) reads what another widget on the screen
+publishes.
 `$result` exists only inside an async action's `onSuccess` / `onFailed` /
 `onSettled` handlers. `$repeatItem` reads the element of the surrounding Repeater
 copy.

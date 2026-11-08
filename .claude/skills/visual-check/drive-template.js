@@ -28,10 +28,10 @@ const h = require(path.join(findRepoRoot(), '.claude/skills/visual-check/harness
   // Static state of the panel.
   await h.shotEl(h.propsPanel(ed), 'panel');
 
-  // A row's source menu (full-page — the popup portals outside the panel).
+  // A row's source drawer (full-page — it slides in over the panel).
   console.log('sources:', await h.openSourceMenu(ed, 'Enabled'));
   await h.shot(ed, 'menu-enabled');
-  await h.closePopup(ed); // Escape does NOT close it
+  await h.closePopup(ed); // its ×
 
   // Drive a row to a binding and capture the result.
   await h.setSource(ed, 'Enabled', 'Variable');
