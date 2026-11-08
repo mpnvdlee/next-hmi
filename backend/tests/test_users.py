@@ -807,6 +807,12 @@ def test_a_panel_sign_out_during_an_on_screen_login_is_not_undone(ws_manager):
 
     class VerySlowWebSocket(SlowWebSocket):
         delay = 0.1
+        sending: asyncio.Event | None = None
+
+        async def send_text(self, message: str) -> None:
+            if self.sending is not None:
+                self.sending.set()
+            await super().send_text(message)
 
     async def scenario() -> FakeWebSocket:
         for client_id in ("p1", "p2", "p3", "p4"):
@@ -824,9 +830,13 @@ def test_a_panel_sign_out_during_an_on_screen_login_is_not_undone(ws_manager):
             "type": "request_identity", "scope": "runtime:x",
             "sessionToken": ws_manager._client_users["p1"]["runtime:p1"]["session"],
         }))
+        x = ws_manager._connections["x"]
+        x.sending = asyncio.Event()
 
+        # Waits for the login's reset to reach x, not a fixed delay: the password
+        # check before it takes as long as PBKDF2 does on the machine.
         async def sign_out_meanwhile() -> None:
-            await asyncio.sleep(0.035)
+            await x.sending.wait()
             await ws_manager.sign_out_panel("line-a")
 
         await asyncio.gather(
