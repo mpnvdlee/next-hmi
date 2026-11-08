@@ -1541,6 +1541,7 @@ export const ACTION_EDITORS: ActionEditors = {
   loginUser: LoginUserEditor,
   logoutUser: LogoutUserEditor,
   acknowledgeAllAlarms: () => null,
+  reloadHmi: () => null,
   delay: DelayEditor,
   setLanguage: SetLanguageEditor,
   setActiveTheme: SetThemeEditor,

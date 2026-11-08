@@ -724,6 +724,8 @@ export type ButtonAction =
       onSettled?: ButtonAction[];
     }
   | { type: 'acknowledgeAllAlarms' }
+  /** Reloads the HMI in this browser, as a page refresh does. */
+  | { type: 'reloadHmi' }
   | { type: 'delay'; duration: number }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }

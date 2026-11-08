@@ -70,6 +70,7 @@
     "onSettled": "actions"
   },
   "acknowledgeAllAlarms": {},
+  "reloadHmi": {},
   "runComponentActions": { "property": "actionsProperty" },
   "delay": { "duration": "Integer" },
   "setLanguage": { "language": "String" },

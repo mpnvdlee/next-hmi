@@ -488,6 +488,7 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `recipeLoad` | `datasetId`, `verify`, `onSuccess` / `onFailed` / `onSettled` |
 | `recipeSave` | `datasetId` (absent = the loaded one), `onSuccess` / `onFailed` / `onSettled` |
 | `acknowledgeAllAlarms` | none |
+| `reloadHmi` | none — reloads the browser page; actions after it do not run |
 | `delay` | `duration` (ms) |
 | `setLanguage` / `setActiveTheme` | `language` / `theme` |
 | `showAlert` | `title`, `description`, `cancelText`, `okText`, `dismissible`, `onCancel`, `onOk` |

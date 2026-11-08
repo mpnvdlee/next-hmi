@@ -141,6 +141,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <path d="M3.2 8.6 l3.1 3.1 L12.8 4.6" />
     </Icon>
   ),
+  // Circular arrow — reload.
+  reloadHmi: (
+    <Icon>
+      <path d="M13 8 a5 5 0 1 1 -1.5 -3.5" />
+      <path d="M12 1.8 v3 h-3" />
+    </Icon>
+  ),
   // Globe.
   setLanguage: (
     <Icon>

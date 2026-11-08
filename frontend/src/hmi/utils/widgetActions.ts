@@ -367,6 +367,12 @@ export function executeWidgetActions(
       continue;
     }
 
+    if (action.type === 'reloadHmi') {
+      // The page goes away, so nothing after this action can run.
+      window.location.reload();
+      return;
+    }
+
     if (action.type === 'setLanguage') {
       const lang = String(evaluatePropertyValue(action.language, evalCtx) ?? '');
       if (lang) {

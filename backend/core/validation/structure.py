@@ -2152,6 +2152,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "onSettled": "actions",
     },
     "acknowledgeAllAlarms": {},
+    "reloadHmi": {},
     "runComponentActions": {"property": "actionsProperty"},
     "delay": {"duration": "Integer"},
     "setLanguage": {"language": "String"},

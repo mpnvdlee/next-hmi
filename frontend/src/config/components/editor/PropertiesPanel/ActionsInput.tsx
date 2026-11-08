@@ -424,6 +424,8 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       return K('Log out user');
     case 'acknowledgeAllAlarms':
       return K('Acknowledge all alarms');
+    case 'reloadHmi':
+      return K('Reload HMI');
     case 'runComponentActions':
       return action.property ? K('Run', action.property) : K('Run component actions');
     case 'delay':

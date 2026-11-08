@@ -67,6 +67,8 @@ export function makeDefaultAction(
       return { type: 'logoutUser' };
     case 'acknowledgeAllAlarms':
       return { type: 'acknowledgeAllAlarms' };
+    case 'reloadHmi':
+      return { type: 'reloadHmi' };
     case 'runComponentActions':
       return { type: 'runComponentActions', property: '' };
     case 'delay':

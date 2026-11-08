@@ -127,6 +127,12 @@ export const ACTION_TYPES = [
     description: 'Shows a transient message with an info, success, warning or error severity.',
   },
   {
+    type: 'reloadHmi' as const,
+    label: 'Reload HMI',
+    category: 'Interface',
+    description: 'Reloads the HMI in this browser, as a page refresh does.',
+  },
+  {
     type: 'delay' as const,
     label: 'Delay',
     category: 'Logic',
@@ -174,6 +180,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   setActiveTheme: 'viewport',
   showAlert: 'alarmCount',
   showToast: 'result',
+  reloadHmi: 'device',
   runComponentActions: 'componentProp',
 };
 

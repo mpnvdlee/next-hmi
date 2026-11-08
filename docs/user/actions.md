@@ -15,7 +15,7 @@ Custom widgets fire the same lists through the SDK's `executeWidgetActions`, so 
 
 ## The action catalog
 
-Twenty-two types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
+Twenty-three types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
 
 ### Screens
 
@@ -72,6 +72,7 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 | **Set Theme** | Switches the active theme by id — day/night buttons, or a per-line brand. See [Theming](theming.md). |
 | **Show Alert** | A modal with a **Title**, **Description**, and two buttons whose captions you set. **OK** and **Cancel** each run their own action list, which is how you gate a dangerous write behind a confirmation. `dismissible` decides whether clicking away counts as cancel. |
 | **Show Toast** | A transient message — **severity** `info` / `success` / `warning` / `error`, **discard** `auto` (after **duration**, 4000 ms by default) or `manual`. The message is a property, so `$loc` and `$var` work in it. |
+| **Reload HMI** | Reloads the HMI in this browser, as a page refresh does — a *Restart HMI* button. It reloads only this screen: other panels and the server keep running, and the actions after it in the list do not run. |
 
 ### Logic
 

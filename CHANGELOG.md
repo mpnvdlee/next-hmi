@@ -22,6 +22,9 @@ server listed.
 
 ### Added
 
+- **Restart the HMI from a button.** A new action, **Reload HMI**, reloads
+  the HMI in this browser as a page refresh does. Other panels and the server
+  keep running.
 - **Size a Button's text.** A Button gains the Label's **Typography**
   (Heading to Caption) and **Overflow** (Wrap or Truncate), so a narrow
   button can take a smaller caption or cut its text off with an ellipsis.
