@@ -220,6 +220,7 @@ A themeable Phosphor icon at any size and colour.
 | `iconName` | Icon | `icon` |
 | `size` | Size (px) | `Integer` |
 | `color` | Color | `color` |
+| `rotation` | Rotation (°) | `Integer` |
 | `chrome` | Chip background | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
@@ -233,6 +234,7 @@ Shows an asset with a fit mode and optional data-driven indicators.
 | `src` | Image | `image` |
 | `alt` | Alt text | `String` |
 | `fit` | Fit | `String` |
+| `rotation` | Rotation (°) | `Integer` |
 | `indicators` | Indicators | `image-indicators` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |

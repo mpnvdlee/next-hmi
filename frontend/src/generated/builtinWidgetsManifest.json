@@ -229,7 +229,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "5e6a7df8dc0db2a2",
+    "buildTs": "07efc508a04a4bd6",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -244,6 +244,9 @@
       },
       "color": {
         "type": "color"
+      },
+      "rotation": {
+        "type": "integer"
       },
       "chrome": {
         "type": "boolean"
@@ -260,7 +263,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "99af36140d4c145d",
+    "buildTs": "8efd335b5a443060",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -275,6 +278,9 @@
       },
       "fit": {
         "type": "string"
+      },
+      "rotation": {
+        "type": "integer"
       },
       "indicators": {
         "type": "image-indicators"

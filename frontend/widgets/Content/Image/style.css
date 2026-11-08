@@ -14,6 +14,9 @@
 }
 
 .hmi-image__img {
+  /* The picture turns, the indicators over it do not. The box keeps its
+     unrotated size, so a non-square picture turned 90° is clipped at its edges. */
+  transform: rotate(var(--hmi-image-rotation, 0deg));
   max-width: 100%;
   height: auto;
   display: block;

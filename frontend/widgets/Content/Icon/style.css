@@ -18,6 +18,11 @@
   border-color: color-mix(in srgb, var(--hmi-accent) 45%, var(--hmi-border));
 }
 
+/* The glyph turns, not the chip around it. */
+.hmi-icon > span {
+  transform: rotate(var(--hmi-icon-rotation, 0deg));
+}
+
 .hmi-icon.hmi-icon--bare {
   padding: 0;
   border: none;

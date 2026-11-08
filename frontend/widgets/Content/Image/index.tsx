@@ -15,6 +15,13 @@ export const schema = {
       { label: 'Scale down', value: 'scale-down' },
     ],
   },
+  rotation: {
+    type: 'integer' as const,
+    label: 'Rotation (°)',
+    defaultValue: 0,
+    step: 90,
+    description: 'Turns the picture clockwise. Bind it to show one asset in any orientation.',
+  },
   indicators: { type: 'image-indicators' as const, label: 'Indicators' },
 };
 
@@ -42,6 +49,7 @@ export default function Image({ properties, layout }: HmiWidgetProps) {
   const src = assetSrc(getPropString(properties, 'src', '', evalCtx));
   const alt = getPropString(properties, 'alt', '', evalCtx);
   const fit = getPropString(properties, 'fit', 'contain', evalCtx) as ObjectFit;
+  const rotation = getPropNumber(properties, 'rotation', 0, evalCtx);
   const indicators = (
     Array.isArray(properties?.indicators) ? properties.indicators : []
   ) as ImageIndicator[];
@@ -55,7 +63,10 @@ export default function Image({ properties, layout }: HmiWidgetProps) {
   }
 
   return (
-    <div className="hmi-component hmi-image" style={selfLayoutStyle(layout)}>
+    <div
+      className="hmi-component hmi-image"
+      style={{ ...selfLayoutStyle(layout), '--hmi-image-rotation': `${rotation}deg` }}
+    >
       <img
         className="hmi-image__img"
         src={src}

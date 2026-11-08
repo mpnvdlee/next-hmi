@@ -461,6 +461,12 @@
         "label": "Color",
         "defaultToken": "--hmi-text"
       },
+      "rotation": {
+        "label": "Rotation (°)",
+        "defaultValue": 0,
+        "step": 90,
+        "description": "Turns the icon clockwise. Bind it to show one asset in any orientation."
+      },
       "chrome": {
         "format": "show",
         "label": "Chip background",
@@ -507,6 +513,12 @@
             "value": "scale-down"
           }
         ]
+      },
+      "rotation": {
+        "label": "Rotation (°)",
+        "defaultValue": 0,
+        "step": 90,
+        "description": "Turns the picture clockwise. Bind it to show one asset in any orientation."
       },
       "indicators": {
         "label": "Indicators"

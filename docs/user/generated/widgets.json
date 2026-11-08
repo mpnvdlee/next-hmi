@@ -792,6 +792,12 @@
             "type": "color"
           },
           {
+            "key": "rotation",
+            "label": "Rotation (°)",
+            "type": "Integer",
+            "defaultValue": 0
+          },
+          {
             "key": "chrome",
             "label": "Chip background",
             "type": "Boolean",
@@ -833,6 +839,12 @@
             "label": "Fit",
             "type": "String",
             "defaultValue": "contain"
+          },
+          {
+            "key": "rotation",
+            "label": "Rotation (°)",
+            "type": "Integer",
+            "defaultValue": 0
           },
           {
             "key": "indicators",

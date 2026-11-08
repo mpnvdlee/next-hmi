@@ -22,6 +22,10 @@ server listed.
 
 ### Added
 
+- **Turn an Icon or an Image.** Both gain **Rotation (°)**, clockwise and
+  bindable, so one asset shows in every orientation instead of a rotated copy
+  per angle. An Icon turns its glyph inside the chip; an Image turns the
+  picture under its indicators.
 - **Stack widgets on top of each other.** A Container's **Direction** gains
   **Stack** beside Row and Column: every child sits in the same spot, drawn
   over the one before it, and the Container is as big as its largest child.

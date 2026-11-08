@@ -42,6 +42,13 @@ describe('Image', () => {
     expect(img).toHaveAttribute('src', 'https://cdn.example.com/plant.png');
   });
 
+  it('turns by its Rotation through a custom property', () => {
+    const { container } = renderImage({ src: '/assets/images/plant.png', rotation: 270 });
+
+    const root = container.querySelector<HTMLElement>('.hmi-image')!;
+    expect(root.style.getPropertyValue('--hmi-image-rotation')).toBe('270deg');
+  });
+
   it('shows a placeholder when no src is set', () => {
     renderImage({});
 
