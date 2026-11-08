@@ -312,6 +312,11 @@ into a dialog or component is now read once.
 
 ### Fixed
 
+- **Escape closes one drawer at a time.** With a drawer opened from inside
+  another — a source picked for an option's label, or for a field of an
+  action in its own drawer — one Escape closed both, and with the cursor in
+  the drawer's search the first Escape did nothing. Now Escape closes the
+  top drawer only; in a search with text it first clears the search.
 - **A sidebar shrinks with its menu.** Collapsing a Navigation Menu with
   its « button left a sidebar with a fixed **Expanded size** at that width,
   with the icons in a strip at its edge. The sidebar now fits the collapsed
