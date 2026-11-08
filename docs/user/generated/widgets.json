@@ -1983,7 +1983,7 @@
       {
         "type": "StringInput",
         "name": "String Input",
-        "description": "A text field whose typed value is published for sibling widgets to read.",
+        "description": "A text field that writes what the operator types to a bound variable or input, and publishes it for sibling widgets to read.",
         "props": [
           {
             "key": "label",
@@ -1996,6 +1996,25 @@
             "label": "Placeholder",
             "type": "String",
             "group": "Content"
+          },
+          {
+            "key": "variable",
+            "label": "Variable",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "writeOn",
+            "label": "Write on",
+            "type": "String",
+            "group": "Data",
+            "defaultValue": "commit"
+          },
+          {
+            "key": "value",
+            "label": "Value",
+            "type": "String",
+            "group": "Data"
           },
           {
             "key": "isPassword",

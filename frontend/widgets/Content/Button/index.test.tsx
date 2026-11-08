@@ -6,6 +6,7 @@ import { useVariableStore } from '@hmi/store/variableStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { __resetForTests, resolvePending } from '@hmi/utils/actionDispatcher';
+import StringInput from '../../Inputs/StringInput';
 import Button from './index';
 
 vi.mock('@hmi/hooks/useWebSocket', () => ({
@@ -116,6 +117,38 @@ describe('Button', () => {
 
     await user.pointer({ keys: '[/MouseLeft]', target: button });
     expect(overlays()).toEqual(['pressed', 'released']);
+  });
+
+  it('commits a field still being edited before its actions run', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <StringInput id="name" properties={{ variable: { $var: { path: 'PLC:Recipe/Name' } } }} />
+        <Button
+          properties={{
+            label: 'Save',
+            variable: { $var: { path: 'PLC:Recipe/Save' } },
+            actions: { onPress: [{ type: 'closePageOverlay' }] },
+          }}
+        />
+      </MemoryRouter>,
+    );
+    await user.type(screen.getByRole('textbox'), 'Lager');
+
+    await user.pointer({
+      keys: '[MouseLeft>]',
+      target: screen.getByRole('button', { name: 'Save' }),
+    });
+
+    expect(
+      vi.mocked(sendWsMessage).mock.calls.map(([f]) => {
+        const frame = f as { path: string; value: unknown };
+        return [frame.path, frame.value];
+      }),
+    ).toEqual([
+      ['Recipe/Name', 'Lager'],
+      ['Recipe/Save', true],
+    ]);
   });
 
   it('toasts the rejection the backend correlates back to the write', async () => {

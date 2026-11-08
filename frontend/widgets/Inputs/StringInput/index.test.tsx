@@ -1,11 +1,19 @@
 import '../../testSdk';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useComponentPropStore } from '@hmi/store/widgetPropStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
+import { useVariableStore } from '@hmi/store/variableStore';
+import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import StringInput from './index';
+
+// The real send, counted: a Value input's write lands in the store through it.
+vi.mock('@hmi/hooks/useWebSocket', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@hmi/hooks/useWebSocket')>();
+  return { ...actual, sendWsMessage: vi.fn(actual.sendWsMessage) };
+});
 
 function renderInput(properties: Record<string, unknown>, id = 'entry') {
   return render(
@@ -235,6 +243,63 @@ describe('StringInput', () => {
       await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
 
       expect(toasts()).toEqual([]);
+    });
+  });
+
+  describe('Variable', () => {
+    // A Value input's slot: written in this browser, as a page variable is.
+    const KEY = '$input:f1/RecipeFilter';
+    const variable = { $var: { path: KEY } };
+    const stored = () => useVariableStore.getState().values[KEY];
+
+    beforeEach(() => {
+      vi.mocked(sendWsMessage).mockClear();
+      useVariableStore.setState({ values: { [KEY]: 'krat' }, varMeta: {} });
+    });
+
+    it('shows the bound text and writes the edit once, on Enter', async () => {
+      const user = userEvent.setup();
+      renderInput({ variable });
+      const field = screen.getByRole('textbox');
+      expect(field).toHaveValue('krat');
+
+      await user.clear(field);
+      await user.type(field, 'doos');
+      expect(stored()).toBe('krat');
+
+      await user.type(field, '{Enter}');
+      expect(stored()).toBe('doos');
+      expect(sendWsMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes on leaving the field', async () => {
+      const user = userEvent.setup();
+      renderInput({ variable });
+
+      await user.type(screen.getByRole('textbox'), 'je');
+      await user.tab();
+
+      expect(stored()).toBe('kratje');
+    });
+
+    it('writes every key with Write on Every key, and shows a clear made elsewhere', async () => {
+      const user = userEvent.setup();
+      renderInput({ variable, writeOn: 'change' });
+      const field = screen.getByRole('textbox');
+
+      await user.type(field, 'je');
+      expect(stored()).toBe('kratje');
+      await user.tab();
+
+      act(() => useVariableStore.getState().setScalar(KEY, ''));
+      expect(field).toHaveValue('');
+    });
+
+    it('starts at Value when nothing is bound', () => {
+      renderInput({ value: 'A17' });
+
+      expect(screen.getByRole('textbox')).toHaveValue('A17');
+      expect(useComponentPropStore.getState().props.entry.value).toBe('A17');
     });
   });
 });

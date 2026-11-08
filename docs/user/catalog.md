@@ -477,12 +477,15 @@ Increment / decrement a numeric variable with + / − buttons.
 
 ### String Input
 
-A text field whose typed value is published for sibling widgets to read.
+A text field that writes what the operator types to a bound variable or input, and publishes it for sibling widgets to read.
 
 | Property | Label | Type |
 |---|---|---|
 | `label` | Label | `String` |
 | `placeholder` | Placeholder | `String` |
+| `variable` | Variable | `String` |
+| `writeOn` | Write on | `String` |
+| `value` | Value | `String` |
 | `isPassword` | Password field | `Boolean` |
 | `keyboard` | Keyboard | `String` |
 | `autoFocus` | Focus when shown | `Boolean` |

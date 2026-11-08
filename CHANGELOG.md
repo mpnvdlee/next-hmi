@@ -22,6 +22,12 @@ server listed.
 
 ### Added
 
+- **A String Input can show and edit a variable.** Bind its **Variable** to a
+  String tag, a page input or a dialog input: the field shows that text and
+  writes what the operator types back to it, on Enter or on leaving the field,
+  or on every key with **Write on** › **Every key** — a search field that
+  filters a Data Grid as the operator types. **Value** sets what an unbound
+  field starts with.
 - **A Data Grid shows an array as a table.** Bind **Items** to a struct array
   from the PLC — a recipe list, an event log — and list the **Columns**, one
   line each in the panel and one row each in its drawer: a member picked from
@@ -215,6 +221,10 @@ server listed.
   the dialog page declares, and validation warned about any other,
   so an input its page group declares could not be set. Both now include the
   inputs of every group the page sits in.
+- **A Button reads what was just typed.** Pressing a Button while a String
+  Input still held an unsaved edit ran the Button's actions before the edit
+  was written, and a Button that closed the dialog lost the edit. The field
+  now writes first.
 - **On Change reads the option just picked.** A Dropdown's or Button Row's
   On Change that read the widget's own selection through **Widget property**
   got the one picked before. Dropdown and Button

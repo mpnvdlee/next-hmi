@@ -82,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "5e46acc42abfd10a",
+    "buildTs": "76986128db456426",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1226,7 +1226,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "df5b803a7e1b208a",
+    "buildTs": "a39edb9bc8147b7d",
     "displayName": "String Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1237,6 +1237,16 @@
         "type": "string"
       },
       "placeholder": {
+        "type": "string"
+      },
+      "variable": {
+        "type": "string",
+        "write": true
+      },
+      "writeOn": {
+        "type": "string"
+      },
+      "value": {
         "type": "string"
       },
       "isPassword": {
@@ -1331,7 +1341,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e8636cd2e5923563",
+    "buildTs": "8a94858d09990346",
     "displayName": "Button Container",
     "hostsChildren": true,
     "flowsChildren": true,

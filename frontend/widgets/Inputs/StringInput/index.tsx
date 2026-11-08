@@ -2,6 +2,32 @@
 export const schema = {
   label: { type: 'string' as const, label: 'Label', group: 'Content' },
   placeholder: { type: 'string' as const, label: 'Placeholder', group: 'Content' },
+  variable: {
+    type: 'string' as const,
+    label: 'Variable',
+    description: 'Shows this text and writes what the operator types back to it.',
+    group: 'Data',
+    write: true,
+  },
+  writeOn: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Write on',
+    description: 'Every key suits a search field that filters as the operator types.',
+    display: 'button-text' as const,
+    group: 'Data',
+    defaultValue: 'commit',
+    options: [
+      { label: 'Enter or leave', value: 'commit' },
+      { label: 'Every key', value: 'change' },
+    ],
+  },
+  value: {
+    type: 'string' as const,
+    label: 'Value',
+    description: 'What the field starts with when no Variable is bound.',
+    group: 'Data',
+  },
   isPassword: { type: 'boolean' as const, label: 'Password field', group: 'Appearance' },
   keyboard: {
     type: 'string' as const,
@@ -41,7 +67,7 @@ export const exportedProperties: ExportedProperty[] = [
 
 export const displayName = 'String Input';
 export const description =
-  'A text field whose typed value is published for sibling widgets to read.';
+  'A text field that writes what the operator types to a bound variable or input, and publishes it for sibling widgets to read.';
 export const category = 'Inputs';
 export const icon = { type: 'builtin', name: 'text-t' } as const;
 
@@ -49,7 +75,18 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
   const isPreview = useIsPreview();
-  const [value, setValue] = useState<string>('');
+  const varKey = bindingKey(getPropBinding(properties, 'variable'));
+  const boundValue = usePropString(properties, 'variable', '');
+  const writeVariable = useWriteVariable(properties, 'variable');
+  const writeOnKey = usePropString(properties, 'writeOn', 'commit') === 'change';
+  const initialValue = usePropString(properties, 'value', '');
+  const [localValue, setLocalValue] = useState<string>(initialValue);
+  // What the operator is typing, until it is committed; null shows the stored
+  // value, so a bound variable changing elsewhere shows up between edits.
+  const [draft, setDraft] = useState<string | null>(null);
+  // Blur, a keyboard closing and Enter can all commit in one gesture; the ref
+  // lets the first one through and makes the rest no-ops.
+  const draftRef = useRef<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -63,7 +100,32 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
   const numeric = keyboard === 'numeric';
   const autoFocus = usePropBoolean(properties, 'autoFocus', false);
 
+  useEffect(() => {
+    setLocalValue(initialValue);
+  }, [initialValue]);
+
+  const value = draft ?? (varKey ? boundValue : localValue);
   usePublishWidgetProp(id, 'value', value);
+
+  const store = (next: string) => {
+    if (varKey) writeVariable(next);
+    else setLocalValue(next);
+  };
+  const setValue = (next: string) => {
+    draftRef.current = next;
+    setDraft(next);
+    if (writeOnKey) store(next);
+  };
+  const endEdit = () => {
+    draftRef.current = null;
+    setDraft(null);
+  };
+  const commit = () => {
+    const pending = draftRef.current;
+    if (pending === null) return;
+    endEdit();
+    if (!writeOnKey) store(pending);
+  };
 
   // Focus opens the keyboard or numpad. Not in the editor canvas, where it
   // would pop up over the page being edited.
@@ -73,6 +135,7 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
 
   const submit = () => {
     setIsKeyboardOpen(false);
+    commit();
     const actions = (properties?.onSubmit as ActionsConfig | undefined)?.onSubmit;
     executeWidgetActions(actions, { scope, evalCtx, anchorEl: wrapperRef.current });
   };
@@ -95,9 +158,12 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           // leaves a fresh keypad for the next try, as a PIN pad does.
           onApply={() => {
             submit();
-            setValue('');
+            setLocalValue('');
           }}
-          onCancel={() => setValue('')}
+          onCancel={() => {
+            endEdit();
+            setLocalValue('');
+          }}
           title={label || undefined}
           currentValue={placeholder || undefined}
           decimals={0}
@@ -155,6 +221,7 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           data-lpignore="true"
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
           onFocus={openKeyboard}
+          onBlur={commit}
           onClick={openKeyboard}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === 'Enter') {
@@ -186,7 +253,10 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           value={value}
           onChange={setValue}
           onApply={submit}
-          onCancel={() => setIsKeyboardOpen(false)}
+          onCancel={() => {
+            setIsKeyboardOpen(false);
+            commit();
+          }}
           anchorRef={wrapperRef}
           title={label || undefined}
           // Centred like Edit Value's, over the dialog a PIN field sits in.
@@ -203,7 +273,10 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
             setValue(v);
             inputRef.current?.focus();
           }}
-          onClose={() => setIsKeyboardOpen(false)}
+          onClose={() => {
+            setIsKeyboardOpen(false);
+            commit();
+          }}
           anchorRef={wrapperRef}
           title={label || undefined}
           password={masked}

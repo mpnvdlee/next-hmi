@@ -40,6 +40,16 @@ export function usePress(
   const press = (el: HTMLElement) => {
     if (held.current) return;
     held.current = el;
+    // A field still being edited commits on blur, which the browser only sends
+    // after pointer-down. Blurring it first lands that write before the
+    // actions read it — or close the dialog it sits in.
+    const editing = document.activeElement;
+    if (
+      (editing instanceof HTMLInputElement || editing instanceof HTMLTextAreaElement) &&
+      !el.contains(editing)
+    ) {
+      editing.blur();
+    }
     onPress(el);
   };
 
