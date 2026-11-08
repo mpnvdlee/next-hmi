@@ -138,9 +138,11 @@
   --hmi-menu-depth-indent: 5;
 }
 
+/* Collapsed, the menu is as wide as an icon and the link's own padding: a sidebar
+   hugs it, so a zero side padding squeezed the icons against the edge. */
 .hmi-navmenu--collapsed .hmi-navmenu__link {
   justify-content: center;
-  padding: var(--hmi-space-md) 0;
+  gap: 0;
 }
 
 .hmi-navmenu--collapsed .hmi-navmenu__expand,

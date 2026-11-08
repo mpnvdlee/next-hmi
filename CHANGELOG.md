@@ -312,6 +312,11 @@ into a dialog or component is now read once.
 
 ### Fixed
 
+- **A sidebar shrinks with its menu.** Collapsing a Navigation Menu with
+  its « button left a sidebar with a fixed **Expanded size** at that width,
+  with the icons in a strip at its edge. The sidebar now fits the collapsed
+  menu and takes its size back when the menu opens. Collapsed, the icons keep
+  the link's side padding instead of touching the edge.
 - **A widget's value in a component reads as bound.** In the components
   editor a working **Widget Property** source, such as a Dropdown's
   Selected Value, showed *Not bound*: the picker knew only a page's widgets,

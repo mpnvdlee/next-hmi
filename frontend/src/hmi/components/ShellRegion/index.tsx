@@ -65,8 +65,31 @@ export default function ShellRegion({ id, config, children, focused }: Props) {
   const expandedSize = cssString(evaluatePropertyValue(config.expandedSize, evalCtx));
   const collapsedSize = cssString(evaluatePropertyValue(config.collapsedSize, evalCtx));
   const background = cssString(evaluatePropertyValue(config.background, evalCtx));
-  const size = resolveRegionSize(expandedSize, collapsedSize, expanded, isVertical);
-  const wantsAutoSize = isVertical && size === 'auto';
+  // A Navigation Menu collapsed by its own « (or its Collapsed binding) takes the
+  // sidebar with it: Expanded size is the open menu's width, so the region hugs
+  // the collapsed menu instead of keeping that width around its icons.
+  const [menuCollapsed, setMenuCollapsed] = useState(false);
+  useEffect(() => {
+    const root = regionRef.current;
+    if (!isVertical || !root) return;
+    const check = () => setMenuCollapsed(root.querySelector('.hmi-navmenu--collapsed') !== null);
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(root, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+    return () => obs.disconnect();
+  }, [isVertical]);
+  const resolvedSize = resolveRegionSize(expandedSize, collapsedSize, expanded, isVertical);
+  // An auto-sized region already follows the menu through the measurement below.
+  const hugsMenu = expanded && menuCollapsed && resolvedSize !== 'auto';
+  const size = hugsMenu ? 'auto' : resolvedSize;
+  // Not around a collapsed menu: the measured width would be the open menu's, which
+  // the menu then keeps filling.
+  const wantsAutoSize = isVertical && size === 'auto' && !hugsMenu;
 
   // `width: max-content` doesn't always recompute when grandchild widths change
   // (e.g. NavigationMenu collapsing) — measure with ResizeObserver and apply inline.
