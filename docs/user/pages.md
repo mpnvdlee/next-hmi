@@ -129,6 +129,15 @@ You don't hand-wire links. Navigation widgets read the page tree and stay in syn
   one control shut until the operator has filled something in while the other stays live;
   **Show previous** and **Show next** drop a control altogether rather than disabling it.
 
+To build a tab bar of your own, use Buttons with the **Page Group: Next**, **Page Group:
+Previous** and **Page Group: Go To** [actions](actions.md#screens), and read the position
+from `$page`: **Page group index** is the open page of the group, counted from 0, and
+**Page group last index** the last one. A tab Button lights up with
+`$compare($page Page group index = 1)`; a Next Button greys out with
+`$compare($page Page group index < $page Page group last index)` on **Interactable**, and a
+Label shows *Tab 2 / 4* with a `$formula` on Page group index + 1 and Page group last
+index + 1.
+
 Put these in a **shell region** (see [Layout](layout.md)) so they persist while operators move between screens.
 
 > [!NOTE]

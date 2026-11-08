@@ -358,6 +358,12 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
       return p ? K('Go to', resolvePageTitle(p.title)) : K('Navigate to page');
     }
+    case 'pageGroupNext':
+      return K('Page Group: Next');
+    case 'pageGroupPrevious':
+      return K('Page Group: Previous');
+    case 'pageGroupGoTo':
+      return K('Page Group: Go To', propertyValuePreview(action.index, 'integer'));
     case 'writeDataVariable': {
       const address = editorTargetAddress(action.target);
       return address ? (

@@ -8,7 +8,9 @@
     "parentId": "string",
     "pathString": "string",
     "depth": "integer",
-    "pathSegments": "string[]"
+    "pathSegments": "string[]",
+    "groupIndex": "integer",
+    "groupLastIndex": "integer"
   },
   "$viewport": {
     "size": "string",

@@ -117,6 +117,8 @@ export const SOURCE_FIELD_PRODUCES = {
     pathString: 'string',
     depth: 'integer',
     pathSegments: 'string[]',
+    groupIndex: 'integer',
+    groupLastIndex: 'integer',
   },
   $viewport: { size: 'string', orientation: 'string', width: 'integer', height: 'integer' },
   $recipe: {

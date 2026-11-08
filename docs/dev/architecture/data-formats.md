@@ -477,6 +477,8 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `openPageOverlay` | as `openDialog`, on a node of the `pages` root, without `componentProperties` |
 | `closePageOverlay` | `pageId` — the overlay to close; empty closes the top-most |
 | `navigateToPage` | `pageId` — a node of the `pages` root, or `{ "$componentProp": "<input>" }` naming an input parameter declared `format: "page"`; closes every overlay first |
+| `pageGroupNext` / `pageGroupPrevious` | `groupId` — absent: the page group around the widget; `$parent`, or a group id, as a Tab Bar's. Stops at the last / first tab, never wraps |
+| `pageGroupGoTo` | `groupId` as above, `index` — the position among the group's children, from 0, as any Integer property value; one outside them does nothing |
 | `writeDataVariable` | `target`, `value` (a literal, or a property source such as `$componentProp`, `$repeatItem` or `$formula`, resolved when the action fires; a `$formula` into an integer tag must come out whole), `onSuccess` / `onFailed` / `onSettled` |
 | `toggleDataVariable` | `target`, `onSuccess` / `onFailed` / `onSettled` |
 | `editValue` | `target`, `title`, `unit`, `min`, `max`, `decimals`, `allowNegative`, `position` (`center` \| `bottom-right`), `onSuccess` / `onFailed` / `onSettled` |

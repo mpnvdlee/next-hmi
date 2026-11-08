@@ -5,7 +5,7 @@ import {
   isRecord,
   getVarBinding,
 } from '@shared/types/propertyValueGuards';
-import { bindingParts } from '@shared/types/config';
+import { bindingParts, type PageField } from '@shared/types/config';
 import { assetName } from './assetPickerUtils';
 import type { PropertySource } from '@hmi/utils/propertySourceRegistry';
 
@@ -15,6 +15,21 @@ import type { PropertySource } from '@hmi/utils/propertySourceRegistry';
  */
 
 export type { PropertySource } from '@hmi/utils/propertySourceRegistry';
+
+/** `$page` fields with their editor labels — the Field dropdown and the preview. */
+export const PAGE_FIELD_OPTIONS: { value: PageField; label: string }[] = [
+  { value: 'title', label: 'Title' },
+  { value: 'breadcrumbLabel', label: 'Breadcrumb label' },
+  { value: 'description', label: 'Description' },
+  { value: 'icon', label: 'Icon' },
+  { value: 'id', label: 'Page id' },
+  { value: 'parentId', label: 'Parent id' },
+  { value: 'depth', label: 'Depth' },
+  { value: 'pathString', label: 'Path string' },
+  { value: 'pathSegments', label: 'Path segments (JSON)' },
+  { value: 'groupIndex', label: 'Page group index' },
+  { value: 'groupLastIndex', label: 'Page group last index' },
+];
 
 /**
  * Determine the property source of a value (plain or sourced).
@@ -233,7 +248,8 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
   if (key === '$page') {
     const p = obj.$page as { field?: string; pageId?: string } | undefined;
     if (!p?.field) return 'page(…)';
-    return p.pageId ? `page(${p.pageId}).${p.field}` : `page.${p.field}`;
+    const label = PAGE_FIELD_OPTIONS.find((o) => o.value === p.field)?.label ?? p.field;
+    return p.pageId ? `${label} (${p.pageId})` : label;
   }
   if (key === '$viewport') {
     const v = obj.$viewport as { field?: string } | undefined;

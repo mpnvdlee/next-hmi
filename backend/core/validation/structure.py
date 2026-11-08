@@ -2100,6 +2100,9 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
     },
     "closePageOverlay": {"pageId": "page"},
     "navigateToPage": {"pageId": "page"},
+    "pageGroupNext": {"groupId": "String"},
+    "pageGroupPrevious": {"groupId": "String"},
+    "pageGroupGoTo": {"groupId": "String", "index": "Integer"},
     "writeDataVariable": {
         "target": "target",
         "value": "writeValue",

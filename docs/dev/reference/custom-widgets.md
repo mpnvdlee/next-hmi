@@ -672,6 +672,7 @@ Supported action types (see `frontend/src/config/components/editor/PropertiesPan
 
 - `openDialog` (a Dialogs-folder node, with `componentProperties`) / `openPageOverlay` (a node in the `pages` root) / `closePageOverlay` (either)
 - `navigateToPage` — `{ pageId }`, a node in the `pages` root or `{ $componentProp }` naming a dialog input declared `format: 'page'`; closes every overlay, then navigates. One that resolves to no navigable page does nothing.
+- `pageGroupNext` / `pageGroupPrevious` — `{ groupId? }`; shows the next or previous page of the page group around the widget (or `'$parent'` / a group id), stopping at either end. `pageGroupGoTo` — `{ groupId?, index }`; shows the page at `index`, counted from 0. Pass `evalCtx` from `useEvalContext()`: without it there is no group to switch and they do nothing.
 - `writeDataVariable` — `{ target, value }`; `target` is `{ $var: { path: 'ds:path' } }`, or inside a Repeater `{ $repeatItem: { member? } }` for the copy's element; value is a literal (`string | number | boolean`, or an array for a whole-array target), or a property source (`$componentProp`, `$var`, …) evaluated when the action fires.
 - `toggleDataVariable` — `{ target }`, the same shape; inverts a Boolean variable from its current server-side value.
 - `editValue` — `{ target, title?, unit?, min?, max?, decimals?, allowNegative?, position? }`; opens the numpad on a numeric variable and writes on Apply. Empty `min` / `max` fall back to the variable's configured range; `$result` carries `value` and `previous`.

@@ -38,6 +38,7 @@ import type { OpenBindingPicker } from '../PropertySourceEditor/editors/utils';
 import { ParentPathContext } from '../PropertySourceEditor/parentPathContext';
 import PropRow from '../../ui/PropRow';
 import PageSelect from '../../ui/PageSelect';
+import PageGroupSelect from '../../ui/PageGroupSelect';
 import Select from '../../ui/Select';
 import BoolButtonGroup from '../../ui/BoolButtonGroup';
 import SchemaFieldRow from '../../ui/SchemaFieldRow';
@@ -151,18 +152,19 @@ type EditorFor<T extends ButtonAction['type']> = ComponentType<{
   ctx: ActionEditorCtx;
 }>;
 
-/** Picker for a String action field: the pick is written into the field as `$var`
- *  and forwarded to the calling slot. */
+/** Picker for a String (or `type`) action field: the pick is written into the
+ *  field as `$var` and forwarded to the calling slot. */
 function stringSlotPicker(
   ctx: ActionEditorCtx,
   pickerId: string,
   label: string,
   current: unknown,
   write: (value: { $var: VariableBinding }) => void,
+  type: 'String' | 'Integer' = 'String',
 ): OpenBindingPicker {
   return (onPick, currentBinding, slot) =>
     ctx.openBindingPicker('', pickerId, {
-      filter: slotFilter({ label, type: 'String' }, slot),
+      filter: slotFilter({ label, type }, slot),
       currentBinding: currentBinding ?? varBindingOf(current),
       onPick: (binding) => {
         write({ $var: binding });
@@ -178,6 +180,7 @@ function LoginFieldEditor({
   value,
   onChange,
   onOpenBindingPicker,
+  type = 'String',
 }: {
   ctx: ActionEditorCtx;
   fieldKey: string;
@@ -185,9 +188,10 @@ function LoginFieldEditor({
   value: unknown;
   onChange: (v: unknown) => void;
   onOpenBindingPicker?: OpenBindingPicker;
+  type?: 'String' | 'Integer';
 }) {
   const inResultHandler = (ctx.resultFields?.length ?? 0) > 0;
-  const schema: SchemaField = { type: 'String', label, placeholder: label };
+  const schema: SchemaField = { type, label, placeholder: label };
   const card = (
     <ParentPathContext.Provider value={[...ctx.path, fieldKey]}>
       <CollapsiblePropertyCard
@@ -581,6 +585,39 @@ const ClosePageOverlayEditor: EditorFor<'closePageOverlay'> = ({ action, ctx }) 
     </ActionFieldRow>
   );
 };
+
+const TAB_GROUP_SCHEMA: SchemaField = { type: 'String', format: 'select', label: 'Target group' };
+
+/** The group a page group action switches, picked as a Tab Bar's. */
+function TabGroupRow({ action, ctx }: { action: { groupId?: string }; ctx: ActionEditorCtx }) {
+  return (
+    <ActionFieldRow ctx={ctx} fieldKey="groupId" schema={TAB_GROUP_SCHEMA} label="Target group">
+      <PageGroupSelect value={action.groupId} onChange={(v) => ctx.update({ groupId: v })} />
+    </ActionFieldRow>
+  );
+}
+
+const PageGroupGoToEditor: EditorFor<'pageGroupGoTo'> = ({ action, ctx }) => (
+  <>
+    <LoginFieldEditor
+      ctx={ctx}
+      fieldKey="index"
+      label="Index"
+      type="Integer"
+      value={action.index}
+      onChange={(v) => ctx.update({ index: v })}
+      onOpenBindingPicker={stringSlotPicker(
+        ctx,
+        'pageGroupGoTo-index',
+        'Index',
+        action.index,
+        (v) => ctx.update({ index: v }),
+        'Integer',
+      )}
+    />
+    <TabGroupRow action={action} ctx={ctx} />
+  </>
+);
 
 const NAVIGATE_SCHEMA: SchemaField = { type: 'String', format: 'page', label: 'Page' };
 
@@ -1492,6 +1529,9 @@ export const ACTION_EDITORS: ActionEditors = {
   openPageOverlay: OpenPageOverlayEditor,
   closePageOverlay: ClosePageOverlayEditor,
   navigateToPage: NavigateToPageEditor,
+  pageGroupNext: TabGroupRow,
+  pageGroupPrevious: TabGroupRow,
+  pageGroupGoTo: PageGroupGoToEditor,
   writeDataVariable: WriteDataVariableEditor,
   toggleDataVariable: ToggleDataVariableEditor,
   editValue: EditValueEditor,

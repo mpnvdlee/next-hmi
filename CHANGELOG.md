@@ -22,6 +22,14 @@ server listed.
 
 ### Added
 
+- **Build a tab bar from your own Buttons.** Three actions switch the pages of
+  a page group: **Page Group: Next**, **Page Group: Previous** and **Page
+  Group: Go To**, whose index is a number, a PLC variable or a dialog input.
+  They work on the group the Button sits in, or its parent: in the main screen
+  they change the page, in a dialog group the tab, and the dialog stays open.
+  Next and Previous do nothing on the last and first page. `$page` gains
+  **Page group index** and **Page group last index**, counted from 0, so a tab
+  Button lights up with a `$compare` and Next greys out on the last page.
 - **Value maps: define a lookup once, use it everywhere.** Under **Value
   Maps** in the editor tree, below Global Events, a map turns a value into a
   colour, a text, a number or a Boolean — alarm severity 2 into the warning

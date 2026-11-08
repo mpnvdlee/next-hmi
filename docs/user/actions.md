@@ -15,7 +15,7 @@ Custom widgets fire the same lists through the SDK's `executeWidgetActions`, so 
 
 ## The action catalog
 
-Nineteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
+Twenty-two types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
 
 ### Screens
 
@@ -25,6 +25,8 @@ Nineteen types, in the order the **Add action** menu lists them. **Browse action
 | **Open Page As Overlay** | Opens a navigable page from the **Pages** section — or a page group — as a modal on top of the current screen. Same presentation fields, no parameters: a navigation destination declares none. |
 | **Close Dialog/Overlay** | Closes either kind, by name, or the current one when left empty. Name the page or page group the overlay was opened with — switching tabs inside it doesn't change that. |
 | **Navigate To Page** | Closes every open dialog and overlay, then goes to a page from the **Pages** section, firing its page events as a menu press does. **Page** is a fixed page, or — inside a dialog — one of its input parameters of type **Page**, so the caller decides where it leads. A parameter that names no navigable page does nothing. |
+| **Page Group: Next** / **Page Group: Previous** | Shows the next or previous page of a page group, as a [Tab Bar](pages.md#give-operators-a-way-around) tab press does. **Target group** is the group the widget sits in — the nearest group, as for a Tab Bar — or its parent group. In the main screen that changes the page; in a dialog group it changes the tab and the dialog stays open. On the last page Next does nothing, on the first page Previous does nothing: they do not wrap round. |
+| **Page Group: Go To** | Shows the page at **Index** in the same group, counted from 0 like a Repeater's index. The index takes any source — a number, a PLC variable, a dialog's input parameter — and one outside the group's pages does nothing. An index belongs to a position: reorder the group's pages and an existing Page Group: Go To shows a different one. |
 
 > [!NOTE]
 > **Two open actions, one close.** The two open actions differ only in which

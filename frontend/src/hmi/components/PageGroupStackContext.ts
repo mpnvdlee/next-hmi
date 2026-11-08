@@ -11,7 +11,15 @@ export interface PageGroupStackEntry {
 export const PageGroupStackContext = createContext<PageGroupStackEntry[]>([]);
 
 export function usePageGroup(groupId?: string): PageGroupStackEntry | null {
-  const stack = useContext(PageGroupStackContext);
+  return pickPageGroup(useContext(PageGroupStackContext), groupId);
+}
+
+/** The group a navigation widget or tab action targets: the nearest one by
+ *  default, its parent for `'$parent'`, or a named group of the stack. */
+export function pickPageGroup(
+  stack: PageGroupStackEntry[],
+  groupId?: string,
+): PageGroupStackEntry | null {
   if (!groupId) return stack[stack.length - 1] ?? null;
   if (groupId === '$parent') return stack[stack.length - 2] ?? null;
   return stack.find((e) => e.group.id === groupId) ?? null;

@@ -40,6 +40,27 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <path d="M1.5 8 h7.5 M6.5 5.5 L9 8 l-2.5 2.5" />
     </Icon>
   ),
+  // A tab strip with an arrow out of its right end.
+  pageGroupNext: (
+    <Icon>
+      <path d="M1.5 13.5 v-8 h5 v8 M6.5 7.5 h4" />
+      <path d="M9.5 10.5 h5 M12.5 8.5 l2 2 l-2 2" />
+    </Icon>
+  ),
+  // The same strip, the arrow pointing back.
+  pageGroupPrevious: (
+    <Icon>
+      <path d="M14.5 13.5 v-8 h-5 v8 M9.5 7.5 h-4" />
+      <path d="M6.5 10.5 h-5 M3.5 8.5 l-2 2 l2 2" />
+    </Icon>
+  ),
+  // Three tabs, the middle one raised — picks one by number.
+  pageGroupGoTo: (
+    <Icon>
+      <path d="M1.5 13.5 h13 M1.5 13.5 v-6 h4 M10.5 7.5 h4 v6" />
+      <path d="M5.5 13.5 v-9 h5 v9" />
+    </Icon>
+  ),
   // Link — writes a live signal.
   writeDataVariable: (
     <Icon viewBox="0 0 24 24" strokeWidth={2}>

@@ -8,6 +8,7 @@ import {
   type ValueMap,
 } from '@shared/types/config';
 import type { HttpEntry, HttpRequestSpec } from '../store/httpSourceStore';
+import type { PageGroupStackEntry } from '../components/PageGroupStackContext';
 import { imageBodyToUrl } from '@shared/utils/imageAsset';
 import { readBit } from '@shared/utils/valueTypes';
 import { withBase } from '@shared/utils/runtimeBase';
@@ -58,6 +59,9 @@ export interface EvaluationContext {
   resolvePage?: (field: PageField, pageId?: string, separator?: string) => ResolvedValue;
   /** Returns the structured ancestor path of the current (or given) page. */
   resolvePagePath?: (pageId?: string) => PagePathSegment[];
+  /** The page group a tab action switches: the nearest around the firing
+   *  widget, or `groupId` (`'$parent'` or a group id). */
+  resolvePageGroup?: (groupId?: string) => PageGroupStackEntry | null;
   resolveViewport?: (field: 'size' | 'width' | 'height' | 'orientation') => ResolvedValue;
   /**
    * Read the cached response for an `$http` request, priming the fetch on first
@@ -864,6 +868,8 @@ const PAGE_FIELDS: ReadonlySet<PageField> = new Set([
   'parentId',
   'pathString',
   'pathSegments',
+  'groupIndex',
+  'groupLastIndex',
 ]);
 
 function evaluatePage(payload: unknown, context: EvaluationContext): ResolvedValue {

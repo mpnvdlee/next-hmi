@@ -363,7 +363,9 @@ export type PageField =
   | 'depth'
   | 'parentId'
   | 'pathString'
-  | 'pathSegments';
+  | 'pathSegments'
+  | 'groupIndex'
+  | 'groupLastIndex';
 
 /**
  * $page: read metadata of the active page (default) or any named page.
@@ -371,6 +373,9 @@ export type PageField =
  * `pathSegments` returns a JSON-stringified array of `{ id, label }` objects
  * so it can flow through the same string-typed expression channel; consumers
  * that need structured segments can call `useEvalContext().resolvePage` directly.
+ * `groupIndex` is the page's position among its group's children, counted from 0,
+ * and `groupLastIndex` the last position. Without `pageId` they read the active tab of
+ * the group the widget sits in — the group the tab actions switch.
  */
 export interface PageSource {
   $page: {
@@ -626,6 +631,17 @@ export type ButtonAction =
        *  `format: 'page'`. One that resolves to no navigable page does nothing. */
       type: 'navigateToPage';
       pageId: string | { $componentProp: string };
+    }
+  /** Switch a page group's tab: the group the widget sits in, or `groupId`
+   *  (`'$parent'` or a group id), as for a Tab Bar. Next and Previous stop at
+   *  the last and first tab; they do not wrap. */
+  | { type: 'pageGroupNext'; groupId?: string }
+  | { type: 'pageGroupPrevious'; groupId?: string }
+  | {
+      /** `index` counts from 0; one outside the group's tabs does nothing. */
+      type: 'pageGroupGoTo';
+      groupId?: string;
+      index: unknown;
     }
   | {
       type: 'writeDataVariable';

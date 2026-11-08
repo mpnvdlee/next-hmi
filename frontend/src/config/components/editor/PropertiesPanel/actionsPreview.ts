@@ -32,6 +32,27 @@ export const ACTION_TYPES = [
       'Closes every open dialog and overlay, then goes to a page — a fixed one, or the one a dialog input parameter names.',
   },
   {
+    type: 'pageGroupNext' as const,
+    label: 'Page Group: Next',
+    category: 'Screens',
+    description:
+      'Shows the next page of the page group the widget sits in, or of a chosen group. Does nothing on the last page.',
+  },
+  {
+    type: 'pageGroupPrevious' as const,
+    label: 'Page Group: Previous',
+    category: 'Screens',
+    description:
+      'Shows the previous page of the page group the widget sits in, or of a chosen group. Does nothing on the first page.',
+  },
+  {
+    type: 'pageGroupGoTo' as const,
+    label: 'Page Group: Go To',
+    category: 'Screens',
+    description:
+      'Shows the page at an index in the page group, counted from 0 — a number, a variable or an input parameter.',
+  },
+  {
     type: 'writeDataVariable' as const,
     label: 'Write Data Variable',
     category: 'Machine',
@@ -136,6 +157,9 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   openPageOverlay: 'page',
   closePageOverlay: 'static',
   navigateToPage: 'pageIsActive',
+  pageGroupNext: 'page',
+  pageGroupPrevious: 'page',
+  pageGroupGoTo: 'page',
   writeDataVariable: 'var',
   toggleDataVariable: 'not',
   editValue: 'formula',

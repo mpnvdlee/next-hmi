@@ -307,6 +307,12 @@ type ComponentAction =
       /** A page id, or a dialog input parameter declared `format: 'page'`. */
       pageId: string | { $componentProp: string };
     }
+  /** Tabs of the group the widget sits in, or of `groupId` (`'$parent'` or a
+   *  group id). Next and Previous stop at either end. */
+  | { type: 'pageGroupNext'; groupId?: string }
+  | { type: 'pageGroupPrevious'; groupId?: string }
+  /** `index` counts from 0: a number or any property source. */
+  | { type: 'pageGroupGoTo'; groupId?: string; index: unknown }
   | {
       type: 'writeDataVariable';
       /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */

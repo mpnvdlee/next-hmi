@@ -19,6 +19,14 @@ describe('propertyValuePreview', () => {
     expect(propertyValuePreview({ $map: { id: '', value: null } })).toBe('(no map) · —');
   });
 
+  it('previews a $page field by its editor label', () => {
+    const left = { $page: { field: 'groupIndex' } };
+    const right = { $page: { field: 'groupLastIndex' } };
+    expect(propertyValuePreview({ $compare: { left, operator: '<', right } })).toBe(
+      'compare(Page group index < Page group last index)',
+    );
+  });
+
   it('recursively previews a one-level $if', () => {
     const value = {
       $if: {

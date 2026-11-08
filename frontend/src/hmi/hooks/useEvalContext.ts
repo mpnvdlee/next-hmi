@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useContext, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useVariableStore } from '../store/variableStore';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -21,14 +21,21 @@ import {
   allPageRootNodes,
   findPageNodeById,
   findPagePath,
+  isPageGroup,
   resolvePageContext,
   resolvePageTitle,
 } from '@shared/utils/pageTree';
-import type { PagePathSegment } from '@shared/types/config';
+import type { PageGroupChild, PagePathSegment } from '@shared/types/config';
+import { PageGroupStackContext, pickPageGroup } from '../components/PageGroupStackContext';
 import type { EvaluationContext, ResolvedValue } from '../utils/propertySourceEval';
 import { useViewport, getViewportSnapshot } from './useViewport';
 
 const PAGE_ID_PATH_PATTERN = /\/(?:pages|preview)\/([^/]+)/;
+
+/** `$page` groupIndex / groupLastIndex of the child `childId` among a group's children. */
+function tabField(field: 'groupIndex' | 'groupLastIndex', tabs: PageGroupChild[], childId: string) {
+  return field === 'groupLastIndex' ? tabs.length - 1 : tabs.findIndex((c) => c.id === childId);
+}
 
 /**
  * Returns a fully wired EvaluationContext for use with evaluatePropertyValue /
@@ -45,6 +52,7 @@ export function useEvalContext(): EvaluationContext {
   const location = useLocation();
   const scope = useHmiScope();
   const hostPageIdFromContext = useHostPageId();
+  const groupStack = useContext(PageGroupStackContext);
   const inputScopeProps = useInputScope()?.properties;
   const repeatScope = useRepeatScope();
   const currentUsersByScope = useHmiStore((s) => s.currentUsersByScope);
@@ -156,6 +164,12 @@ export function useEvalContext(): EvaluationContext {
         // renders a page without touching the URL, so keying on the route would
         // report the host page behind the overlay throughout it.
         resolvePage: (field, pageId, separator): ResolvedValue => {
+          if ((field === 'groupIndex' || field === 'groupLastIndex') && !pageId) {
+            // The group the tab actions switch, so a widget in a group's own
+            // header or footer reads that group's tab, not a nested one's.
+            const entry = pickPageGroup(groupStack);
+            if (entry) return tabField(field, entry.group.children, entry.activePage.id);
+          }
           const target = pageId ?? hostPageId;
           if (!target) return null;
           const trail = findPagePath(allPageRootNodes(pageRootsRef.current), target);
@@ -190,10 +204,19 @@ export function useEvalContext(): EvaluationContext {
               }));
               return JSON.stringify(segments);
             }
+            case 'groupIndex':
+            case 'groupLastIndex': {
+              const parent = trail[trail.length - 2];
+              return parent && isPageGroup(parent)
+                ? tabField(field, parent.children, node.id)
+                : null;
+            }
             default:
               return null;
           }
         },
+
+        resolvePageGroup: (groupId) => pickPageGroup(groupStack, groupId),
 
         resolveViewport: (field): ResolvedValue => {
           const v = getViewportSnapshot();
@@ -250,6 +273,7 @@ export function useEvalContext(): EvaluationContext {
       scope,
       inputScopeProps,
       repeatScope,
+      groupStack,
       currentUsersByScope,
       openPageOverlays,
       allUsernames,

@@ -8,6 +8,7 @@ import { writeTargetAddress } from '@shared/types/config';
 import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { evaluatePropertyValue, resolveBoundIndex } from '@hmi/utils/propertySourceEval';
+import { toNumber } from '@hmi/utils/coercion';
 import { substituteBoundIndexes } from '@hmi/utils/boundIndexResolution';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { resolveComponentPropValue } from '@hmi/utils/componentPropResolution';
@@ -204,6 +205,33 @@ export function executeWidgetActions(
       // Only the `pages` root routes; an input naming nothing there does nothing.
       if (pageId && findPageNodeById(useConfigStore.getState().pages, pageId)) {
         useHmiStore.getState().navigateToPage(pageId);
+      }
+      continue;
+    }
+
+    if (
+      action.type === 'pageGroupNext' ||
+      action.type === 'pageGroupPrevious' ||
+      action.type === 'pageGroupGoTo'
+    ) {
+      // An event outside any widget has no group around it, so it does nothing.
+      const entry = evalCtx.resolvePageGroup?.(action.groupId);
+      if (!entry) continue;
+      const tabs = entry.group.children;
+      const current = tabs.findIndex((c) => c.id === entry.activePage.id);
+      const index =
+        action.type === 'pageGroupGoTo'
+          ? toNumber(evaluatePropertyValue(action.index, evalCtx))
+          : current + (action.type === 'pageGroupNext' ? 1 : -1);
+      // Past either end does nothing: Next and Previous do not wrap round.
+      if (
+        index !== null &&
+        Number.isInteger(index) &&
+        index >= 0 &&
+        index < tabs.length &&
+        index !== current
+      ) {
+        entry.onNavigate(tabs[index].id);
       }
       continue;
     }
