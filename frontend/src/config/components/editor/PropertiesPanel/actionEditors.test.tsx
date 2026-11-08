@@ -302,6 +302,31 @@ describe('writeDataVariable coercion editor', () => {
   });
 });
 
+describe('writeDataVariable value from another source', () => {
+  it('shows a value read from a variable or another widget', () => {
+    const Editor = ACTION_EDITORS.writeDataVariable!;
+    const action = (value: unknown): Extract<ButtonAction, { type: 'writeDataVariable' }> => ({
+      type: 'writeDataVariable',
+      target: { $var: { path: 'PLC:Speed' } },
+      value: value as never,
+    });
+
+    const { unmount } = render(
+      <Editor action={action({ $var: { path: 'PLC:Setpoint' } })} ctx={makeCtx()} />,
+    );
+    expect(screen.getByText('Value')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <Editor
+        action={action({ $widgetProp: { widgetId: 'dd', property: 'selectedValue' } })}
+        ctx={makeCtx()}
+      />,
+    );
+    expect(screen.getByText('Value')).toBeInTheDocument();
+  });
+});
+
 describe('write target inside a Repeater', () => {
   const SCALAR = { members: [], writable: true, elementType: 'Float' };
   const STRUCT = {

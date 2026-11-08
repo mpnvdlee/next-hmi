@@ -287,6 +287,10 @@ server listed.
 - **Chart tooltips show on the HMI.** Hovering a Trend Chart showed no
   tooltip at runtime; charts ignored the pointer everywhere, not only on the
   editor canvas, where a click must select the widget.
+- **Write Data Variable shows every value.** A value taken from another
+  widget, a formula or a variable had no row in the editor, so it could be
+  neither seen nor changed there. It now shows in the action like any
+  property value.
 - **A Button reads what was just typed.** Pressing a Button while a String
   Input still held an unsaved edit ran the Button's actions before the edit
   was written, and a Button that closed the dialog lost the edit. The field

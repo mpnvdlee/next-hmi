@@ -986,6 +986,30 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
           />
         </PropRow>
       )}
+      {sourced && valueSource !== '$repeatItem' && valueSource !== '$componentProp' && (
+        // Any other source — another widget's export, a formula, a variable —
+        // in the same card as a property value of that source.
+        <ParentPathContext.Provider value={[...ctx.path, 'value']}>
+          <CollapsiblePropertyCard
+            title="Value"
+            value={action.value}
+            onChange={(v) => ctx.update({ value: v as typeof action.value })}
+            schema={{ ...valueSchema, ...(canonicalType && { type: canonicalType }) }}
+            onOpenBindingPicker={(onPick, currentBinding, slot, extras) =>
+              ctx.openBindingPicker('', 'writeValue', {
+                ...extras,
+                filter: slotFilter(valueFilter, slot),
+                currentBinding: currentBinding ?? varBindingOf(action.value),
+                // A nested slot (a formula's input) supplies its own onPick.
+                onPick: (binding) =>
+                  onPick
+                    ? onPick(binding)
+                    : ctx.update({ value: { $var: binding } } as Partial<ButtonAction>),
+              })
+            }
+          />
+        </ParentPathContext.Provider>
+      )}
       {!sourced && (
         <PropRow
           label="Value"
