@@ -123,8 +123,11 @@ after a backup — see [Managing projects](projects.md#the-manager-dashboard).
 The **manager dashboard** (the origin root, behind the device-admin
 password) is the operator surface:
 
-- **First-run setup** — on first launch the dashboard asks you to set a
-  device-admin password. It is stored hashed in
+- **First-run setup** — on first launch the dashboard asks for the **setup
+  code** and a device-admin password. Until a password is set, the device
+  prints the code (`XXXX-XXXX`) in its console and its log at every start;
+  with Docker, `docker logs nexthmi` shows it. The code works once, and a
+  restart prints a new one. The password is stored hashed in
   `<runtime_home>/.manager-auth.json` and gates every subsequent visit.
   Signing in lasts a day, counted from the moment you sign in and not from
   your last click: after that the dashboard asks for the password again, and
@@ -472,7 +475,8 @@ The image is multi-arch (`linux/amd64` + `linux/arm64`). Swap `:latest` for a
 version tag such as `:1.0.1` to pin a release.
 
 Open <http://localhost:8000> and set the device-admin password when the
-manager dashboard prompts. On first boot the bundled seed project is
+manager dashboard prompts. It asks for the setup code first:
+`docker logs nexthmi` shows it. On first boot the bundled seed project is
 registered and started; open its HMI or editor from the dashboard. The project
 needs no password of its own.
 
@@ -564,9 +568,11 @@ A terminal window opens, prints the banner, and stays in the foreground.
 
 The banner shows the version, the runtime-home path, the address the default
 project answers on, and a link to the manager's project list (`/projects`) for
-reaching the others. Under **Getting started** it lists the first steps: open
-the project list in a browser, choose the device-admin password on the first
-visit (and sign in with it after that), then pick a project — **Open** runs it,
+reaching the others. Until a device-admin password is set it also shows the
+**Setup code** the first visit asks for. Under **Getting started** it lists
+the first steps: open the project list in a browser, enter the setup code and
+choose the device-admin password on the first visit (and sign in with it after
+that), then pick a project — **Open** runs it,
 **Open editor** lets you change it. In a terminal that supports it, every URL in
 the banner is a clickable link.
 
@@ -578,17 +584,20 @@ default. Set `NEXTHMI_HOST=127.0.0.1` to keep it to this machine only, and the
 network block goes with it: nothing else is answering. See [HTTPS](#https)
 before putting an install on a network you do not control.
 
-On the first launch, set the device-admin password. That is the only credential
-the install asks for: the seeded project holds only its `guest` user and opens
-straight away. Upgrades preserve an existing project's users and passwords
-byte-for-byte.
+On the first launch, set the device-admin password, with the setup code from
+the banner. That is the only credential the install asks for: the seeded
+project holds only its `guest` user and opens straight away. Upgrades preserve
+an existing project's users and passwords byte-for-byte.
 
-**Do it straight away.** Until that password exists there is nothing to check a
-request against, so the first-run page accepts whoever reaches it first — this
-machine or any other on the network — and the install advertises itself over
-mDNS the whole time it waits. The window is short and it is yours to close:
-claim the install right after the first start, or bring it up with
-`NEXTHMI_HOST=127.0.0.1` and lift that once the password is set.
+**The setup code is what claims the install.** Until a password exists there is
+no password to check, so the first-run page asks for the code instead. The
+device prints it only in this terminal and in its log, and a website cannot
+read either: a page that points a name of its own at the device gets past its
+other checks, but not this one. Five wrong codes lock setup for a minute, as
+five wrong passwords lock sign-in. Anyone who can read the terminal or the log
+can still claim the install, and it advertises itself over mDNS the whole time
+it waits, so set the password right after the first start. The code works once;
+a restart prints a new one.
 
 To stop: focus the terminal window and press Ctrl-C — uvicorn's
 lifespan shutdown runs and the OPC-UA pool closes cleanly.

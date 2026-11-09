@@ -17,6 +17,12 @@ class PasswordBody(BaseModel):
     password: str = Field(min_length=1, max_length=512)
 
 
+class SetupBody(PasswordBody):
+    # Optional in the schema so a missing code gets a readable refusal, not a
+    # list of validation errors.
+    setupCode: str = Field(default="", max_length=64)
+
+
 class ChangePasswordBody(BaseModel):
     currentPassword: str = Field(min_length=1, max_length=512)
     newPassword: str = Field(min_length=1, max_length=512)
@@ -61,10 +67,27 @@ async def auth_status(request: Request) -> dict:
 
 
 @router.post("/setup")
-async def setup_password(body: PasswordBody, request: Request, response: Response) -> dict:
-    """Set the device-admin password on first run. Refuses if one already exists."""
+async def setup_password(body: SetupBody, request: Request, response: Response) -> dict:
+    """Set the device-admin password on first run. Refuses if one already exists.
+
+    Demands the one-time setup code the device printed when it started
+    (``manager_auth.setup_code``); a wrong code counts toward the same lockout
+    as a wrong password.
+    """
     if manager_auth.is_password_set():
         raise ConflictError("A device-admin password is already set; use login.")
+    if not body.setupCode.strip():
+        raise ValidationError(
+            "Enter the setup code. It is shown in the console and the log when the device starts."
+        )
+    _require_not_locked_out()
+    if not manager_auth.verify_setup_code(body.setupCode):
+        manager_auth.register_login_failure()
+        raise ValidationError(
+            "Incorrect setup code. Use the code from the device's most recent start: "
+            "it changes every time the device starts."
+        )
+    manager_auth.register_login_success()
     manager_auth.set_password(body.password)
     _set_session_cookie(request, response, manager_auth.issue_token())
     return {"authenticated": True}

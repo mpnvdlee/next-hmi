@@ -11,7 +11,7 @@ from pathlib import Path
 
 import launcher
 import pytest
-from core import net, runtime_home, tls_settings
+from core import manager_auth, net, runtime_home, tls_settings
 from fastapi.testclient import TestClient
 
 
@@ -372,7 +372,10 @@ def client(monkeypatch, home: Path) -> TestClient:
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     with TestClient(manager.app) as tc:
-        tc.post("/api/manager/auth/setup", json={"password": "secret"})
+        tc.post(
+            "/api/manager/auth/setup",
+            json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        )
         yield tc
 
 

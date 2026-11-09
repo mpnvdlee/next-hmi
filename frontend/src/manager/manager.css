@@ -62,6 +62,13 @@
   color: var(--cfg-text-muted);
 }
 
+/* Copied off a terminal, so it reads like one; the server ignores case. */
+.mgr-auth-card__code {
+  font-family: var(--cfg-font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 /* ── instance status pill ─────────────────────────────────── */
 .mgr-status {
   display: inline-block;

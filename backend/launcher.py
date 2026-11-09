@@ -847,12 +847,16 @@ def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
     app_port = https_port if split_ports else port
     scheme = "https" if tls else "http"
     open_url = net.display_url(scheme, host, app_port)
+    # Same process as the manager app, so this is the code its /setup checks.
+    from core import manager_auth
+
     print_banner(
         "runtime",
         BannerFields(
             runtime_home=data_dir,
             open_url=open_url,
             network_urls=(tuple(net.network_urls(scheme, host, app_port)),),
+            setup_code=manager_auth.setup_code(),
             version=_read_version(),
             edition=app_edition(),
         ),

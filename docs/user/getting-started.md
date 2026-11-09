@@ -27,7 +27,7 @@ $ ./nexthmi.command
 
 1. **Start the server** — Run one of the commands above. On first launch it creates its **runtime home** — a per-installation folder (default `~/Documents/NextHMI/`, or wherever `NEXTHMI_DATA_DIR` points) that holds the project manifest, logs, and the widget build cache.
 2. **Open the Manager** — Browse to `http://localhost:8000`. The **Manager** lists every project registered on this installation and lets you start, stop, open, transfer and remove them.
-3. **Set the device-admin password** — On a fresh installation the Manager asks you to choose one, and asks for it on every later visit. This gate gets you into the dashboard; it is separate from the per-project operator accounts you define later.
+3. **Set the device-admin password** — On a fresh installation the Manager asks you to choose one, and asks for it on every later visit. The first time it also asks for the **setup code** the server printed when it started: in the terminal window, or with Docker in `docker logs nexthmi`. This gate gets you into the dashboard; it is separate from the per-project operator accounts you define later.
 4. **The default project is already running** — The install creates one for you, a blank project with a single page, and starts it during that same first launch, so its row shows **Running** rather than a Start button. It needs no credential of its own. **Stop** and **Start** are on the row whenever you want to take it down and bring it back.
 5. **Open its editor** — Press **Open editor** to land under `/editor/<project>/` — or read [Managing projects](projects.md) to create your own first.
 

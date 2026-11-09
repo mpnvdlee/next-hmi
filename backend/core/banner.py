@@ -144,6 +144,9 @@ class BannerFields:
     # the rows rather than a spelling beside each of them: repeating every URL
     # three times is what made the splash unreadable.
     network_urls: tuple[tuple[str, ...], ...] = ()
+    # Set while no device-admin password exists: the dashboard's first-run
+    # setup asks for it (``core.manager_auth.setup_code``).
+    setup_code: str | None = None
     # Dev-mode only.
     frontend_url: str | None = None
 
@@ -153,9 +156,14 @@ def _getting_started(mode: Literal["runtime", "dev"], fields: BannerFields) -> l
     a terminal, not yet at the app."""
     base = fields.frontend_url if mode == "dev" and fields.frontend_url else fields.open_url
     projects = f"{base}/projects"
+    first_visit = (
+        "First visit: enter the setup code above and choose a device-admin password"
+        if fields.setup_code
+        else "First visit: choose a device-admin password"
+    )
     steps = [
         f"Open a web browser and go to {_url(projects)}",
-        "First visit: choose a device-admin password; after that, sign in with it",
+        f"{first_visit}; after that, sign in with it",
         "Pick a project: Open runs it, Open editor lets you change it",
     ]
     if any(fields.network_urls):
@@ -189,6 +197,8 @@ def render_banner(mode: Literal["runtime", "dev"], fields: BannerFields) -> str:
         # (e.g. 0.0.0.0:8000) isn't a clickable URL, so it's left out.
         out.append(_row("Default project", _url(fields.open_url)))
         out.append(_row("Project list", _url(f"{fields.open_url}/projects")))
+    if fields.setup_code:
+        out.append(_row("Setup code", _wrap(fields.setup_code, _ANSI_BOLD)))
 
     # The same servers, from anywhere else. The rows above are loopback, which
     # is the wrong answer to "what do I type on the tablet" and the only answer

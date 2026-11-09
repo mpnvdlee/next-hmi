@@ -177,7 +177,10 @@ def test_mcp_rejects_invalid_bearer_token(manager_client: TestClient):
 def test_mcp_without_trailing_slash_is_not_a_redirect(manager_client: TestClient):
     """Clients that don't follow redirects still reach the transport at ``/mcp``:
     the path is rewritten to ``/mcp/`` before routing instead of 307-ing there."""
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     resp = manager_client.post(
         "/mcp",
         json=_INITIALIZE,
@@ -200,12 +203,18 @@ def test_mcp_forged_forwarded_headers_do_not_bypass_auth(manager_client: TestCli
 
 
 def test_mcp_accepts_valid_session_cookie(manager_client: TestClient):
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     _initialize(manager_client)
 
 
 def test_mcp_accepts_valid_bearer_token(manager_client: TestClient):
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     pair = manager_client.post(
         "/api/manager/mcp/pair",
@@ -220,7 +229,10 @@ def test_mcp_accepts_valid_bearer_token(manager_client: TestClient):
 def test_mcp_answers_a_client_on_the_lan(manager_client: TestClient):
     """A client on another machine sends the manager's LAN address as Host; the
     SDK's loopback-only Host check would answer that 421."""
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     token = manager_client.post(
         "/api/manager/mcp/pair",
@@ -242,7 +254,10 @@ def test_mcp_caps_open_sessions(_two_session_cap, manager_client: TestClient):
     the cap a new session is refused while the open ones keep working."""
     from mcp_server import server as mcp_server
 
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     _initialize(manager_client)
     _initialize(manager_client)
     refused = manager_client.post(
@@ -279,7 +294,10 @@ def _seed_project(client: TestClient) -> str:
 
 
 def test_pair_requires_correct_password_and_takes_no_project(manager_client: TestClient):
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
 
     wrong = manager_client.post(
@@ -309,7 +327,10 @@ def test_mcp_token_list_and_revoke_require_manager_session(manager_client: TestC
     assert manager_client.get("/api/manager/mcp-tokens").status_code == 401
     assert manager_client.delete("/api/manager/mcp-tokens/anything").status_code == 401
 
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     pair = manager_client.post(
         "/api/manager/mcp/pair",
@@ -329,7 +350,10 @@ def test_mcp_token_list_and_revoke_require_manager_session(manager_client: TestC
 def test_dashboard_create_needs_session_not_password(manager_client: TestClient):
     """The dashboard's create route takes the manager session as its proof: no
     password in the body, and nothing minted without the session."""
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     _drop_session_cookie(manager_client)
     body = {"access": "write", "name": "Laptop"}
@@ -364,7 +388,10 @@ def test_dashboard_create_needs_session_not_password(manager_client: TestClient)
 
 
 def test_password_change_revokes_mcp_tokens(manager_client: TestClient):
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     pair = manager_client.post(
         "/api/manager/mcp/pair",

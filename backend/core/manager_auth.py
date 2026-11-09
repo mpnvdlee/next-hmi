@@ -42,6 +42,14 @@ _throttle_lock = threading.Lock()
 _failed_attempts = 0
 _lockout_until = 0.0
 
+# First-run setup code. Until a password exists, /setup has nothing to check a
+# caller against, and a website that points a name of its own at the device (DNS
+# rebinding) passes the Origin check like the device itself. The code is printed
+# on the console and in the log, which no website can read. Memory only: every
+# start prints a fresh one.
+_SETUP_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
+_setup_code: str | None = None
+
 
 def lockout_remaining() -> float:
     """Seconds the login endpoint stays locked, or ``0.0`` if it is open."""
@@ -87,12 +95,41 @@ def is_password_set() -> bool:
     return bool(data and data.get("hash") and data.get("salt"))
 
 
+def setup_code() -> str | None:
+    """The code first-run setup requires (``XXXX-XXXX``), or ``None`` once a
+    password is set."""
+    global _setup_code
+    if is_password_set():
+        _setup_code = None
+        return None
+    if _setup_code is None:
+        raw = "".join(secrets.choice(_SETUP_CODE_ALPHABET) for _ in range(8))
+        _setup_code = f"{raw[:4]}-{raw[4:]}"
+    return _setup_code
+
+
+def _normalized_code(code: str) -> bytes:
+    # Typed from a terminal: case, the dash and stray spaces must not matter.
+    return "".join(ch for ch in code.upper() if ch.isalnum()).encode("utf-8")
+
+
+def verify_setup_code(candidate: str) -> bool:
+    expected = setup_code()
+    if expected is None:
+        return False
+    return hmac.compare_digest(_normalized_code(candidate), _normalized_code(expected))
+
+
 def _hash_password(password: str, salt: bytes, iterations: int) -> bytes:
     return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
 
 
 def set_password(password: str) -> None:
-    """Create or replace the device-admin password (and rotate the session secret)."""
+    """Create or replace the device-admin password (and rotate the session secret).
+
+    Spends the setup code: it opens first-run setup once, never again.
+    """
+    global _setup_code
     if not password:
         raise ValueError("Password must not be empty")
     salt = secrets.token_bytes(16)
@@ -104,6 +141,7 @@ def set_password(password: str) -> None:
         "secret": secrets.token_hex(32),
     }
     write_text_atomic(auth_path(), json.dumps(payload, indent=2))
+    _setup_code = None
 
 
 def verify_password(password: str) -> bool:

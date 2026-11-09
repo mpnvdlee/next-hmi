@@ -77,9 +77,10 @@ The manager is the device's front door, at the address without
   other NEXT HMI devices can find it for a project transfer.
 
 > [!IMPORTANT]
-> **On a new install, whoever opens the dashboard first sets the device-admin
-> password.** See [Installing](install.md#installing) for how to close that
-> window.
+> **On a new install, whoever enters the setup code first sets the device-admin
+> password.** The device prints the code in its console and its log until a
+> password is set, so anyone who can read either can claim the install. See
+> [Installing](install.md#installing).
 
 ## What needs a credential
 
@@ -109,14 +110,20 @@ The manager is the device's front door, at the address without
   own at the device's address looks to the device like the device itself. It
   still reaches only the open part: the browser does not send the dashboard
   sign-in to that name, and the projects running behind the device answer
-  only the device itself, never a name.
+  only the device itself, never a name. On a new install it cannot set the
+  device-admin password either: that takes the setup code, which only the
+  device's console and log show.
 - **Files in the project folders run no script.** An HTML or SVG file in
   `assets` or `custom-widgets`, opened at its own address, shows as a plain
   document, so a file someone put there cannot act with your dashboard
   sign-in. Custom widgets and external libraries are code the screens run on
   purpose and are not limited this way.
 - **Sign-ins are throttled**, per username on the screens, and for the
-  device-admin password everywhere.
+  device-admin password and the setup code everywhere.
+- **The open part takes at most 1 MB per request.** The device refuses a
+  larger request before reading it, so no amount of data sent its way can
+  exhaust the device's memory and take the screens down. An HTTP source whose
+  request is over that is not sent, and the screen says so.
 
 ## Showing NEXT HMI inside another site
 

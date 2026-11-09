@@ -59,7 +59,12 @@ app.include_router(late)
 # An instance answers only a loopback Host (core.origin_check).
 client = TestClient(app, base_url="http://127.0.0.1")
 if module_name == "manager":
-    client.post("/api/manager/auth/setup", json={"password": "regression"})
+    from core import manager_auth
+
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "regression", "setupCode": manager_auth.setup_code()},
+    )
 
 late_get = client.get("/api/late-probe/ping")
 late_post = client.post("/api/late-probe/ping")

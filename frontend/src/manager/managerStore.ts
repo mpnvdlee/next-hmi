@@ -36,7 +36,7 @@ interface ManagerStore {
   systemInfo: SystemInfo | null;
 
   refreshAuth(): Promise<void>;
-  setup(password: string): Promise<void>;
+  setup(password: string, setupCode: string): Promise<void>;
   login(password: string): Promise<void>;
   logout(): Promise<void>;
   changePassword(currentPassword: string, newPassword: string): Promise<void>;
@@ -81,8 +81,8 @@ export const useManagerStore = create<ManagerStore>((set, get) => ({
     }
   },
 
-  setup: async (password: string) => {
-    await apiJson('/api/manager/auth/setup', { method: 'POST', body: { password } });
+  setup: async (password: string, setupCode: string) => {
+    await apiJson('/api/manager/auth/setup', { method: 'POST', body: { password, setupCode } });
     set({ auth: 'authed', authError: null });
   },
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from core import embed_settings, runtime_home
+from core import embed_settings, manager_auth, runtime_home
 from fastapi.testclient import TestClient
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -172,7 +172,10 @@ def manager_module(monkeypatch, home: Path):
 @pytest.fixture
 def client(manager_module) -> TestClient:
     with TestClient(manager_module.app) as tc:
-        tc.post("/api/manager/auth/setup", json={"password": "secret"})
+        tc.post(
+            "/api/manager/auth/setup",
+            json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        )
         yield tc
 
 
@@ -307,7 +310,7 @@ from fastapi.testclient import TestClient
 
 import main
 import manager
-from core import storage
+from core import manager_auth, storage
 
 assets = storage.active_assets_dir()
 (assets / "images").mkdir(parents=True, exist_ok=True)
@@ -348,7 +351,10 @@ result = {
     "widget_js": seen(browser.get("/runtime/ghost/widget-js/Probe/index.js")),
     "library": seen(browser.get("/runtime/ghost/external-libraries/lib/index.mjs")),
 }
-browser.post("/api/manager/auth/setup", json={"password": "probe"})
+browser.post(
+    "/api/manager/auth/setup",
+    json={"password": "probe", "setupCode": manager_auth.setup_code()},
+)
 result["editor"] = seen(browser.get("/editor/ghost/"))
 browser.put("/api/system/embedding", json={"origins": ["https://portal.example.com"]})
 result["runtime_embeddable"] = seen(browser.get("/runtime/ghost/"))

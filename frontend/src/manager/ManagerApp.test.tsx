@@ -161,6 +161,18 @@ describe('startup gate', () => {
 
     expect(screen.getByRole('button', { name: 'Set password & continue' })).toBeInTheDocument();
     expect(screen.getByText('Confirm password')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('XXXX-XXXX')).toHaveFocus();
+    expect(
+      screen.getByText(/Shown in the console and the log when the device starts\. With Docker:/),
+    ).toHaveTextContent('docker logs nexthmi');
+  });
+
+  it('asks for no setup code on the sign-in form', () => {
+    useManagerStore.setState({ auth: 'needs-login' });
+
+    renderAt('/projects');
+
+    expect(screen.queryByText('Setup code')).toBeNull();
   });
 
   describe('enterprise app gates', () => {
@@ -245,6 +257,7 @@ describe('auth gate form', () => {
     const { container } = renderAt('/projects');
     const inputs = container.querySelectorAll('input[type="password"]');
 
+    await userEvent.type(screen.getByPlaceholderText('XXXX-XXXX'), 'K7PM-3QXD');
     await userEvent.type(inputs[0], 'hunter2');
     await userEvent.type(inputs[1], 'hunter3');
     await userEvent.click(screen.getByRole('button', { name: 'Set password & continue' }));
@@ -253,7 +266,7 @@ describe('auth gate form', () => {
     expect(setup).not.toHaveBeenCalled();
   });
 
-  it('sets the device-admin password once both fields agree', async () => {
+  it('asks for the setup code before calling setup', async () => {
     const setup = vi.fn().mockResolvedValue(undefined);
     useManagerStore.setState({ auth: 'needs-setup', setup });
     const { container } = renderAt('/projects');
@@ -263,7 +276,46 @@ describe('auth gate form', () => {
     await userEvent.type(inputs[1], 'hunter2');
     await userEvent.click(screen.getByRole('button', { name: 'Set password & continue' }));
 
-    await waitFor(() => expect(setup).toHaveBeenCalledWith('hunter2'));
+    expect(
+      await screen.findByText(
+        'Enter the setup code. It is shown in the console and the log when the device starts.',
+      ),
+    ).toBeInTheDocument();
+    expect(setup).not.toHaveBeenCalled();
+  });
+
+  it('sets the device-admin password with the setup code once both fields agree', async () => {
+    const setup = vi.fn().mockResolvedValue(undefined);
+    useManagerStore.setState({ auth: 'needs-setup', setup });
+    const { container } = renderAt('/projects');
+    const inputs = container.querySelectorAll('input[type="password"]');
+
+    await userEvent.type(screen.getByPlaceholderText('XXXX-XXXX'), 'K7PM-3QXD');
+    await userEvent.type(inputs[0], 'hunter2');
+    await userEvent.type(inputs[1], 'hunter2');
+    await userEvent.click(screen.getByRole('button', { name: 'Set password & continue' }));
+
+    await waitFor(() => expect(setup).toHaveBeenCalledWith('hunter2', 'K7PM-3QXD'));
+  });
+
+  it('surfaces a refused setup code as an inline error', async () => {
+    const setup = vi
+      .fn()
+      .mockRejectedValue(
+        new Error('Incorrect setup code. Use the code from the most recent start.'),
+      );
+    useManagerStore.setState({ auth: 'needs-setup', setup });
+    const { container } = renderAt('/projects');
+    const inputs = container.querySelectorAll('input[type="password"]');
+
+    await userEvent.type(screen.getByPlaceholderText('XXXX-XXXX'), 'AAAA-AAAA');
+    await userEvent.type(inputs[0], 'hunter2');
+    await userEvent.type(inputs[1], 'hunter2');
+    await userEvent.click(screen.getByRole('button', { name: 'Set password & continue' }));
+
+    expect(
+      await screen.findByText('Incorrect setup code. Use the code from the most recent start.'),
+    ).toBeInTheDocument();
   });
 
   it('surfaces a rejected sign-in as an inline error', async () => {

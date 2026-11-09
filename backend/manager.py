@@ -78,8 +78,9 @@ from mcp_server.write_helpers import drain_inflight_broadcasts
 from services import frontend_serve, project_resume
 from services.supervisor import supervisor
 from starlette.background import BackgroundTask
+from starlette.datastructures import Headers
 from starlette.routing import get_route_path
-from starlette.types import Scope
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starlette.websockets import WebSocketState
 
 logger = logging.getLogger(__name__)
@@ -160,6 +161,14 @@ def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    # Logged as well as printed in the launcher's banner: start-dev.py prints
+    # its banner from another process, and the log file outlives the terminal.
+    setup_code = manager_auth.setup_code()
+    if setup_code is not None:
+        logger.warning(
+            "No device-admin password is set. Setup code for the first visit to the dashboard: %s",
+            setup_code,
+        )
     # start-dev.py binds uvicorn itself, so the launcher's ``mark_served`` call
     # never runs and tls_settings still defaults to "serving plain HTTP". Left
     # unset, Settings → HTTPS reads that stale default as reality and reports
@@ -784,6 +793,106 @@ async def _pump_websocket(client: WebSocket, upstream) -> None:
         await upstream.close()
 
 
+# ── request body caps ─────────────────────────────────────────────────────────
+
+# Neither uvicorn nor Starlette caps a request body, and FastAPI reads a JSON
+# body before any dependency authenticates the caller, so one chunked multi-GB
+# POST could fill the manager's memory and take every project's panels down with
+# it. Whatever the gate lets through with no session (the live view, sign-in and
+# pairing, API v1) gets the public cap. The proxy streams a body on to the child
+# rather than holding it, so the editor cap bounds what a child must take in:
+# the largest editor bodies are JSON saves (a page, or a datasource's whole
+# variable list after a large browse import) and the 2 MB thumbnail.
+_PUBLIC_BODY_LIMIT = 1024 * 1024
+_EDITOR_BODY_LIMIT = 64 * 1024 * 1024
+
+
+def _body_limit(scope: Scope) -> int | None:
+    """The most request body *scope* may carry, or ``None`` when it is not capped here."""
+    path = get_route_path(scope)
+    method = scope["method"]
+    if path == "/mcp" or path.startswith("/mcp/"):
+        return None  # authenticates before the transport reads a byte
+    if method == "POST" and path == "/api/manager/peer/transfers":
+        return None  # held to its own Content-Length limit by the gate
+    if not _is_gated(path, method, _raw_route_path(scope)):
+        return _PUBLIC_BODY_LIMIT
+    # The gate demands a session before anything reads the body; the manager's
+    # own routes (a project zip import among them) spool uploads to disk.
+    return _EDITOR_BODY_LIMIT if _is_proxy_path(path) else None
+
+
+class _BodyTooLarge(Exception):
+    pass
+
+
+class _RequestBodyLimit:
+    """Answer 413 to a request body over :func:`_body_limit`.
+
+    A declared ``Content-Length`` over the cap is refused before a byte is read;
+    a chunked body is counted as it arrives. Once the count trips, whatever the
+    app made of the failed read is replaced by the 413: FastAPI reports it as a
+    400 "error parsing the body", and through the gate's task group it surfaces
+    as an ``ExceptionGroup`` rather than anything a handler could match.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        headers = Headers(scope=scope) if scope["type"] == "http" else None
+        # A request that announces neither has no body, which is every asset GET.
+        has_body = headers is not None and (
+            "content-length" in headers or "transfer-encoding" in headers
+        )
+        limit = _body_limit(scope) if has_body else None
+        if limit is None:
+            await self.app(scope, receive, send)
+            return
+        too_large = JSONResponse(
+            {
+                "detail": "Request body too large: this address accepts at most "
+                f"{limit // (1024 * 1024)} MB."
+            },
+            status_code=413,
+        )
+        declared = headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > limit:
+            await too_large(scope, receive, send)
+            return
+
+        received = 0
+        exceeded = False
+        started = False
+
+        async def counting_receive() -> Message:
+            nonlocal received, exceeded
+            if exceeded:
+                raise _BodyTooLarge
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    exceeded = True
+                    raise _BodyTooLarge
+            return message
+
+        async def guarded_send(message: Message) -> None:
+            nonlocal started
+            if exceeded and not started:
+                return
+            started = started or message["type"] == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, counting_receive, guarded_send)
+        except Exception:
+            if not exceeded or started:
+                raise
+        if exceeded and not started:
+            await too_large(scope, receive, send)
+
+
 _PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
 
@@ -850,9 +959,12 @@ async def _proxy_http_to_child(
         # The auth gate has already demanded the session for /editor/*.
         if forwarded_prefix.startswith("/editor/"):
             headers.append((audit.EDITOR_HEADER, "1"))
-    body = await request.body()
+    # Streamed, not buffered: ``_RequestBodyLimit`` counts it on the way through.
+    # A request that announces no body sends none, so a GET is not reframed as
+    # an empty chunked upload.
+    has_body = "content-length" in request.headers or "transfer-encoding" in request.headers
     upstream_req = _proxy_client.build_request(
-        request.method, url, headers=headers, content=body
+        request.method, url, headers=headers, content=request.stream() if has_body else None
     )
     try:
         upstream_resp = await _proxy_client.send(upstream_req, stream=True, follow_redirects=False)
@@ -894,6 +1006,10 @@ def _register_proxy_routes(prefix: str) -> None:
 
 for _prefix in _PROXY_PREFIXES:
     _register_proxy_routes(_prefix)
+
+# Added after the gate so it wraps it: a declared oversize body is refused
+# before the gate or any route looks at the request.
+app.add_middleware(_RequestBodyLimit)
 
 
 # ── manager SPA (served at origin root, base "/") ───────────────────────────────

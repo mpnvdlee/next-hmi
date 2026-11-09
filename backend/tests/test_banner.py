@@ -166,3 +166,15 @@ def test_banner_names_the_edition_under_the_logo() -> None:
     ee = _ANSI.sub("", render_banner("runtime", replace(_fields(), edition="ee")))
     assert "Community Edition v1.0.0" in oss
     assert "Enterprise Edition v1.0.0" in ee
+
+
+def test_banner_shows_the_setup_code_while_no_password_is_set() -> None:
+    out = _ANSI.sub("", render_banner("runtime", replace(_fields(), setup_code="K7PM-3QXD")))
+    assert re.search(r"^  Setup code +K7PM-3QXD$", out, re.MULTILINE)
+    assert "First visit: enter the setup code above and choose a device-admin password" in out
+
+
+def test_banner_omits_the_setup_code_once_a_password_is_set() -> None:
+    out = _ANSI.sub("", render_banner("runtime", _fields()))
+    assert "Setup code" not in out
+    assert "First visit: choose a device-admin password" in out

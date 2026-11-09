@@ -55,7 +55,10 @@ def test_setup_then_access(client: TestClient) -> None:
     assert status["passwordSet"] is False
     assert status["authenticated"] is False
 
-    resp = client.post("/api/manager/auth/setup", json={"password": "secret"})
+    resp = client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     assert resp.status_code == 200
     assert resp.json()["authenticated"] is True
 
@@ -66,8 +69,9 @@ def test_setup_then_access(client: TestClient) -> None:
 
 
 def test_second_setup_rejected(client: TestClient) -> None:
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
-    resp = client.post("/api/manager/auth/setup", json={"password": "again"})
+    code = manager_auth.setup_code()
+    client.post("/api/manager/auth/setup", json={"password": "secret", "setupCode": code})
+    resp = client.post("/api/manager/auth/setup", json={"password": "again", "setupCode": code})
     assert resp.status_code == 409
 
 
@@ -81,7 +85,10 @@ def test_fresh_project_is_manager_authenticated_and_opens_with_no_operator_crede
         "/api/projects", json={"name": "Fresh", "path": str(target)}
     ).status_code == 401
 
-    client.post("/api/manager/auth/setup", json={"password": "manager-secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "manager-secret", "setupCode": manager_auth.setup_code()},
+    )
     created = client.post(
         "/api/projects", json={"name": "Fresh", "path": str(target)}
     )
@@ -109,7 +116,10 @@ def test_fresh_project_is_manager_authenticated_and_opens_with_no_operator_crede
 def test_registering_an_existing_project_does_not_rewrite_its_users(
     client: TestClient, tmp_path: Path
 ) -> None:
-    client.post("/api/manager/auth/setup", json={"password": "manager-secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "manager-secret", "setupCode": manager_auth.setup_code()},
+    )
     target = tmp_path / "Existing-Project"
     target.mkdir()
     from core.manifest import ensure_project_metadata
@@ -147,7 +157,10 @@ def test_invalid_project_credentials_fail_closed_on_all_manager_routes(
 ) -> None:
     from core import users_document
 
-    client.post("/api/manager/auth/setup", json={"password": "manager-secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "manager-secret", "setupCode": manager_auth.setup_code()},
+    )
     target = tmp_path / f"Broken-{failure}"
     created = client.post(
         "/api/projects", json={"name": failure, "path": str(target)}
@@ -200,7 +213,10 @@ def _session_set_cookie(response) -> str:
 
 @pytest.mark.parametrize("route", ["setup", "login", "change-password", "logout"])
 def test_session_cookie_is_secure_over_https(tls_client: TestClient, route: str) -> None:
-    setup = tls_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    setup = tls_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     if route == "setup":
         resp = setup
     elif route == "login":
@@ -221,7 +237,10 @@ def test_session_cookie_is_secure_over_https(tls_client: TestClient, route: str)
 
 def test_session_cookie_lifetime_matches_the_token(client: TestClient) -> None:
     """A cookie outliving its token reads as signed in while every call 401s."""
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     client.post("/api/manager/auth/logout")
     resp = client.post("/api/manager/auth/login", json={"password": "secret"})
     assert f"max-age={manager_auth.SESSION_TTL_SECONDS}" in _session_set_cookie(resp)
@@ -231,20 +250,29 @@ def test_session_cookie_lifetime_matches_the_token(client: TestClient) -> None:
 @pytest.mark.parametrize("route", ["setup", "logout"])
 def test_session_cookie_not_secure_over_plain_http(client: TestClient, route: str) -> None:
     """Plain-HTTP installs must keep working — a Secure cookie is never stored there."""
-    setup = client.post("/api/manager/auth/setup", json={"password": "secret"})
+    setup = client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     resp = setup if route == "setup" else client.post("/api/manager/auth/logout")
     assert "secure" not in _session_set_cookie(resp)
 
 
 def test_login_wrong_password(client: TestClient) -> None:
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     client.post("/api/manager/auth/logout")
     bad = client.post("/api/manager/auth/login", json={"password": "nope"})
     assert bad.status_code == 422
 
 
 def test_change_password_then_login_with_new(client: TestClient) -> None:
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     resp = client.post(
         "/api/manager/auth/change-password",
         json={"currentPassword": "secret", "newPassword": "newsecret"},
@@ -261,7 +289,10 @@ def test_change_password_then_login_with_new(client: TestClient) -> None:
 
 
 def test_change_password_wrong_current_rejected(client: TestClient) -> None:
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     resp = client.post(
         "/api/manager/auth/change-password",
         json={"currentPassword": "wrong", "newPassword": "newsecret"},
@@ -278,7 +309,10 @@ def test_system_diagnostics_gated_without_auth(client: TestClient) -> None:
 
 
 def test_system_diagnostics_served_when_authed(client: TestClient) -> None:
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
 
     info = client.get("/api/system/info")
     assert info.status_code == 200
@@ -292,7 +326,10 @@ def test_system_diagnostics_served_when_authed(client: TestClient) -> None:
 def test_system_restart_not_exposed_on_manager(client: TestClient) -> None:
     """The manager exposes only read-only diagnostics — never /restart, which
     would SIGTERM the supervisor and tear down every running project."""
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     # A production SPA catch-all can claim the URL for GET and make Starlette
     # report 405; without that optional mount the absent route reports 404.
     # Either response proves the mutating endpoint is not registered.
@@ -309,7 +346,10 @@ def test_proxy_excludes_internal_reload_hook_even_when_project_is_running(
     # regardless of alias or whether the project is actually running.
     import manager as manager_module
 
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     monkeypatch.setattr(manager_module.supervisor, "port_for", lambda pid: 65000)
 
     resp = getattr(client, method)(f"/{prefix}/some-project/api/internal/reload")
@@ -647,7 +687,10 @@ def test_only_the_editor_socket_reaches_the_child_marked_as_editor(
     with client.websocket_connect("/runtime/ghost/ws", headers=forged) as ws:
         ws.send_text("hello")
         assert ws.receive_text() == "echo:hello"
-    client.post("/api/manager/auth/setup", json={"password": "manager-secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "manager-secret", "setupCode": manager_auth.setup_code()},
+    )
     with client.websocket_connect("/editor/ghost/ws") as ws:
         ws.send_text("hello")
         assert ws.receive_text() == "echo:hello"
@@ -677,7 +720,10 @@ def test_only_an_editor_http_request_reaches_the_child_marked_as_editor(
     path = "api/recipes/datasets/ds-1/download"
 
     assert client.post(f"/runtime/ghost/{path}", json={}, headers=forged).status_code == 200
-    client.post("/api/manager/auth/setup", json={"password": "manager-secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "manager-secret", "setupCode": manager_auth.setup_code()},
+    )
     assert client.post(f"/editor/ghost/{path}", json={}, headers={"x-nexthmi-editor": "0"}).status_code == 200
 
     assert seen == [None, "1"]
@@ -784,7 +830,10 @@ def test_root_path_mount_keeps_the_public_surface_public(
 
 
 def test_runtime_editor_aliases_503_when_authed_unknown_project(client: TestClient) -> None:
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     assert client.get("/runtime/ghost/api/health").status_code == 503
     assert client.get("/editor/ghost/api/health").status_code == 503
 
@@ -798,7 +847,10 @@ def test_document_navigation_to_unopenable_project_is_sent_back_to_projects(
     can't be opened lands on the dashboard with a reason, not a raw 503 JSON
     body. A build that ships the bundle serves the project shell instead and
     explains the outage in place — see the test below."""
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
 
     resp = client.get(
         f"/{prefix}/ghost/", headers={"accept": "text/html"}, follow_redirects=False
@@ -842,7 +894,10 @@ def test_document_navigation_to_unopenable_project_is_served_the_project_shell(
         monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
         monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
         with TestClient(manager.app) as tc:
-            tc.post("/api/manager/auth/setup", json={"password": "secret"})
+            tc.post(
+                "/api/manager/auth/setup",
+                json={"password": "secret", "setupCode": manager_auth.setup_code()},
+            )
             resp = tc.get(
                 f"/{prefix}/ghost/", headers={"accept": "text/html"}, follow_redirects=False
             )
@@ -918,7 +973,10 @@ def test_document_navigation_to_unopenable_project_without_a_session_is_sent_bac
 def test_non_document_requests_still_get_the_503(client: TestClient) -> None:
     """Only top-level navigations are redirected — an XHR/asset fetch must keep
     getting a machine-readable failure so callers can retry or report."""
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     resp = client.get("/runtime/ghost/api/health", follow_redirects=False)
     assert resp.status_code == 503
 
@@ -998,7 +1056,10 @@ def test_legacy_p_prefix_routing_removed(client: TestClient) -> None:
     gating, no proxy, no redirect shim. A hit on it 404s like any other
     unmatched path, authenticated or not."""
     assert client.get("/p/ghost/api/health").status_code == 404
-    client.post("/api/manager/auth/setup", json={"password": "secret"})
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+    )
     assert client.get("/p/ghost/api/health").status_code == 404
     assert client.get("/p/ghost/").status_code == 404
 
@@ -1100,7 +1161,10 @@ def test_root_redirects_to_running_default(monkeypatch, tmp_path: Path) -> None:
             manager.supervisor, "port_for", lambda pid: 12345 if pid == "plant-a" else None
         )
         with TestClient(manager.app) as tc:
-            tc.post("/api/manager/auth/setup", json={"password": "secret"})
+            tc.post(
+                "/api/manager/auth/setup",
+                json={"password": "secret", "setupCode": manager_auth.setup_code()},
+            )
             resp = tc.get("/", follow_redirects=False)
             assert resp.status_code in (302, 307)
             assert resp.headers["location"] == "/runtime/plant-a/"

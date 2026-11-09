@@ -91,14 +91,18 @@ describe('auth lifecycle', () => {
     expect(useManagerStore.getState().authError).toBe('supervisor down');
   });
 
-  it('setup posts the password and opens the dashboard', async () => {
+  it('setup posts the password with the setup code and opens the dashboard', async () => {
     const calls = stubFetch({});
     useManagerStore.setState({ auth: 'needs-setup', authError: 'stale' });
 
-    await useManagerStore.getState().setup('hunter2');
+    await useManagerStore.getState().setup('hunter2', 'K7PM-3QXD');
 
     expect(calls).toEqual([
-      { url: '/api/manager/auth/setup', method: 'POST', body: { password: 'hunter2' } },
+      {
+        url: '/api/manager/auth/setup',
+        method: 'POST',
+        body: { password: 'hunter2', setupCode: 'K7PM-3QXD' },
+      },
     ]);
     expect(useManagerStore.getState().auth).toBe('authed');
     expect(useManagerStore.getState().authError).toBeNull();

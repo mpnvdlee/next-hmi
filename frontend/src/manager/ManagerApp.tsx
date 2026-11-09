@@ -180,6 +180,7 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
   const setup = useManagerStore((s) => s.setup);
   const login = useManagerStore((s) => s.login);
   const authError = useManagerStore((s) => s.authError);
+  const [setupCode, setSetupCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
@@ -190,13 +191,19 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError(null);
+    if (isSetup && !setupCode.trim()) {
+      setLocalError(
+        'Enter the setup code. It is shown in the console and the log when the device starts.',
+      );
+      return;
+    }
     if (isSetup && password !== confirm) {
       setLocalError('Passwords do not match');
       return;
     }
     setBusy(true);
     try {
-      if (isSetup) await setup(password);
+      if (isSetup) await setup(password, setupCode);
       else await login(password);
     } catch (err) {
       setLocalError(describeError(err));
@@ -219,13 +226,33 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
             names, so the gate carries it ahead of the field itself. */}
         <InsecureConnectionNotice />
         <div className="cfg-security-form">
+          {isSetup && (
+            <label className="project-form__field">
+              <span className="project-form__label">Setup code</span>
+              <input
+                type="text"
+                className="cfg-prop-input cfg-prop-input--tall mgr-auth-card__code"
+                value={setupCode}
+                placeholder="XXXX-XXXX"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                autoFocus
+                onChange={(e) => setSetupCode(e.target.value)}
+              />
+              <span className="project-form__hint">
+                Shown in the console and the log when the device starts. With Docker:{' '}
+                <code>docker logs nexthmi</code>
+              </span>
+            </label>
+          )}
           <label className="project-form__field">
             <span className="project-form__label">Password</span>
             <input
               type="password"
               className="cfg-prop-input cfg-prop-input--tall"
               value={password}
-              autoFocus
+              autoFocus={!isSetup}
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
