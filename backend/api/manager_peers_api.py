@@ -26,7 +26,7 @@ import threading
 import time
 import uuid
 import zipfile
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass
@@ -70,6 +70,7 @@ from core.time_utils import iso_now
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
+from services import widget_compiler
 from services.supervisor import supervisor
 
 from api.projects_api import (
@@ -582,36 +583,11 @@ async def peer_info(request: Request) -> dict[str, Any]:
     return {"runtimeId": peer_discovery.runtime_id, "hostname": peer_discovery.hostname}
 
 
-def _custom_widget_count(paths: Iterable[str]) -> int:
-    """Widget entry points among project-relative paths, as the compiler finds them.
-
-    ``custom-widgets/<Name>/index.tsx`` and ``custom-widgets/<Group>/<Name>/index.tsx``.
-    Separators and case are normalised because an archive is written by the
-    other side, and on Windows or macOS ``Custom-Widgets\\X\\index.tsx`` lands
-    in the same folder the compiler reads.
-    """
-    count = 0
-    for path in paths:
-        parts = [part.casefold() for part in path.replace("\\", "/").split("/")]
-        parts = [part for part in parts if part not in ("", ".")]
-        if len(parts) in (3, 4) and parts[0] == "custom-widgets" and parts[-1] == "index.tsx":
-            count += 1
-    return count
-
-
-def _project_custom_widget_count(project_root: Path) -> int:
-    widgets = project_root / "custom-widgets"
-    entries = [*widgets.glob("*/index.tsx"), *widgets.glob("*/*/index.tsx")]
-    return _custom_widget_count(entry.relative_to(project_root).as_posix() for entry in entries)
-
-
-def _archive_custom_widget_count(zip_path: Path) -> int:
-    try:
-        with zipfile.ZipFile(zip_path) as archive:
-            return _custom_widget_count(archive.namelist())
-    except zipfile.BadZipFile:
-        # Unpacking refuses it next, with its own message.
-        return 0
+def _listed_code(project_root: Path) -> dict[str, Any]:
+    """``code`` names what the project carries; ``customWidgets`` is the count
+    a puller from before ``code`` reads."""
+    code = widget_compiler.project_code(project_root)
+    return {"customWidgets": len(code["customWidgets"]), "code": code}
 
 
 @public_router.get("/projects")
@@ -642,9 +618,9 @@ async def peer_projects(request: Request) -> dict[str, Any]:
                 "inProjectsRoot": root is not None
                 and Path(entry.path).expanduser().resolve().parent == root,
                 "running": running_entry(manifest, entry.id) is not None,
-                # Custom widgets are code the puller builds and serves; it asks
-                # its operator to trust the source before pulling any.
-                "customWidgets": _project_custom_widget_count(Path(entry.path).expanduser()),
+                # Code the puller would serve to every browser that opens the
+                # project; it asks its operator to trust the source first.
+                **_listed_code(Path(entry.path).expanduser()),
             }
             for entry in manifest.projects
             if Path(entry.path).expanduser().is_dir()
@@ -1866,7 +1842,7 @@ class PullBody(BaseModel):
     start: bool = False
     transferId: str | None = None
     # The operator's acknowledgement that the source is trusted to run code
-    # here; required whenever the archive carries custom widgets.
+    # here; required whenever the archive carries any (`project_code`).
     trustCustomWidgets: bool = False
 
     _validate_project_ids = field_validator("sourceProjectId", "destinationProjectId")(
@@ -2118,15 +2094,6 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
             raise ConflictError(
                 "Source project changed since this transferId was first attempted; use a new id"
             )
-        # Checked on the archive itself, not on what the source's listing said:
-        # the listing is the source's word, the archive is what gets installed.
-        widgets = await asyncio.to_thread(_archive_custom_widget_count, zip_path)
-        if widgets and not body.trustCustomWidgets:
-            raise ConflictError(
-                f"This project contains {widgets} custom "
-                f"{'widget' if widgets == 1 else 'widgets'}, code that would run on "
-                "this device. Confirm you trust the source of this project to pull it."
-            )
         state.phase = "extracting"
         # `bytesTotal` is 0 when the peer omitted Content-Length; snapping
         # `bytesDone` down to it would erase the download progress already
@@ -2147,7 +2114,19 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
                     raise RuntimeError("Transfer cancelled")
 
             with zip_path.open("rb") as archive:
-                return unpack_project(archive, stage, progress=progress)
+                metadata = unpack_project(archive, stage, progress=progress)
+            # Checked on what landed in the staging folder, before anything is
+            # installed: the source's listing is only its word, and only the
+            # extracted tree says what the compiler and the browser would run.
+            code = widget_compiler.project_code(stage)
+            if any(code.values()) and not body.trustCustomWidgets:
+                raise ConflictError(
+                    "This project contains code: "
+                    f"{widget_compiler.describe_project_code(code)}. It would run in "
+                    "the browser of everyone who opens the project on this device. "
+                    "Confirm you trust the source of this project to pull it."
+                )
+            return metadata
 
         def journal_update(**updates: Any) -> None:
             _pull_journal_update(state.transferId, **updates)

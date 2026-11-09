@@ -14,6 +14,7 @@ import {
 import { basename } from '@shared/utils/paths';
 import { randomUuid } from '@shared/utils/id';
 import { explainFailure, phaseLabel } from './peerTransferMessages';
+import ProjectCodeWarning from './ProjectCodeWarning';
 import {
   freeFolderName,
   sameParams,
@@ -489,14 +490,17 @@ export default function PeerTransferModal({
     () => replaceable.filter((target) => !target.running),
     [replaceable],
   );
-  // Custom widgets are code this manager builds and serves. A source that does
-  // not say how many it ships is asked about every time, and a refusal from
-  // the backend — which counts them in the archive itself — asks too.
-  const widgetCount = pullSource?.customWidgets;
+  // Custom widgets, external libraries and import-map overrides are code this
+  // manager would serve to every browser that opens the project. A source that
+  // does not say what it ships is asked about every time, and a refusal from
+  // the backend — which reads the extracted project itself — asks too.
+  const pullCode = pullSource?.code;
   const needsWidgetTrust =
     isPull &&
     !!pullSource &&
-    (widgetCount !== 0 || !!failureText?.includes('custom widget'));
+    (pullCode === undefined ||
+      Object.values(pullCode).some((names) => names.length > 0) ||
+      !!failureText?.includes('This project contains code'));
   const canTransfer =
     paired &&
     (!isPull || pullSourceId.length > 0) &&
@@ -847,25 +851,17 @@ export default function PeerTransferModal({
             </div>
           )}
           {needsWidgetTrust && (
-            <div className="project-form__warning">
-              <p className="project-form__warning-text">
-                {`${
-                  widgetCount === undefined
-                    ? `${deviceName} does not say whether this project contains custom widgets.`
-                    : widgetCount === 0
-                      ? 'This project contains custom widgets.'
-                      : `This project contains ${widgetCount} custom ${widgetCount === 1 ? 'widget' : 'widgets'}.`
-                } Custom widgets are code. They are built on this device when the project starts, and they run in the browser of everyone who opens the project, with the same access as this dashboard. Only import projects from a source you trust.`}
-              </p>
-              <label className="project-form__toggle">
-                <input
-                  type="checkbox"
-                  checked={trustWidgets}
-                  onChange={(event) => setTrustWidgets(event.target.checked)}
-                />
-                <span>I trust the source of this project and want to run its widgets</span>
-              </label>
-            </div>
+            <ProjectCodeWarning
+              code={pullCode ?? null}
+              unknownLead={
+                pullCode === undefined
+                  ? `${deviceName} does not say whether this project contains code.`
+                  : 'This project contains code.'
+              }
+              closing="Only fetch projects from a device you trust."
+              checked={trustWidgets}
+              onChange={setTrustWidgets}
+            />
           )}
           {policy === 'reject' && folderField}
           {!showResolution && trimmedFolder.length > 0 && (

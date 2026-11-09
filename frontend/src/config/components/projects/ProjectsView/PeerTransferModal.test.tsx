@@ -4,11 +4,13 @@ import {
   useProjectsStore,
   type PeerProbe,
   type PeerProject,
+  type ProjectCode,
   type ProjectEntry,
 } from '@config/store/projectsStore';
 import PeerTransferModal from './PeerTransferModal';
 
 const FINGERPRINT = '0123456789abcdef'.repeat(4);
+const NO_CODE: ProjectCode = { customWidgets: [], externalLibraries: [], importOverrides: [] };
 
 /** An HTTPS peer seen for the first time: its certificate still has to be compared. */
 function probed(overrides: Partial<PeerProbe> = {}): PeerProbe {
@@ -525,7 +527,7 @@ it('does not call a project registered outside the projects root a folder clash'
 it('names the local project in the way when it really is in the projects root', async () => {
   const user = userEvent.setup();
   const beginPeerPull = stubPullStore(
-    [{ id: 'remote-1', name: 'Landing', folder: 'landing', running: false, customWidgets: 0 }],
+    [{ id: 'remote-1', name: 'Landing', folder: 'landing', running: false, code: NO_CODE }],
     {
       projects: [
         project({
@@ -822,7 +824,7 @@ it('keeps the explanation of a terminal status the durable journal owns', async 
   // A sender's journal never leaves active/complete/error/cancelled.
   const user = userEvent.setup();
   stubPullStore(
-    [{ id: 'remote-1', name: 'Landing', folder: 'landing', running: false, customWidgets: 0 }],
+    [{ id: 'remote-1', name: 'Landing', folder: 'landing', running: false, code: NO_CODE }],
     {
       getPeerPull: vi.fn(async (transferId: string) => ({
         transferId,
@@ -1209,49 +1211,52 @@ it('keeps no pairing key when "Remember this device" is cleared', async () => {
   expect(pairPeer.mock.calls[0][4]).toMatchObject({ remember: false });
 });
 
-const WIDGET_WARNING_TAIL =
-  'Custom widgets are code. They are built on this device when the project starts, and they run in the browser of everyone who opens the project, with the same access as this dashboard. Only import projects from a source you trust.';
+const CODE_WARNING_TAIL =
+  'It runs in the browser of everyone who opens the project, with the same access as this dashboard. Only fetch projects from a device you trust.';
 
 it.each([
-  [2, 'This project contains 2 custom widgets.'],
-  [undefined, 'line-2-panel does not say whether this project contains custom widgets.'],
-])(
-  'makes a pull of custom widgets (%s) wait for the operator to trust the source',
-  async (customWidgets, lead) => {
-    const user = userEvent.setup();
-    const beginPeerPull = stubPullStore([
-      { id: 'remote-1', name: 'Landing', folder: 'landing', running: false, customWidgets },
-    ]);
-
-    render(<PeerTransferModal direction="pull" onClose={vi.fn()} onTransferred={vi.fn()} />);
-    await pairWith(user);
-    await pick(user, 'Source project on peer', /Landing \(landing\)/);
-
-    expect(screen.getByText(`${lead} ${WIDGET_WARNING_TAIL}`)).toBeInTheDocument();
-    const pull = screen.getByRole('button', { name: 'Pull' });
-    expect(pull).toBeDisabled();
-
-    await user.click(
-      screen.getByRole('checkbox', {
-        name: 'I trust the source of this project and want to run its widgets',
-      }),
-    );
-    await user.click(pull);
-    expect(beginPeerPull.mock.calls[0][0]).toMatchObject({ trustCustomWidgets: true });
-  },
-);
-
-it('pulls a project its source says has no custom widgets without the warning', async () => {
+  [
+    { customWidgets: ['Dials/Needle', 'Gauge'], externalLibraries: ['three'], importOverrides: [] },
+    'This project contains code: 2 custom widgets, 1 external library.',
+  ],
+  [undefined, 'line-2-panel does not say whether this project contains code.'],
+])('makes a pull of code (%j) wait for the operator to trust the source', async (code, lead) => {
   const user = userEvent.setup();
   const beginPeerPull = stubPullStore([
-    { id: 'remote-1', name: 'Landing', folder: 'landing', running: false, customWidgets: 0 },
+    { id: 'remote-1', name: 'Landing', folder: 'landing', running: false, code },
   ]);
 
   render(<PeerTransferModal direction="pull" onClose={vi.fn()} onTransferred={vi.fn()} />);
   await pairWith(user);
   await pick(user, 'Source project on peer', /Landing \(landing\)/);
 
-  expect(screen.queryByText(new RegExp(WIDGET_WARNING_TAIL.slice(0, 30)))).not.toBeInTheDocument();
+  expect(screen.getByText(`${lead} ${CODE_WARNING_TAIL}`)).toBeInTheDocument();
+  for (const item of code ? ['Dials/Needle', 'Gauge', 'external-libraries/three'] : []) {
+    expect(screen.getByText(item)).toBeInTheDocument();
+  }
+  const pull = screen.getByRole('button', { name: 'Pull' });
+  expect(pull).toBeDisabled();
+
+  await user.click(
+    screen.getByRole('checkbox', {
+      name: 'I trust the source of this project and want to run its code',
+    }),
+  );
+  await user.click(pull);
+  expect(beginPeerPull.mock.calls[0][0]).toMatchObject({ trustCustomWidgets: true });
+});
+
+it('pulls a project its source says has no code without the warning', async () => {
+  const user = userEvent.setup();
+  const beginPeerPull = stubPullStore([
+    { id: 'remote-1', name: 'Landing', folder: 'landing', running: false, code: NO_CODE },
+  ]);
+
+  render(<PeerTransferModal direction="pull" onClose={vi.fn()} onTransferred={vi.fn()} />);
+  await pairWith(user);
+  await pick(user, 'Source project on peer', /Landing \(landing\)/);
+
+  expect(screen.queryByText(new RegExp(CODE_WARNING_TAIL.slice(0, 30)))).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Pull' }));
   expect(beginPeerPull.mock.calls[0][0]).toMatchObject({ trustCustomWidgets: false });
 });

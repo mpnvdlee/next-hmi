@@ -116,9 +116,20 @@ export interface PeerProject {
    * folder nor can be replaced by one. Absent from a peer predating the field.
    */
   inProjectsRoot?: boolean;
-  /** How many custom widgets the project carries, by the peer's own count.
-   * Absent from a peer predating the field: unknown, never "none". */
-  customWidgets?: number;
+  /** The code the project carries, by the peer's own account. Absent from a
+   * peer predating the field: unknown, never "none". */
+  code?: ProjectCode;
+}
+
+/** What in a project runs as code in the browser of everyone who opens it
+ *  (backend `widget_compiler.project_code`). */
+export interface ProjectCode {
+  /** Widget keys: `<Name>` or `<Group>/<Name>`. */
+  customWidgets: string[];
+  /** Top-level entries of `external-libraries/` holding a `.js`/`.mjs` file. */
+  externalLibraries: string[];
+  /** Keys of the project's `external-modules.json` import map. */
+  importOverrides: string[];
 }
 
 /**
@@ -200,7 +211,13 @@ interface ProjectsStore {
   renameProject(id: string, patch: { name?: string; id?: string }): Promise<ProjectEntry>;
   removeProject(id: string, deleteFolder: boolean): Promise<void>;
   exportProject(id: string): void;
-  importProject(file: File, destinationPath: string): Promise<ProjectEntry>;
+  /** Throws `ProjectCodeUnconfirmedError` when the archive carries code and
+   *  `trustCustomWidgets` is not set. */
+  importProject(
+    file: File,
+    destinationPath: string,
+    trustCustomWidgets?: boolean,
+  ): Promise<ProjectEntry>;
   loadPeers(): Promise<PeerListResponse | null>;
   addManualPeer(host: string, port: number, name?: string, scheme?: PeerScheme): Promise<void>;
   removeManualPeer(host: string, port: number): Promise<void>;
@@ -253,12 +270,35 @@ interface ProjectsStore {
     confirmReplace: boolean;
     start: boolean;
     transferId: string;
-    /** The operator trusts the source to run its custom widgets here. */
+    /** The operator trusts the source to run the project's code here. */
     trustCustomWidgets?: boolean;
   }): Promise<PeerTransferStatus>;
   getPeerPull(transferId: string): Promise<PeerTransferStatus>;
   cancelPeerPull(transferId: string): Promise<PeerTransferStatus>;
   clearError(): void;
+}
+
+/** The import 409's `code` for an archive with code sent without
+ *  `trustCustomWidgets` (backend/api/projects_api.py). */
+const CUSTOM_WIDGETS_UNCONFIRMED = 'custom_widgets_unconfirmed';
+
+function isProjectCode(value: unknown): value is ProjectCode {
+  if (!value || typeof value !== 'object') return false;
+  const lists = value as Record<string, unknown>;
+  return (['customWidgets', 'externalLibraries', 'importOverrides'] as const).every((kind) => {
+    const names = lists[kind];
+    return Array.isArray(names) && names.every((name) => typeof name === 'string');
+  });
+}
+
+export class ProjectCodeUnconfirmedError extends Error {
+  readonly projectCode: ProjectCode;
+
+  constructor(message: string, projectCode: ProjectCode) {
+    super(message);
+    this.name = 'ProjectCodeUnconfirmedError';
+    this.projectCode = projectCode;
+  }
 }
 
 export function describeError(e: unknown): string {
@@ -385,12 +425,22 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     document.body.removeChild(a);
   },
 
-  importProject: async (file: File, destinationPath: string) => {
+  importProject: async (file: File, destinationPath: string, trustCustomWidgets = false) => {
     const form = new FormData();
     form.append('file', file);
     form.append('destinationPath', destinationPath);
+    if (trustCustomWidgets) form.append('trustCustomWidgets', 'true');
     const res = await fetch(withBase('/api/projects/import'), { method: 'POST', body: form });
-    if (!res.ok) throw await apiErrorFrom(res);
+    if (!res.ok) {
+      const error = await apiErrorFrom(res.clone());
+      if (error.code !== CUSTOM_WIDGETS_UNCONFIRMED) throw error;
+      const body = (await res.json()) as Partial<ProjectCode>;
+      throw new ProjectCodeUnconfirmedError(error.message, {
+        customWidgets: body.customWidgets ?? [],
+        externalLibraries: body.externalLibraries ?? [],
+        importOverrides: body.importOverrides ?? [],
+      });
+    }
     const entry = (await res.json()) as ProjectEntry;
     await get().load();
     return entry;
@@ -459,7 +509,11 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
       method: 'POST',
       body: { host, port, token: token || undefined, scheme, runtimeId: runtimeId ?? undefined },
     });
-    return result.projects;
+    // `code` drives a trust prompt: anything but three lists of names reads as
+    // "the source does not say", never as "no code".
+    return (result.projects ?? []).map((project) =>
+      isProjectCode(project.code) ? project : { ...project, code: undefined },
+    );
   },
 
   beginPeerTransfer: async (args) =>

@@ -980,7 +980,7 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
 - `GET /api/projects/{id}/export`
   - Streams the project as a zip with `Content-Disposition: attachment; filename="<name>.nexthmi.zip"` (the project name, made filename-safe). 409 if the folder is missing on disk.
 - `POST /api/projects/import`
-  - Multipart upload: `file` (zip), `destinationPath`, optional `name`. Validates destination, unpacks, adds a manifest entry; `201` with the entry. `422` on invalid zip, unsafe or symlink archive members, a reusable-component `$var` violation at any nested child/default-value source, or a malformed JSON, invalid UTF-8, unreadable, symlinked, or reparse-point component path. Component errors report `components/<file>.json#/<JSON pointer>`; file-content errors use the root pointer with a stable reason. `409` on id collision with an existing entry, or a destination that already holds a project. The destination is cleaned up and no manifest entry is added after any validation failure.
+  - Multipart upload: `file` (zip), `destinationPath`, optional `name`, optional `trustCustomWidgets` (boolean, default false). Validates destination, unpacks, adds a manifest entry; `201` with the entry. An archive that carries code — custom widgets as the compiler discovers them in the unpacked `custom-widgets/`, any `.js`/`.mjs` file under `external-libraries/`, or any key of `external-modules.json` — is refused unless `trustCustomWidgets` is true, with `409` `{ detail, code: "custom_widgets_unconfirmed", customWidgets: ["<Group>/<Name>", …], externalLibraries: ["<top-level entry>", …], importOverrides: ["<key>", …] }` — that code builds at project start and runs in every viewer's browser, so the operator confirms the source first. An id that is already registered is reported first, as its own `409`. `422` on invalid zip, unsafe or symlink archive members, an archive member with a `.`, `..` or empty path segment, a reusable-component `$var` violation at any nested child/default-value source, or a malformed JSON, invalid UTF-8, unreadable, symlinked, or reparse-point component path. Component errors report `components/<file>.json#/<JSON pointer>`; file-content errors use the root pointer with a stable reason. `409` on id collision with an existing entry, or a destination that already holds a project. The destination is cleaned up and no manifest entry is added after any validation failure.
 - `GET /api/projects/_runtime-home`
   - Used by the create dialog to suggest the default folder. Returns `runtimeHome` and `defaultProjectsRoot`. Read-only — it creates nothing. Unset, the default root is the user's Documents folder; where that does not exist (Docker, headless Linux) `validate-path` reports `parent-missing` for the suggestion, and `POST /api/projects` creates the root when the destination is inside it.
 
@@ -1020,7 +1020,7 @@ random peer token.
   `403` when the caller is not on a private address.
 - `GET /api/manager/peer/projects` — bearer-authenticated project list for
   explicit destination selection, covering projects whose folder exists. Each
-  entry is `{ id, name, folder, inProjectsRoot, running, customWidgets }`.
+  entry is `{ id, name, folder, inProjectsRoot, running, customWidgets, code }`.
   `inProjectsRoot` is
   whether that project's folder really is a child of the peer's projects root —
   the only place a transfer can install — so the caller can tell a folder
@@ -1029,6 +1029,10 @@ random peer token.
   widget entry points (`custom-widgets/<Name>/index.tsx` and
   `custom-widgets/<Group>/<Name>/index.tsx`); the modal reads a missing value
   as unknown and asks the operator to trust the source before pulling.
+  `code` is `{ customWidgets, externalLibraries, importOverrides }`: the
+  project's widget keys, the top-level entries of `external-libraries/` holding
+  a `.js`/`.mjs` file, and the keys of `external-modules.json`. The modal reads a
+  missing or malformed `code` as unknown too.
 - `POST /api/manager/peer/transfers` — bearer-authenticated multipart receive (`201`):
   `file`, `transferId`, `sourceProjectId`, `destinationProjectId`,
   `destinationFolder`, `collisionPolicy`, `confirmReplace`, and `start`.
@@ -1053,8 +1057,13 @@ random peer token.
   address or the runtimeId names another certificate, or a pinned runtimeId
   answers over plain HTTP) or `none` (plain HTTP, `fingerprint: null`). A pinned
   address is always probed over HTTPS. `remembered` says this manager holds a
-  pairing key for the device bound to this certificate. `422` for an expired
-  certificate or a failed TLS handshake.
+  pairing key for the device bound to this certificate. `trust` is also `new`
+  for a pin written before pairing asked for confirmation (no `runtimeId`
+  key); pairing then saves it with the runtimeId. A peer that answers with this
+  manager's own runtimeId is refused with `409` "This device has the same
+  identity as the one you are pairing with. Delete .peer-identity.json in one
+  of their runtime homes and restart it." `422` for an expired certificate or
+  a failed TLS handshake.
 - `POST /api/manager/peer-pair` and `POST /api/manager/peer-projects` —
   session-authenticated browser proxies for pairing and destination discovery.
   Bodies `{ host, port = 8000, scheme, password, name?, fingerprint?,
@@ -1096,9 +1105,9 @@ random peer token.
   `GET /api/manager/peer/projects/{sourceProjectId}/archive` from the paired
   peer and installs it locally, reusing the same collision/backup/rollback
   core as the receive endpoint above. The body also takes
-  `trustCustomWidgets = false`: a downloaded archive with custom widget entry
-  points fails with "This project contains N custom widgets…" before anything
-  is extracted unless it is `true`. It is consent, not a parameter, so it is
+  `trustCustomWidgets = false`: once the archive is extracted into the staging
+  folder, a project carrying any code (as for import) fails with "This project
+  contains code: …" before anything is installed, unless it is `true`. It is consent, not a parameter, so it is
   left out of the retry fingerprint and a refused pull retries under the same
   id. `GET` / `DELETE
   /api/manager/pulls/{transferId}` polls or cancels it, with the same
@@ -1112,8 +1121,9 @@ random peer token.
   server.
 - `DELETE /api/manager/peers/trust?host=...&port=8000&runtimeId=...` →
   `{ host, port, forgotten: true }`; drops the address's pin and every pin of
-  the same runtimeId (the one given, and the dropped pin's own). `404` when
-  nothing was pinned. The only recovery path after a peer renews its certificate, and an
+  the same runtimeId (the one given, and the dropped pin's own), and the pairing
+  key remembered for those runtimeIds, even when nothing was pinned (before the
+  `404`). `404` when nothing was pinned. The only recovery path after a peer renews its certificate, and an
   explicit operator action by design — dropping a pin discards the evidence that
   would otherwise expose an interception.
 - `GET /api/manager/peer-tokens` and

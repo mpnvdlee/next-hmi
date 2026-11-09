@@ -3,7 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Button from '../../ui/Button';
 import ModalShell from '../../ui/ModalShell';
 import DirectoryBrowserModal from './DirectoryBrowserModalLazy';
-import { describeError, useProjectsStore } from '@config/store/projectsStore';
+import ProjectCodeWarning from './ProjectCodeWarning';
+import {
+  describeError,
+  ProjectCodeUnconfirmedError,
+  type ProjectCode,
+  useProjectsStore,
+} from '@config/store/projectsStore';
 import { joinPath, slugify } from '@shared/utils/paths';
 import { useDestinationPathValidation } from '../useDestinationPathValidation';
 
@@ -30,6 +36,9 @@ export default function ImportProjectModal({ defaultRoot, onCancel, onImported }
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [browsing, setBrowsing] = useState(false);
+  // Set once the server has refused the archive for carrying code.
+  const [code, setCode] = useState<ProjectCode | null>(null);
+  const [trusted, setTrusted] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const suggested = useMemo(() => suggestPath(defaultRoot, file), [defaultRoot, file]);
@@ -39,17 +48,23 @@ export default function ImportProjectModal({ defaultRoot, onCancel, onImported }
 
   const validation = useDestinationPathValidation(path);
 
-  const canSubmit = !!file && path.trim().length > 0 && validation?.ok === true && !submitting;
+  const canSubmit =
+    !!file &&
+    path.trim().length > 0 &&
+    validation?.ok === true &&
+    (code === null || trusted) &&
+    !submitting;
 
   async function handleSubmit() {
     if (!canSubmit || !file) return;
     setSubmitting(true);
     setError(null);
     try {
-      await importProject(file, path.trim());
+      await importProject(file, path.trim(), trusted);
       onImported();
     } catch (e) {
-      setError(describeError(e));
+      if (e instanceof ProjectCodeUnconfirmedError) setCode(e.projectCode);
+      else setError(describeError(e));
     } finally {
       setSubmitting(false);
     }
@@ -69,7 +84,11 @@ export default function ImportProjectModal({ defaultRoot, onCancel, onImported }
           ref={fileRef}
           type="file"
           accept=".zip,application/zip"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            setCode(null);
+            setTrusted(false);
+          }}
         />
       </label>
 
@@ -120,6 +139,17 @@ export default function ImportProjectModal({ defaultRoot, onCancel, onImported }
         </p>
       )}
       {error && <p className="project-form__status project-form__status--error">{error}</p>}
+
+      {code && (
+        <ProjectCodeWarning
+          code={code}
+          unknownLead="This project contains code."
+          closing="Only import projects from a source you trust."
+          checked={trusted}
+          disabled={submitting}
+          onChange={setTrusted}
+        />
+      )}
 
       <div className="name-modal__actions">
         <Button variant="ghost" onClick={onCancel} disabled={submitting}>

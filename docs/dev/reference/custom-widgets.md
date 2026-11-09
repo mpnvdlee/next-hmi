@@ -23,6 +23,43 @@ would trust to run code on the server and in operators' browsers, and keep the
 whole deployment on a trusted network (see
 [deploy.md](../operations/deploy.md#network-placement-and-threat-model)).
 
+A project brings its code with it, so **importing, pulling or receiving a
+project runs that code too**. A project's code is
+(`widget_compiler.project_code`, read from the extracted files):
+
+- its **custom widgets**, as the compiler discovers them — they build when the
+  project starts and run in the browser of everyone who opens it;
+- every `.js`/`.mjs` file under `external-libraries/`, named by its top-level
+  entry there;
+- every key of `external-modules.json`, the project's import-map overrides.
+
+A project with no custom widgets is not code-free: a library or an override
+loads into every page of the project. `POST /api/projects/import` therefore
+refuses an archive that carries any of these with a `409`
+(`code: "custom_widgets_unconfirmed"`, plus `customWidgets`,
+`externalLibraries` and `importOverrides` lists) until the caller sets
+`trustCustomWidgets`, which the import dialog does only once the operator ticks
+*I trust the source of this project and want to run its code*. A pull is
+refused the same way, checked in the staging folder before anything is
+installed; the source's project listing names the same three lists (`code`) so
+the dialog can ask first. Both checks read what landed on disk, and an archive
+member with a `.`, `..` or empty path segment is refused outright on every
+unpack (import, pull, receive), so a member name cannot say one thing and land
+in `custom-widgets/` anyway.
+
+What the build itself may read is bounded: **a widget can only bundle files
+inside the project's `custom-widgets/` folder** and its `external-libraries/`,
+both of which are served as-is anyway — so widgets may share a helper such as
+`custom-widgets/_shared/scale.ts`. The compiler checks esbuild's metafile — its
+record of every file the bundle read, whatever pulled it in (`import`,
+`import()`, `require()`, `export … from`, or a symlink) — and refuses a build
+that reached any other file, with an error such as
+`Widget “Leak” imports ../../../.manager-auth.json, which is outside the custom-widgets folder`.
+A refused build also removes the widget's previous `index.js`. Without that
+bound a widget could inline a server file — the manager's session secret,
+another project's datasource passwords — into its compiled module, which
+`/runtime/<id>/widget-js/` serves without a session.
+
 ## Folder contract
 
 Layout choices:
@@ -81,7 +118,13 @@ The compiler lives in `backend/services/widget_compiler.py` and runs in both dev
 
 A failed compile leaves the previous `index.js` in place, which is deliberate
 for a project widget: a broken edit keeps the last good module serving to the
-live HMI instead of blanking the operator's screen. The built-in half does not
+live HMI instead of blanking the operator's screen. The one exception is a
+build refused for reading a file outside the widget's folder (see
+[Security](#security-editor-access-is-code-execution)): that removes the
+previous `index.js` too, since it may predate the check and carry the same
+file. The built-in widgets are the product's own code and may share helpers
+across `frontend/widgets/`, so their build (`--once --manifest …`) bounds
+inputs to that tree instead. The built-in half does not
 get that latitude — `publish_builtin_widgets_assets` reads `.build-status.json` from
 disk and skips any widget whose row is not `ok`, so a broken build never
 publishes yesterday's artifact under a source that no longer matches it. One
@@ -413,7 +456,12 @@ A loose `<name>.js` at the root of `external-libraries/` also works for single-f
 { "imports": { "weird-lib": "/external-libraries/weird/dist/esm/main.bundle.js" } }
 ```
 
-Override entries win over auto-derived ones.
+Override entries win over auto-derived ones. A key must be a bare module name:
+one that starts with `/`, `./` or `../`, or contains `:` or `\`, would remap
+that URL for every module on the page — a built-in widget's own
+`/runtime/<id>/builtin-widgets-js/…` included — so it is logged and left out of
+the import map (`build_import_map`, shared by the served page and the compiler;
+the dev server's plugin applies the same rule).
 
 **Which project the dev server scans.** The import map is built by a Vite plugin
 (`frontend/dev-plugins/externalModules.ts`), which has to find the live project

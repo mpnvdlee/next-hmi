@@ -7,6 +7,7 @@ Covers:
   * ``render_index_html`` — strips the build-time importmap, injects a
     fresh one, caches by (index.html, libs dir, override file) mtime.
 """
+import json
 from pathlib import Path
 
 from services import frontend_serve
@@ -178,6 +179,44 @@ def test_build_combines_folder_convention_and_loose_root(tmp_path: Path) -> None
         "uplot/": "/external-libraries/uplot/",
         "tiny": "/external-libraries/tiny.js",
     }
+
+
+def test_build_keeps_only_bare_module_names(tmp_path: Path, caplog) -> None:
+    """A URL-like key would remap that URL for every module on the page,
+    a built-in widget included."""
+    override = tmp_path / "external-modules.json"
+    override.write_text(
+        json.dumps(
+            {
+                "imports": {
+                    "lodash": "/external-libraries/lodash.js",
+                    "/runtime/p/builtin-widgets-js/Button/index.js": "/external-libraries/x.js",
+                    "./local.js": "/external-libraries/x.js",
+                    "../up.js": "/external-libraries/x.js",
+                    "https://cdn.example/x.js": "/external-libraries/x.js",
+                    "C:\\x": "/external-libraries/x.js",
+                    "": "/external-libraries/x.js",
+                }
+            }
+        )
+    )
+    with caplog.at_level("WARNING", logger="services.frontend_serve"):
+        result = frontend_serve.build_import_map(tmp_path / "missing", override)
+    assert result["imports"] == {"lodash": "/external-libraries/lodash.js"}
+    assert len(caplog.records) == 6
+
+
+def test_rendered_page_carries_no_url_like_import_map_key(tmp_path: Path) -> None:
+    frontend_serve.reset_render_cache()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html><head></head><body></body></html>")
+    override = tmp_path / "external-modules.json"
+    override.write_text(
+        '{"imports": {"/runtime/p/builtin-widgets-js/Button/index.js": "/external-libraries/x.js"}}'
+    )
+    html = frontend_serve.render_index_html(dist, tmp_path / "missing", override)
+    assert "builtin-widgets-js" not in html
 
 
 # ── render_index_html ───────────────────────────────────────────────────────

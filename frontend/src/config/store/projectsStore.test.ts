@@ -1,4 +1,9 @@
-import { useProjectsStore, describeError, type ProjectEntry } from './projectsStore';
+import {
+  ProjectCodeUnconfirmedError,
+  useProjectsStore,
+  describeError,
+  type ProjectEntry,
+} from './projectsStore';
 
 interface Call {
   url: string;
@@ -303,6 +308,25 @@ describe('peer discovery', () => {
     });
   });
 
+  it('listPeerProjects reads a malformed code listing as unknown, never as none', async () => {
+    const code = { customWidgets: ['Gauge'], externalLibraries: [], importOverrides: [] };
+    stubFetch({
+      'POST /api/manager/peer-projects': {
+        projects: [
+          { id: 'a', name: 'A', folder: 'a', running: false, code },
+          { id: 'b', name: 'B', folder: 'b', running: false, code: { customWidgets: 'x' } },
+          { id: 'c', name: 'C', folder: 'c', running: false, customWidgets: 0 },
+        ],
+      },
+    });
+
+    const projects = await useProjectsStore
+      .getState()
+      .listPeerProjects('10.0.0.4', 8443, 'tok', 'https');
+
+    expect(projects.map((project) => project.code)).toEqual([code, undefined, undefined]);
+  });
+
   it('removeManualPeer deletes by host and port query params', async () => {
     const calls = stubFetch({});
 
@@ -311,6 +335,85 @@ describe('peer discovery', () => {
     expect(calls).toEqual([
       { url: '/api/manager/peers/manual?host=10.0.0.4&port=8000', method: 'DELETE' },
     ]);
+  });
+});
+
+describe('importProject', () => {
+  const zip = new File(['zip'], 'plant.zip');
+
+  function stubImport(status: number, body: unknown) {
+    const forms: FormData[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        forms.push(init?.body as FormData);
+        return new Response(JSON.stringify(body), { status });
+      }),
+    );
+    return forms;
+  }
+
+  it('names the code the server wants confirmed', async () => {
+    const forms = stubImport(409, {
+      detail: 'This project contains code: 1 custom widget (Leak), 1 external library (three).',
+      code: 'custom_widgets_unconfirmed',
+      customWidgets: ['Leak'],
+      externalLibraries: ['three'],
+      importOverrides: [],
+    });
+
+    const error = await useProjectsStore
+      .getState()
+      .importProject(zip, '/projects/plant')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ProjectCodeUnconfirmedError);
+    expect((error as ProjectCodeUnconfirmedError).projectCode).toEqual({
+      customWidgets: ['Leak'],
+      externalLibraries: ['three'],
+      importOverrides: [],
+    });
+    expect(forms[0].has('trustCustomWidgets')).toBe(false);
+  });
+
+  it('reads a server that names only custom widgets', async () => {
+    stubImport(409, {
+      detail: 'This project contains 1 custom widget (Leak).',
+      code: 'custom_widgets_unconfirmed',
+      customWidgets: ['Leak'],
+    });
+
+    const error = await useProjectsStore
+      .getState()
+      .importProject(zip, '/projects/plant')
+      .catch((e: unknown) => e);
+
+    expect((error as ProjectCodeUnconfirmedError).projectCode).toEqual({
+      customWidgets: ['Leak'],
+      externalLibraries: [],
+      importOverrides: [],
+    });
+  });
+
+  it('sends the confirmation when the caller trusts the widgets', async () => {
+    const forms = stubImport(201, project());
+    vi.spyOn(useProjectsStore.getState(), 'load').mockResolvedValue();
+
+    await useProjectsStore.getState().importProject(zip, '/projects/plant', true);
+
+    expect(forms[0].get('trustCustomWidgets')).toBe('true');
+  });
+
+  it('keeps any other conflict an ordinary error', async () => {
+    stubImport(409, { detail: 'A project with id p1 is already registered.' });
+
+    const error = await useProjectsStore
+      .getState()
+      .importProject(zip, '/projects/plant')
+      .catch((e: unknown) => e);
+
+    expect(error).not.toBeInstanceOf(ProjectCodeUnconfirmedError);
+    expect(describeError(error)).toBe('A project with id p1 is already registered.');
   });
 });
 

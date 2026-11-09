@@ -2187,28 +2187,48 @@ def _write_custom_widget(project: Path, relative: str = "Gauge") -> None:
     (widget / "index.tsx").write_text("export default () => null;\n", encoding="utf-8")
 
 
-def test_pulling_custom_widgets_needs_the_trust_acknowledgement(
-    monkeypatch, tmp_path: Path
-):
-    """Enforced on the archive itself: the source's own listing is only its word."""
-    _, root = _configure_home(monkeypatch, tmp_path)
-    source = tmp_path / "widget-source"
+def _source_project(tmp_path: Path) -> Path:
+    source = tmp_path / "code-source"
     source.mkdir()
     write_project_metadata(source, ProjectMetadata(id="source-id", name="Source"))
     (source / "pages.json").write_text('{"pages": []}', encoding="utf-8")
     (source / "users.json").write_text('{"users": []}', encoding="utf-8")
+    return source
+
+
+def _packed(source: Path, extra: dict[str, str] | None = None) -> bytes:
+    """``pack_project`` output, plus members under names it would never write."""
+    output = io.BytesIO()
+    pack_project(source, output)
+    with zipfile.ZipFile(output, "a") as archive:
+        for name, text in (extra or {}).items():
+            archive.writestr(name, text)
+    return output.getvalue()
+
+
+def _staging_left_behind(root: Path) -> list[str]:
+    return [path.name for path in root.iterdir() if path.name.startswith(".nexthmi-transfer-")]
+
+
+def test_pulling_custom_widgets_needs_the_trust_acknowledgement(
+    monkeypatch, tmp_path: Path
+):
+    """Enforced on what was extracted: the source's own listing is only its word."""
+    _, root = _configure_home(monkeypatch, tmp_path)
+    source = _source_project(tmp_path)
     _write_custom_widget(source)
-    archive = io.BytesIO()
-    pack_project(source, archive)
-    _patch_peer_download(monkeypatch, archive.getvalue())
+    _patch_peer_download(monkeypatch, _packed(source))
 
     with TestClient(_app()) as client:
         begun = client.post("/api/manager/pulls", json=_pull_body(transferId="pull-widgets"))
         assert begun.status_code == 202, begun.text
         refused = _wait_for_pull(client, "pull-widgets")
         assert refused["status"] == "error", refused
-        assert "contains 1 custom widget," in refused["message"]
+        assert refused["message"].startswith(
+            "This project contains code: 1 custom widget (Gauge). "
+        )
         assert not (root / "pulled-copy").exists()
+        assert _staging_left_behind(root) == []
         assert load_manifest().projects == []
 
         # The same id: consent is not a transfer parameter.
@@ -2223,7 +2243,65 @@ def test_pulling_custom_widgets_needs_the_trust_acknowledgement(
     assert (root / "pulled-copy" / "custom-widgets" / "Gauge" / "index.tsx").is_file()
 
 
-def test_peer_project_listing_counts_custom_widgets(monkeypatch, tmp_path: Path):
+def test_pulling_external_code_needs_the_trust_acknowledgement(
+    monkeypatch, tmp_path: Path
+):
+    """No custom-widgets folder, yet a library and an import map run all the same."""
+    _, root = _configure_home(monkeypatch, tmp_path)
+    source = _source_project(tmp_path)
+    (source / "external-libraries").mkdir()
+    (source / "external-libraries" / "chart.mjs").write_text("export {}", encoding="utf-8")
+    (source / "external-modules.json").write_text(
+        '{"imports": {"lodash": "/external-libraries/chart.mjs"}}', encoding="utf-8"
+    )
+    _patch_peer_download(monkeypatch, _packed(source))
+
+    with TestClient(_app()) as client:
+        client.post("/api/manager/pulls", json=_pull_body(transferId="pull-libraries"))
+        refused = _wait_for_pull(client, "pull-libraries")
+        assert refused["status"] == "error", refused
+        assert refused["message"].startswith(
+            "This project contains code: 1 external library (chart.mjs), "
+            "1 import-map override (lodash). "
+        )
+        assert not (root / "pulled-copy").exists()
+
+        client.post(
+            "/api/manager/pulls",
+            json=_pull_body(transferId="pull-libraries", trustCustomWidgets=True),
+        )
+        status = _wait_for_pull(client, "pull-libraries")
+
+    assert status["status"] == "complete", status
+
+
+@pytest.mark.parametrize(
+    "member",
+    ["x/../custom-widgets/Gauge/index.tsx", "custom-widgets/a/../Gauge/index.tsx"],
+)
+def test_a_pulled_member_whose_name_hides_where_it_lands_is_refused(
+    monkeypatch, tmp_path: Path, member: str
+):
+    """Both land in custom-widgets/Gauge/; a source that also lists no widgets
+    must not get one installed past the trust prompt."""
+    _, root = _configure_home(monkeypatch, tmp_path)
+    archive = _packed(_source_project(tmp_path), {member: "export default () => null;"})
+    _patch_peer_download(monkeypatch, archive)
+
+    with TestClient(_app()) as client:
+        client.post("/api/manager/pulls", json=_pull_body(transferId="pull-trick"))
+        status = _wait_for_pull(client, "pull-trick")
+
+    assert status["status"] == "error", status
+    assert "'..' path segment" in status["message"]
+    assert not (root / "pulled-copy").exists()
+    assert _staging_left_behind(root) == []
+    assert load_manifest().projects == []
+
+
+def test_peer_project_listing_counts_the_code_each_project_carries(
+    monkeypatch, tmp_path: Path
+):
     _, root = _configure_home(monkeypatch, tmp_path)
     plain = root / "plain"
     plain.mkdir()
@@ -2231,10 +2309,17 @@ def test_peer_project_listing_counts_custom_widgets(monkeypatch, tmp_path: Path)
     _write_custom_widget(with_widgets)
     _write_custom_widget(with_widgets, "Dials/Needle")
     (with_widgets / "custom-widgets" / "Gauge" / "helper.ts").write_text("", encoding="utf-8")
+    with_libraries = root / "with-libraries"
+    (with_libraries / "external-libraries" / "three").mkdir(parents=True)
+    (with_libraries / "external-libraries" / "three" / "three.js").write_text("")
+    (with_libraries / "external-libraries" / "three" / "extra.js").write_text("")
+    (with_libraries / "external-modules.json").write_text(
+        '{"imports": {"a": "/external-libraries/three/extra.js", "b": "https://cdn/x.js"}}'
+    )
     manifest = load_manifest()
     manifest.projects.extend(
         ProjectEntry(id=path.name, name=path.name, path=str(path), addedAt="2026-01-01T00:00:00Z")
-        for path in (plain, with_widgets)
+        for path in (plain, with_widgets, with_libraries)
     )
     save_manifest(manifest)
 
@@ -2245,24 +2330,19 @@ def test_peer_project_listing_counts_custom_widgets(monkeypatch, tmp_path: Path)
         )
 
     assert listed.status_code == 200, listed.text
-    counts = {entry["id"]: entry["customWidgets"] for entry in listed.json()["projects"]}
-    assert counts == {"plain": 0, "with-widgets": 2}
-
-
-def test_custom_widgets_are_counted_the_way_the_receiving_filesystem_will_see_them():
-    assert (
-        manager_peers_api._custom_widget_count(
-            [
-                "custom-widgets/Gauge/index.tsx",
-                "Custom-Widgets\\Dial\\index.tsx",
-                "./custom-widgets/Group/Meter/INDEX.TSX",
-                "custom-widgets/Gauge/helper.ts",
-                "custom-widgets/index.tsx",
-                "pages/custom-widgets/Gauge/index.tsx",
-            ]
-        )
-        == 3
-    )
+    listing = {entry["id"]: entry for entry in listed.json()["projects"]}
+    nothing = {"customWidgets": [], "externalLibraries": [], "importOverrides": []}
+    assert {key: entry["code"] for key, entry in listing.items()} == {
+        "plain": nothing,
+        "with-widgets": {**nothing, "customWidgets": ["Dials/Needle", "Gauge"]},
+        "with-libraries": {**nothing, "externalLibraries": ["three"], "importOverrides": ["a", "b"]},
+    }
+    # The count a puller from before `code` reads.
+    assert {key: entry["customWidgets"] for key, entry in listing.items()} == {
+        "plain": 0,
+        "with-widgets": 2,
+        "with-libraries": 0,
+    }
 
 
 def test_pull_transport_failure_keeps_the_transports_own_message(

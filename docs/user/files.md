@@ -89,7 +89,7 @@ Custom widgets must not bundle their own dependencies. Instead, drop an ESM buil
 <project>/external-libraries/three/three.js       →  import * as THREE from 'three'
 ```
 
-A loose `<name>.js` directly under `external-libraries/` works too, for single-file libraries. If you need a specifier that doesn't match a filename, add an `external-modules.json` at the project root to map it explicitly — see the [custom-widget reference](../dev/reference/custom-widgets.md#using-external-libraries) for that shape.
+A loose `<name>.js` directly under `external-libraries/` works too, for single-file libraries. If you need a specifier that doesn't match a filename, add an `external-modules.json` at the project root to map it explicitly — see the [custom-widget reference](../dev/reference/custom-widgets.md#using-external-libraries) for that shape. Its keys must be plain module names (`lodash-es`, not `/path/x.js` or `https://…`); any other key is ignored. Libraries and this file are code: a project that carries them asks for trust when it is imported or pulled, like one with custom widgets.
 
 In dev the folder is watched, so adding a library triggers a reload. In a packaged build it is read at startup.
 

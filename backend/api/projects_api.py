@@ -50,8 +50,9 @@ from core.project_packer import (
 from core.storage import repo_root
 from core.time_utils import iso_now
 from fastapi import APIRouter, File, Form, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from services import widget_compiler
 
 from api.thumbnail_api import delete_thumbnail, thumbnail_path, thumbnail_updated_at
 
@@ -63,6 +64,11 @@ _TEMPLATE_DIRNAMES: dict[str, str] = {
     "empty": "project-seed",
     "example": "project-example",
 }
+
+# The 409 ``code`` of an import that carries code (custom widgets, external
+# libraries, import-map overrides) but was sent without ``trustCustomWidgets``;
+# the import dialog keys its confirmation step on it.
+CUSTOM_WIDGETS_UNCONFIRMED = "custom_widgets_unconfirmed"
 
 
 # ── request / response models ────────────────────────────────────────────────
@@ -880,11 +886,15 @@ async def import_project(
     file: UploadFile = File(...),
     destinationPath: str = Form(...),
     name: str | None = Form(default=None),
-) -> dict[str, Any]:
+    trustCustomWidgets: bool = Form(default=False),
+) -> Any:
     """Unpack an uploaded zip into ``destinationPath`` and register it.
 
     The new project is NOT made the default. If the archive's project id
-    already matches an existing manifest entry, returns 409.
+    already matches an existing manifest entry, returns 409. An archive that
+    carries code — custom widgets, external libraries or import-map overrides,
+    see ``widget_compiler.project_code`` — is refused with a 409 naming it
+    unless ``trustCustomWidgets`` is set: every viewer's browser runs it.
     """
     target = _prepare_import_destination(destinationPath)
 
@@ -898,20 +908,41 @@ async def import_project(
             raise ValidationError(str(exc)) from exc
         except zipfile.BadZipFile as exc:
             raise ValidationError(f"Uploaded file is not a valid zip: {exc}") from exc
+        duplicate_message = (
+            f"A project with id {metadata.id} is already registered. "
+            "Remove it first or import a different archive."
+        )
+        # Asked before the trust question: confirming trust in an archive that
+        # can never be imported here would only lead to this refusal anyway.
+        # Registering checks again under the manifest lock.
+        if find_project(load_manifest(), metadata.id) is not None:
+            raise ConflictError(duplicate_message)
+        # Read from what landed on disk, with the compiler's own discovery, so
+        # the list is exactly what would run whatever the member names said.
+        code = widget_compiler.project_code(target)
     except Exception:
         # Clean up a partially-written destination on failure.
         if target.is_dir():
             shutil.rmtree(target, ignore_errors=True)
         raise
 
+    if any(code.values()) and not trustCustomWidgets:
+        shutil.rmtree(target, ignore_errors=True)
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": (
+                    "This project contains code: "
+                    f"{widget_compiler.describe_project_code(code)}. "
+                    "Confirm that you trust the source of this project to import it."
+                ),
+                "code": CUSTOM_WIDGETS_UNCONFIRMED,
+                **code,
+            },
+        )
+
     entry, _manifest = _register_imported_project(
-        target,
-        metadata,
-        name,
-        duplicate_message=(
-            f"A project with id {metadata.id} is already registered. "
-            "Remove it first or import a different archive."
-        ),
+        target, metadata, name, duplicate_message=duplicate_message
     )
     logger.info("Imported project '%s' (%s) at %s", entry.name, metadata.id, target)
     return _entry_dict(entry, _manifest)

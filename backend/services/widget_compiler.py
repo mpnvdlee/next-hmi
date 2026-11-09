@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 import threading
 from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
@@ -40,7 +41,7 @@ from core.storage import (
 )
 from core.time_utils import iso_now
 
-from services.frontend_serve import build_import_map
+from services.frontend_serve import build_import_map, read_overrides
 from services.widget_schemas import extract_schemas
 
 logger = logging.getLogger(__name__)
@@ -301,18 +302,24 @@ _IMPORT_SPECIFIER_RE = re.compile(
     r"""import\s+(?:type\s+)?(?:[^'";]+?\s+from\s+)?['"]([^'"]+)['"]"""
 )
 
+
+def _external_libraries_dir(src_dir: Path | None = None) -> Path:
+    """The project's ``external-libraries/``. When a caller supplies a custom
+    widget root, use its sibling project directory; tests and one-off
+    validation rely on that."""
+    if src_dir is None:
+        return active_external_libraries_dir()
+    return src_dir.parent / "external-libraries"
+
+
 def _external_imports(src_dir: Path | None = None) -> set[str]:
     """Import-map keys available to widgets in this project.
 
     The browser map and compiler deliberately share ``build_import_map`` so a
     widget cannot compile in development and then fail in the packaged runtime
-    (or vice versa). When a caller supplies a custom widget root, use its
-    sibling project directories; tests and one-off validation rely on that.
+    (or vice versa).
     """
-    if src_dir is None:
-        libraries_dir = active_external_libraries_dir()
-    else:
-        libraries_dir = src_dir.parent / "external-libraries"
+    libraries_dir = _external_libraries_dir(src_dir)
     override_path = libraries_dir.parent / "external-modules.json"
     return set(build_import_map(libraries_dir, override_path)["imports"])
 
@@ -340,6 +347,43 @@ def _disallowed_import(
         ):
             return specifier
     return None
+
+
+def _bundle_roots(target: CompileTarget) -> tuple[Path, ...]:
+    """The folders a widget's bundle may read files from.
+
+    A project widget can be someone else's code — an imported, pulled or
+    pushed project — and its build is served without a session, so a file it
+    could pull in from elsewhere on the server would be published. It gets the
+    project's ``custom-widgets/`` and ``external-libraries/``, both served
+    as-is anyway, so widgets can share helpers (``../_shared/scale.ts``) as the
+    product's built-in widgets do (``usePress.ts``, ``Container/ContainerBox.tsx``).
+    """
+    return (target.src_dir.resolve(), _external_libraries_dir(target.src_dir).resolve())
+
+
+def _input_outside(metafile: Path, cwd: Path, roots: tuple[Path, ...]) -> Path | None:
+    """The first file esbuild bundled from outside ``roots``, or ``None``.
+
+    The metafile is esbuild's own record of every file it read, whatever
+    pulled it in (``import``, ``import()``, ``require()``, ``export … from``,
+    a CSS ``@import``), so this does not depend on recognising the syntax.
+    Keys are relative to esbuild's working directory; resolving them also
+    follows a symlink out of the folder.
+    """
+    inputs = json.loads(metafile.read_text(encoding="utf-8")).get("inputs", {})
+    for name in inputs:
+        path = (cwd / name).resolve()
+        if not any(path.is_relative_to(root) for root in roots):
+            return path
+    return None
+
+
+def _shown_from(path: Path, folder: Path) -> str:
+    try:
+        return Path(os.path.relpath(path, folder)).as_posix()
+    except ValueError:  # another drive on Windows
+        return str(path)
 
 
 def _esbuild_external_args(external_imports: set[str]) -> list[str]:
@@ -499,6 +543,43 @@ def discovered_entries_by_key(root: Path) -> dict[str, Path]:
     return {widget_key(entry, root): entry for entry in find_entries(root)}
 
 
+def project_code(project_root: Path) -> dict[str, list[str]]:
+    """What in a project runs as code in the browser of everyone who opens it.
+
+    ``customWidgets`` as this compiler discovers them; ``externalLibraries``,
+    each top-level entry of ``external-libraries/`` holding a ``.js`` or
+    ``.mjs`` file; ``importOverrides``, the keys of ``external-modules.json``.
+    Read from disk, so a trust check made on it sees what would actually run.
+    """
+    libraries_dir = project_root / "external-libraries"
+    libraries = {
+        path.relative_to(libraries_dir).parts[0]
+        for path in libraries_dir.rglob("*")
+        if path.suffix.lower() in (".js", ".mjs") and path.is_file()
+    }
+    return {
+        "customWidgets": sorted(discovered_entries_by_key(project_root / "custom-widgets")),
+        "externalLibraries": sorted(libraries),
+        "importOverrides": sorted(read_overrides(project_root / "external-modules.json")),
+    }
+
+
+_CODE_KINDS = (
+    ("customWidgets", "custom widget", "custom widgets"),
+    ("externalLibraries", "external library", "external libraries"),
+    ("importOverrides", "import-map override", "import-map overrides"),
+)
+
+
+def describe_project_code(code: dict[str, list[str]]) -> str:
+    """``2 custom widgets (Gauges/Dial, Leak), 1 external library (three)``."""
+    return ", ".join(
+        f"{len(names)} {singular if len(names) == 1 else plural} ({', '.join(names)})"
+        for key, singular, plural in _CODE_KINDS
+        if (names := code[key])
+    )
+
+
 def decode_build_status(raw: Any) -> dict[str, dict[str, Any]]:
     """Decode only the canonical build-status envelope.
 
@@ -647,26 +728,46 @@ async def _compile_discovered_entry(target: CompileTarget, tsx_path: Path, key: 
                 "external-libraries import map; use SDK globals from "
                 "window.__nextHMI__ for HMI APIs"
             )
-        proc = await asyncio.create_subprocess_exec(
-            _esbuild_binary(),
-            str(tsx_path),
-            "--bundle",
-            "--external:react",
-            "--format=esm",
-            "--target=es2020",
-            "--jsx=transform",
-            "--jsx-factory=React.createElement",
-            "--jsx-fragment=React.Fragment",
-            "--log-level=silent",
-            *_esbuild_external_args(external_imports),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            err = stderr.decode("utf-8", errors="replace").strip() or "esbuild failed"
-            raise RuntimeError(err)
-        compiled = stdout.decode("utf-8")
+        # esbuild only writes a metafile next to an output file, so the bundle
+        # goes to scratch first; nothing reaches ``out_path`` until it passes.
+        with tempfile.TemporaryDirectory(prefix="nexthmi-widget-") as scratch:
+            bundle = Path(scratch) / "index.js"
+            metafile = Path(scratch) / "meta.json"
+            # Passed explicitly because the metafile's paths are relative to it.
+            cwd = Path.cwd()
+            proc = await asyncio.create_subprocess_exec(
+                _esbuild_binary(),
+                str(tsx_path),
+                "--bundle",
+                "--external:react",
+                "--format=esm",
+                "--target=es2020",
+                "--jsx=transform",
+                "--jsx-factory=React.createElement",
+                "--jsx-fragment=React.Fragment",
+                "--log-level=silent",
+                f"--outfile={bundle}",
+                f"--metafile={metafile}",
+                *_esbuild_external_args(external_imports),
+                cwd=cwd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                err = stderr.decode("utf-8", errors="replace").strip() or "esbuild failed"
+                raise RuntimeError(err)
+            outside = _input_outside(metafile, cwd, _bundle_roots(target))
+            if outside is not None:
+                # The last build may predate this check and carry the same
+                # file, so it must not keep serving either.
+                out_path.unlink(missing_ok=True)
+                raise RuntimeError(
+                    f"Widget “{key}” imports "
+                    f"{_shown_from(outside, tsx_path.parent.resolve())}, "
+                    "which is outside the custom-widgets folder"
+                )
+            compiled = bundle.read_text(encoding="utf-8")
         collisions = _sdk_name_collisions(compiled)
         if collisions:
             raise RuntimeError(

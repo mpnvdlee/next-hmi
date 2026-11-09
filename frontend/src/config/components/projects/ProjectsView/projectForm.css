@@ -81,6 +81,36 @@
   color: var(--cfg-danger, crimson);
 }
 
+.project-form__warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  border: 1px solid var(--cfg-warning-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-warning-bg);
+  color: var(--cfg-warning-fg);
+  font-size: var(--cfg-text-sm);
+  line-height: 1.45;
+}
+
+.project-form__warning-text {
+  margin: 0;
+}
+
+.project-form__warning-list {
+  margin: 0;
+  padding-left: calc(var(--cfg-space-2) + 1rem);
+  font-family: var(--cfg-font-mono);
+  word-break: break-all;
+}
+
+.project-form__warning .project-form__toggle {
+  color: inherit;
+  font-size: inherit;
+  font-weight: var(--cfg-fw-medium);
+}
+
 .project-form__failure {
   display: flex;
   flex-direction: column;

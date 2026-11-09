@@ -44,7 +44,7 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
 - `backend/core/project_packer.py`
   - one zip code path for export, import, and manager peer transfer — `pack_project()` / `unpack_project()` with symlink + traversal + size-cap guards
 - `backend/core/peer_discovery.py`
-  - mDNS advertise/browse over `_nexthmi._tcp.local.`; a `runtimeId` per runtime home (`.peer-identity.json`, kept across restarts because peers pin certificates by it) so multiple ports on one host don't shadow each other. Started only by the manager.
+  - mDNS advertise/browse over `_nexthmi._tcp.local.`; a `runtimeId` per runtime home (`.peer-identity.json`, kept across restarts because peers pin certificates by it) so multiple ports on one host don't shadow each other. A copied runtime home shares that id; delete `.peer-identity.json` in the copy (probe and pairing refuse a peer with this manager's own id). Started only by the manager.
 - `backend/core/exceptions.py`
   - domain exception hierarchy (`NextHmiError`, `NotFoundError`, `ConflictError`, `ValidationError`, `RateLimitError`, plus per-domain subclasses such as `ConfigValidationError` or `DatasourceConflictError`)
   - `register_exception_handlers(app)` — maps domain exceptions to consistent JSON error responses

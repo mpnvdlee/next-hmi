@@ -67,15 +67,20 @@ advertises itself and never accepts a peer connection — see
   `changed`. A renewed peer certificate breaks transfers until its pins are
   dropped (`DELETE /api/manager/peers/trust`, which drops every pin of the same
   runtimeId) and the new certificate confirmed, by design.
-- **Pulled custom widgets** — custom widgets are code the puller builds and
-  serves to every browser that opens the project. The peer's project listing
-  reports `customWidgets` per project; the modal shows a warning and requires
-  "I trust the source of this project and want to run its widgets" whenever
-  that count is non-zero or missing. The pull itself counts widget entry
-  points (`custom-widgets/<Name>/index.tsx`, `…/<Group>/<Name>/index.tsx`,
-  separators and case normalised) in the downloaded archive and fails before
-  extracting anything unless the request carried `trustCustomWidgets: true` —
-  the listing is only the source's word.
+- **Pulled code** — a project's custom widgets, the `.js`/`.mjs` files of its
+  `external-libraries/` and the keys of its `external-modules.json` are code
+  the puller serves to every browser that opens the project
+  (`widget_compiler.project_code`; see
+  [custom-widgets.md](custom-widgets.md#security-editor-access-is-code-execution)).
+  The peer's project listing names them per project (`code: { customWidgets, externalLibraries,
+  importOverrides }`, beside the older `customWidgets` count); the modal lists
+  them and requires "I trust the source of this project and want to run its
+  code" whenever any is named or `code` is missing. The pull itself reads the
+  same three from the project extracted into its staging folder and fails
+  before installing anything unless the request carried
+  `trustCustomWidgets: true` — the listing is only the source's word. An
+  archive member with a `.`, `..` or empty path segment is refused while
+  unpacking, so no member name can hide where it lands.
 - **Address pinning** — outgoing connections resolve the peer hostname once
   and pin the HTTP connection to that private unicast address. Public, mixed
   public/private, link-local, multicast, and unspecified answers are
@@ -117,7 +122,7 @@ which:
    "Forget pinned certificate and verify again"; a plain-HTTP peer shows how to
    turn HTTPS on, and the override behind "Isolated network without HTTPS?".
 2. For pull, lists the peer's registered projects to pick a source from, and
-   asks the operator to trust the source of any project with custom widgets
+   asks the operator to trust the source of any project with code, naming it
    (see the trust model above).
 3. Detects the name clashes it can see against the destination's registered
    projects and, only when there is one, asks how to resolve it (see below);

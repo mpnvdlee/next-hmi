@@ -88,14 +88,16 @@ The zip is the hand-off format: one file that carries the whole project, includi
 
 **Download (export).** **Export** on the project's row streams the folder out as `<name>.nexthmi.zip`. The compiled custom-widget cache (`widget-build/`) is skipped — it is regenerated on the far side — and so are the historian's local database files (`*.db`, `*.sqlite`, and their journals), the pre-upgrade zips in `.backups/`, and the whole `certs/` folder, all of which are installation-local. `certs/` holds an OPC-UA *private key*, which is never handed to anyone else; the receiver generates its own pair on first connect, and trusts the server certificate again (or re-uploads it) — see [Trust the server certificate](datasources.md#trust-the-server-certificate). Historian *configuration* does travel, so the receiver knows what to log. Symlinks are never followed into the archive.
 
-**Upload (import).** **↑ Import zip** takes the **Zip file** and a **Destination folder**, unpacks it into a new project folder, and registers it. The archive is hardened on the way in: path traversal and absolute paths are rejected, symlinks are dropped, and the total is capped by `NEXTHMI_MAX_PROJECT_ZIP_MB` (500 MB by default) so an oversize archive is refused before any bytes reach disk.
+**Upload (import).** **↑ Import zip** takes the **Zip file** and a **Destination folder**, unpacks it into a new project folder, and registers it. The archive's *files* are checked on the way in: path traversal and absolute paths are rejected, as is any file name with a `.`, `..` or empty folder in it, an archive holding a symlink is refused, and the total is capped by `NEXTHMI_MAX_PROJECT_ZIP_MB` (500 MB by default) so an oversize archive is refused before any bytes reach disk. That does not make the project's *content* safe to run.
+
+**A project can contain code.** Code means its [custom widgets](custom-widgets.md), any JavaScript file in its `external-libraries/` folder, and the entries of its `external-modules.json` import map. When the zip carries any of it, **Import** stops and the dialog says what it found — for example *This project contains code: 2 custom widgets, 1 external library.* — and lists each item; tick **I trust the source of this project and want to run its code** and click **Import** again to go ahead. That code runs in the browser of everyone who opens the project, with the same access as this dashboard, and custom widgets are built on this device when the project starts — so only import projects from a source you trust. A widget can only build in files from the project's `custom-widgets/` and `external-libraries/` folders, so it cannot pick up other files on this device, but nothing limits what its code does once it runs in a browser. The same holds for a project you pull from or receive from another device.
 
 An archive has to actually hold a project: one carrying a `config.json`
 metadata block but no `users.json` is refused on the way in, rather than
 registering an entry that then refuses to start. Exporting such a project is
 still allowed, so a damaged one can be carried somewhere else and repaired.
 
-Because the id travels with the archive, importing a project that is *already* registered on this installation is refused with a conflict. Remove the existing entry first, or import onto a different machine.
+Because the id travels with the archive, importing a project that is *already* registered on this installation is refused with a conflict — before the dialog asks about any code in it. Remove the existing entry first, or import onto a different machine.
 
 ## Push & pull between devices
 
@@ -103,7 +105,7 @@ Because the id travels with the archive, importing a project that is *already* r
 
 Pairing takes three steps — **Verify device → Sign in → Send**. First compare the other device's certificate fingerprint with the **SHA-256** under **Settings › HTTPS** on that device; only then type its device-admin password. After that a revocable peer token authenticates the transfer, and **Remember this device** keeps it so the next transfer needs no password. Discovery is by mDNS, and a peer can always be entered manually as `host:port` — a peer found both ways is offered once, not twice. The full trust model and the HTTPS certificate pinning are in [Installing and running](install.md#peer-transfer-over-https).
 
-**Pulling a project with custom widgets.** Custom widgets are code: they are built on this device when the project starts and run in the browser of everyone who opens it. Before pulling a project that has them — or one whose source does not say — the dialog asks you to tick *I trust the source of this project and want to run its widgets*, and the manager refuses the pull without it.
+**Pulling a project that contains code.** Custom widgets, external libraries and import-map entries are code (see [Download & upload a project](#download--upload-a-project) above). When the source says the project has any, the dialog names it — for example *This project contains code: 2 custom widgets, 1 external library.*, then each item — and asks you to tick *I trust the source of this project and want to run its code*; it asks too when the source does not say. The manager checks the downloaded project itself before installing it, and refuses the pull without that tick.
 
 **When the far side already has that project.** The dialog checks before it
 sends, so a clash on the project's **id**, its **destination folder**, or both
