@@ -50,6 +50,9 @@ def document_state(document: Any) -> DocumentState:
         return _invalid()
     if not isinstance(document.get("users"), list):
         return _invalid()
+    admin_groups = document["settings"].get("userAdminGroups", [])
+    if not isinstance(admin_groups, list) or not all(isinstance(g, str) for g in admin_groups):
+        return _invalid()
     group_ids: set[str] = set()
     for group in document["groups"]:
         if not isinstance(group, dict) or not is_valid_user_id(group.get("id", "")):
@@ -73,6 +76,11 @@ def document_state(document: Any) -> DocumentState:
         ):
             return _invalid()
         if user["id"] in user_ids or user["username"] in usernames:
+            return _invalid()
+        if not isinstance(user.get("language", ""), str):
+            return _invalid()
+        locked = user.get("locked", {})
+        if not isinstance(locked, dict) or not all(isinstance(v, bool) for v in locked.values()):
             return _invalid()
         if "passwordHash" in user and (
             user.get("password", "") != "" or not is_valid_hash(user["passwordHash"])

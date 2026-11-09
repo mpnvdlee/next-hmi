@@ -163,7 +163,8 @@ def test_put_users_document_saves_all_sections_together(api_client):
 
     assert resp.status_code == 200
     payload = resp.json()
-    assert payload["settings"] == document["settings"]
+    # No admin group in this design, so the default names nobody.
+    assert payload["settings"] == {**document["settings"], "userAdminGroups": []}
     assert payload["groups"] == document["groups"]
     assert all(user["password"] == "" for user in payload["users"])
     stored = next(user for user in load()["users"] if user["id"] == "operator1")

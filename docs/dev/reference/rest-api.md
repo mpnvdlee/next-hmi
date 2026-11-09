@@ -565,10 +565,17 @@ Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z
     unchanged save preserves the exact stored credential value.
   - The canonical `guest` user is required, must keep both id and username
     `guest`, must belong only to the `guest` group, and cannot have credentials.
+  - A user may carry `language` (string, at most 32 characters) and `locked`
+    (`{ delete?, password?, groups? }` booleans). A user object that omits
+    either key keeps the stored value; an empty `language` or all-false
+    `locked` clears it.
+  - `settings.userAdminGroups` (group ids, not `guest`) names the runtime's
+    user admins; omitted keeps the stored value, unknown ids drop out.
 - `PUT /api/users/settings`
-  - Body: `{ "autoLoginName": "guest" }`.
-  - `422` if `autoLoginName` is not a string, or if the resulting document would
-    break a users.json invariant. Any other key in the body is dropped.
+  - Body: `{ "autoLoginName": "guest", "userAdminGroups"?: ["admin"] }`.
+  - `422` if `autoLoginName` is not a string, `userAdminGroups` is not a list
+    of strings or names `guest`, or the resulting document would break a
+    users.json invariant. Any other key in the body is dropped.
   - Returns the persisted `settings`.
 - `PUT /api/users/groups`
   - Body: array of `{ id, label? }`. `id` must be valid; `label` defaults to `id`.
@@ -839,7 +846,7 @@ Times in queries are ISO-8601 (no offset means UTC) or relative (`-30s`, `-15m`,
 ### Users
 
 - `GET …/users` — scope `users:read` → `{ users: [{ id, username, groups, passwordSet }], groups: [{ id, label }] }`. No password or hash ever leaves.
-- `PUT …/users/{userId}` — scope `users:write`. Body `{ username?, password?, groups? }`; any other field is `422`. Creates the user when `userId` is new, else updates it. An omitted field keeps its current value (`username` defaults to `userId` on create); an omitted or empty `password` keeps the stored one, and a new user without one has no password and cannot sign in. → the user as `GET` shows it.
+- `PUT …/users/{userId}` — scope `users:write`. Body `{ username?, password?, groups?, language? }`; any other field is `422`. A user with a `language` lists it in `GET` and in this reply; `locked` flags are kept and not exposed. Creates the user when `userId` is new, else updates it. An omitted field keeps its current value (`username` defaults to `userId` on create); an omitted or empty `password` keeps the stored one, and a new user without one has no password and cannot sign in. → the user as `GET` shows it.
   - Runs the editor's own validation (`users_api.put_users`): id and username `[A-Za-z0-9_-]`, at most 64 characters; at least one group, every group known; a duplicate username `409`; `guest` keeps id and username `guest`, only the `guest` group and no password. The password is stored as a PBKDF2 hash.
 - `DELETE …/users/{userId}` — scope `users:write` → `{ deleted: userId }`. `404` when unknown; `guest` cannot be deleted (`422`).
 - A missing, unreadable or invalid `users.json` answers `409` on all three, rather than a write replacing it with defaults.

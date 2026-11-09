@@ -5,7 +5,7 @@ from typing import Any
 
 from core import users_document
 from core.exceptions import UserConflictError, UserNotFoundError, UserValidationError
-from core.passwords import has_password, hash_password
+from core.passwords import has_password
 from fastapi import APIRouter, Body, Depends, Request
 from services import users_manager
 
@@ -33,14 +33,6 @@ router = APIRouter(
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
-def _require_valid_id(value: Any, label: str) -> str:
-    if not users_manager.valid_id(value):
-        raise UserValidationError(
-            f"Invalid {label}: must match [A-Za-z0-9_-], max 64 chars"
-        )
-    return str(value)
-
-
 def _redact_document(document: dict[str, Any]) -> dict[str, Any]:
     """Strip stored credentials from every account, keeping ``passwordSet``.
 
@@ -48,6 +40,12 @@ def _redact_document(document: dict[str, Any]) -> dict[str, Any]:
     "(no password)" placeholder.
     """
     redacted = dict(document)
+    # The editor shows the groups in effect, not an absent key.
+    known = users_manager.known_group_ids(document)
+    redacted["settings"] = {
+        "userAdminGroups": [g for g in users_manager.admin_groups(document) if g in known],
+        **document.get("settings", {}),
+    }
     redacted["users"] = [
         {
             **{key: value for key, value in user.items() if key != "passwordHash"},
@@ -61,79 +59,6 @@ def _redact_document(document: dict[str, Any]) -> dict[str, Any]:
         if isinstance(user, dict)
     ]
     return redacted
-
-
-def _credential_fields(item: dict, current_by_id: dict[str, dict]) -> dict[str, Any]:
-    if "passwordHash" in item:
-        raise UserValidationError("passwordHash is a server-managed field")
-    submitted = str(item.get("password", ""))
-    current = current_by_id.get(str(item.get("id", "")))
-    existing_plaintext = str(current.get("password", "")) if current is not None else ""
-    if current is not None and (
-        submitted == ""
-        or ("passwordHash" not in current and submitted == existing_plaintext)
-    ):
-        fields: dict[str, Any] = {"password": existing_plaintext}
-        if "passwordHash" in current:
-            fields["passwordHash"] = current["passwordHash"]
-        return fields
-    if submitted == "":
-        return {"password": ""}
-    if len(submitted) > 512:
-        raise UserValidationError("Password must be at most 512 characters")
-    return {"password": "", "passwordHash": hash_password(submitted)}
-
-
-def _normalize_users(
-    users: list, group_ids: set[str], current_by_id: dict[str, dict]
-) -> list[dict[str, Any]]:
-    seen_ids: set[str] = set()
-    seen_usernames: set[str] = set()
-    normalized: list[dict[str, Any]] = []
-    guest: dict[str, Any] | None = None
-    for item in users:
-        if not isinstance(item, dict):
-            raise UserValidationError("Each user must be an object")
-        user_id = _require_valid_id(item.get("id"), "user id")
-        username = _require_valid_id(item.get("username"), "username")
-        if user_id in seen_ids:
-            raise UserConflictError(f"Duplicate user id: {user_id}")
-        if username in seen_usernames:
-            raise UserConflictError(f"Duplicate username: {username}")
-        seen_ids.add(user_id)
-        seen_usernames.add(username)
-        groups = item.get("groups", [])
-        if not isinstance(groups, list) or not groups:
-            raise UserValidationError(f"User '{username}' must have at least one group")
-        if not all(isinstance(group_id, str) for group_id in groups):
-            raise UserValidationError(f"User '{username}' groups must be strings")
-        unknown = [group_id for group_id in groups if group_id not in group_ids]
-        if unknown:
-            raise UserValidationError(
-                f"Unknown groups for user '{username}': {unknown}"
-            )
-        user = {
-            "id": user_id,
-            "username": username,
-            **_credential_fields(item, current_by_id),
-            "groups": list(groups),
-        }
-        if user_id == "guest" or username == "guest":
-            if user_id != "guest" or username != "guest":
-                raise UserValidationError(
-                    "The guest user id and username must both be 'guest'"
-                )
-            guest = user
-        normalized.append(user)
-    if guest is None:
-        raise UserValidationError("Cannot remove the 'guest' user")
-    if guest["groups"] != ["guest"]:
-        raise UserValidationError(
-            "The guest user must belong only to the 'guest' group"
-        )
-    if guest.get("password", "") or "passwordHash" in guest:
-        raise UserValidationError("The guest user cannot have a password")
-    return normalized
 
 
 def _require_valid_users_document(document: dict[str, Any]) -> None:
@@ -201,7 +126,7 @@ def put_users_document(body: dict = Body(...)) -> dict:
     for item in groups:
         if not isinstance(item, dict):
             raise UserValidationError("Each group must be an object")
-        group_id = _require_valid_id(item.get("id"), "group id")
+        group_id = users_manager.require_valid_id(item.get("id"), "group id")
         if group_id in seen_group_ids:
             raise UserConflictError(f"Duplicate group id: {group_id}")
         seen_group_ids.add(group_id)
@@ -211,20 +136,16 @@ def put_users_document(body: dict = Body(...)) -> dict:
     if "guest" not in seen_group_ids:
         raise UserValidationError("Cannot remove the 'guest' group")
 
-    auto_login = settings.get("autoLoginName", "guest")
-    if not isinstance(auto_login, str):
-        raise UserValidationError("autoLoginName must be a string")
-
     current = users_manager.load()
-    current_by_id = {
-        str(user.get("id")): user
-        for user in current.get("users", [])
-        if isinstance(user, dict)
-    }
-    normalized_users = _normalize_users(users, seen_group_ids, current_by_id)
+    normalized_settings = users_manager.normalize_settings(
+        settings, seen_group_ids, current.get("settings", {})
+    )
+    normalized_users = users_manager.normalize_users(
+        users, seen_group_ids, current.get("users", [])
+    )
 
     document = {
-        "settings": {"autoLoginName": auto_login},
+        "settings": normalized_settings,
         "groups": normalized_groups,
         "users": normalized_users,
     }
@@ -236,13 +157,10 @@ def put_users_document(body: dict = Body(...)) -> dict:
 @router.put("/settings")
 def put_settings(body: dict) -> dict:
     """Replace the settings section."""
-    auto_login = body.get("autoLoginName", "guest")
-
-    if not isinstance(auto_login, str):
-        raise UserValidationError("autoLoginName must be a string")
-
     doc = users_manager.load()
-    doc["settings"] = {"autoLoginName": auto_login}
+    doc["settings"] = users_manager.normalize_settings(
+        body, users_manager.known_group_ids(doc), doc.get("settings", {})
+    )
     _require_valid_users_document(doc)
     users_manager.save(doc)
     return doc["settings"]
@@ -258,7 +176,7 @@ def put_groups(body: list = Body(...)) -> list:
     for item in body:
         if not isinstance(item, dict):
             raise UserValidationError("Each group must be an object")
-        gid = _require_valid_id(item.get("id"), "group id")
+        gid = users_manager.require_valid_id(item.get("id"), "group id")
         if gid in seen_ids:
             raise UserConflictError(f"Duplicate group id: {gid}")
         seen_ids.add(gid)
@@ -311,19 +229,7 @@ def put_users(body: list = Body(...)) -> list:
         raise UserValidationError("Body must be a list of users")
 
     doc = users_manager.load()
-    current_by_id = {
-        str(user.get("id")): user
-        for user in doc.get("users", [])
-        if isinstance(user, dict)
-    }
-    group_ids = {
-        str(group.get("id"))
-        for group in doc.get("groups", [])
-        if isinstance(group, dict)
-    }
-    doc["users"] = _normalize_users(body, group_ids, current_by_id)
-    _require_valid_users_document(doc)
-    users_manager.save(doc)
+    users_manager.save_users(doc, body)
     return _redact_document(doc)["users"]
 
 

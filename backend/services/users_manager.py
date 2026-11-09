@@ -14,9 +14,9 @@ import shutil
 from datetime import UTC, datetime
 from typing import Any
 
-from core import user_auth_throttle
-from core.exceptions import RateLimitError
-from core.passwords import verify_absent_user, verify_password
+from core import user_auth_throttle, users_document
+from core.exceptions import RateLimitError, UserConflictError, UserValidationError
+from core.passwords import hash_password, verify_absent_user, verify_password
 from core.storage import active_project_root, read_json, write_json
 from core.validation import is_valid_user_id
 
@@ -111,14 +111,7 @@ async def authenticate(username: Any, password: Any) -> tuple[dict[str, Any], di
             f"Too many failed sign-in attempts. Try again in {int(remaining) + 1}s."
         )
     document = load()
-    user = next(
-        (
-            item
-            for item in document.get("users", [])
-            if isinstance(item, dict) and item.get("username") == username
-        ),
-        None,
-    )
+    user = find_user(document, username)
     # A name that misses still pays for a verification. Returning here without
     # one answered ~50x faster than a wrong password and enumerated the roster
     # — on a route an anonymous LAN caller can reach.
@@ -159,6 +152,177 @@ def load_or_create() -> None:
 def save(doc: dict[str, Any]) -> None:
     """Persist the users document to disk."""
     write_json(users_path(), doc)
+
+
+# --- Normalization (shared by the REST routes and runtime management) ---------
+
+DEFAULT_ADMIN_GROUPS = ["admin"]
+LOCK_KEYS = ("delete", "password", "groups")
+_MAX_LANGUAGE_LENGTH = 32
+
+
+def _credential_fields(item: dict, current_by_id: dict[str, dict]) -> dict[str, Any]:
+    if "passwordHash" in item:
+        raise UserValidationError("passwordHash is a server-managed field")
+    submitted = str(item.get("password", ""))
+    current = current_by_id.get(str(item.get("id", "")))
+    existing_plaintext = str(current.get("password", "")) if current is not None else ""
+    if current is not None and (
+        submitted == ""
+        or ("passwordHash" not in current and submitted == existing_plaintext)
+    ):
+        fields: dict[str, Any] = {"password": existing_plaintext}
+        if "passwordHash" in current:
+            fields["passwordHash"] = current["passwordHash"]
+        return fields
+    if submitted == "":
+        return {"password": ""}
+    if len(submitted) > 512:
+        raise UserValidationError("Password must be at most 512 characters")
+    return {"password": "", "passwordHash": hash_password(submitted)}
+
+
+def _profile_fields(item: dict, current: dict | None, username: str) -> dict[str, Any]:
+    """``language`` and ``locked``: a key the item omits keeps the stored value,
+    so a writer that knows nothing of them (API v1, an older editor) never
+    clears them."""
+    source = item if "language" in item else (current or {})
+    language = source.get("language", "")
+    if not isinstance(language, str) or len(language) > _MAX_LANGUAGE_LENGTH:
+        raise UserValidationError(f"User '{username}' language must be a short string")
+    source = item if "locked" in item else (current or {})
+    locked = source.get("locked", {})
+    if not isinstance(locked, dict) or any(
+        key not in LOCK_KEYS or not isinstance(value, bool) for key, value in locked.items()
+    ):
+        raise UserValidationError(
+            f"User '{username}' locked must map {list(LOCK_KEYS)} to booleans"
+        )
+    fields: dict[str, Any] = {}
+    if language:
+        fields["language"] = language
+    flags = {key: True for key in LOCK_KEYS if locked.get(key)}
+    if flags:
+        fields["locked"] = flags
+    return fields
+
+
+def normalize_users(
+    users: list, group_ids: set[str], current_users: list
+) -> list[dict[str, Any]]:
+    current_by_id = {str(u.get("id")): u for u in current_users if isinstance(u, dict)}
+    seen_ids: set[str] = set()
+    seen_usernames: set[str] = set()
+    normalized: list[dict[str, Any]] = []
+    guest: dict[str, Any] | None = None
+    for item in users:
+        if not isinstance(item, dict):
+            raise UserValidationError("Each user must be an object")
+        user_id = require_valid_id(item.get("id"), "user id")
+        username = require_valid_id(item.get("username"), "username")
+        if user_id in seen_ids:
+            raise UserConflictError(f"Duplicate user id: {user_id}")
+        if username in seen_usernames:
+            raise UserConflictError(f"Duplicate username: {username}")
+        seen_ids.add(user_id)
+        seen_usernames.add(username)
+        groups = item.get("groups", [])
+        if not isinstance(groups, list) or not groups:
+            raise UserValidationError(f"User '{username}' must have at least one group")
+        if not all(isinstance(group_id, str) for group_id in groups):
+            raise UserValidationError(f"User '{username}' groups must be strings")
+        unknown = [group_id for group_id in groups if group_id not in group_ids]
+        if unknown:
+            raise UserValidationError(
+                f"Unknown groups for user '{username}': {unknown}"
+            )
+        user = {
+            "id": user_id,
+            "username": username,
+            **_credential_fields(item, current_by_id),
+            "groups": list(groups),
+            **_profile_fields(item, current_by_id.get(user_id), username),
+        }
+        if user_id == "guest" or username == "guest":
+            if user_id != "guest" or username != "guest":
+                raise UserValidationError(
+                    "The guest user id and username must both be 'guest'"
+                )
+            guest = user
+        normalized.append(user)
+    if guest is None:
+        raise UserValidationError("Cannot remove the 'guest' user")
+    if guest["groups"] != ["guest"]:
+        raise UserValidationError(
+            "The guest user must belong only to the 'guest' group"
+        )
+    if guest.get("password", "") or "passwordHash" in guest:
+        raise UserValidationError("The guest user cannot have a password")
+    return normalized
+
+
+def known_group_ids(doc: dict[str, Any]) -> set[str]:
+    return {str(g.get("id")) for g in doc.get("groups", []) if isinstance(g, dict)}
+
+
+def normalize_settings(
+    settings: dict[str, Any], group_ids: set[str], current: dict[str, Any]
+) -> dict[str, Any]:
+    """``autoLoginName`` and ``userAdminGroups``; an omitted ``userAdminGroups``
+    keeps the stored one. A group that no longer exists drops out of it, so
+    deleting a group never strands the document."""
+    auto_login = settings.get("autoLoginName", "guest")
+    if not isinstance(auto_login, str):
+        raise UserValidationError("autoLoginName must be a string")
+    normalized: dict[str, Any] = {"autoLoginName": auto_login}
+    admin = settings["userAdminGroups"] if "userAdminGroups" in settings else current.get("userAdminGroups")
+    if admin is None:
+        return normalized
+    if not isinstance(admin, list) or not all(isinstance(g, str) for g in admin):
+        raise UserValidationError("userAdminGroups must be a list of group ids")
+    if "guest" in admin:
+        raise UserValidationError("The guest group cannot manage users")
+    normalized["userAdminGroups"] = [g for g in dict.fromkeys(admin) if g in group_ids]
+    return normalized
+
+
+def require_valid_id(value: Any, label: str) -> str:
+    if not valid_id(value):
+        raise UserValidationError(
+            f"Invalid {label}: must match [A-Za-z0-9_-], max 64 chars"
+        )
+    return str(value)
+
+
+def admin_groups(doc: dict[str, Any]) -> list[str]:
+    settings = doc.get("settings")
+    groups = settings.get("userAdminGroups") if isinstance(settings, dict) else None
+    return list(groups) if isinstance(groups, list) else list(DEFAULT_ADMIN_GROUPS)
+
+
+def is_user_admin(doc: dict[str, Any], groups: list[str]) -> bool:
+    return bool(set(groups) & set(admin_groups(doc)))
+
+
+def find_user(doc: dict[str, Any], username: Any) -> dict[str, Any] | None:
+    return next(
+        (u for u in doc.get("users", []) if isinstance(u, dict) and u.get("username") == username),
+        None,
+    )
+
+
+def save_users(doc: dict[str, Any], items: list) -> None:
+    """Replace ``doc``'s users with ``items``, validated, and persist it."""
+    doc["users"] = normalize_users(items, known_group_ids(doc), doc.get("users", []))
+    state = users_document.document_state(doc)
+    if not state.valid:
+        raise UserValidationError(state.error or "users.json is invalid")
+    save(doc)
+
+
+def unchanged_user(user: dict[str, Any]) -> dict[str, Any]:
+    # An empty password and omitted profile keys keep what is stored.
+    return {"id": user.get("id"), "username": user.get("username"), "groups": user.get("groups"), "password": ""}
 
 
 # --- Internal helpers -------------------------------------------------------
