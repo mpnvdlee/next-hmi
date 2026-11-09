@@ -1082,7 +1082,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "a0abe7d472247559",
+    "buildTs": "2cb631cd7b6e7594",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1101,6 +1101,14 @@
       },
       "maxIndex": {
         "type": "integer"
+      },
+      "variable": {
+        "type": [
+          "string",
+          "integer",
+          "float"
+        ],
+        "write": true
       },
       "selectedValue": {
         "type": [

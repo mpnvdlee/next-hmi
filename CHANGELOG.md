@@ -13,6 +13,11 @@ heading.
 
 ### Added
 
+- **A Dropdown writes to a variable.** A Dropdown gains **Value**: bound to a
+  variable, the choice is written there and read back, as on a Button Row, so
+  a PLC enum parameter becomes a dropdown. It keeps showing what the variable
+  holds until the PLC confirms the new choice.
+
 - **Filter a list as the operator types.** `$compare` gains **contains**
   (∋): true when the left text holds the right one, ignoring case, and always
   true for an empty right side. Compare a list row's **Visible** against a

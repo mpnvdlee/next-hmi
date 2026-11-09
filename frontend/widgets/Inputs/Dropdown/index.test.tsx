@@ -42,6 +42,28 @@ describe('Dropdown', () => {
     __resetForTests();
   });
 
+  it('writes the chosen option to a bound variable and shows its value', async () => {
+    const user = userEvent.setup();
+    const binding = { $var: { path: 'PLC:Line/Unit' } };
+    useVariableStore.setState({ values: { 'PLC:Line/Unit': 'C' }, varMeta: {} });
+    renderDropdown({ options: OPTIONS, variable: binding });
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Celsius');
+    await user.click(screen.getByRole('combobox'));
+    await user.click(screen.getByRole('option', { name: 'Fahrenheit' }));
+
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'write_field',
+        datasource: 'PLC',
+        path: 'Line/Unit',
+        value: 'F',
+      }),
+    );
+    // The PLC has not confirmed yet: the dropdown keeps showing what it holds.
+    expect(screen.getByRole('combobox')).toHaveTextContent('Celsius');
+  });
+
   it('renders with no properties at all', () => {
     const { container } = renderDropdown({});
     const el = container.firstElementChild as HTMLElement;

@@ -2033,7 +2033,7 @@
     }
   },
   "Inputs/Dropdown": {
-    "description": "Pick one option from a list. Publishes the selection for sibling widgets to read and fires On Change.",
+    "description": "Pick one option from a list. Writes the choice to a bound variable, publishes it for sibling widgets to read and fires On Change.",
     "icon": {
       "type": "builtin",
       "name": "list"
@@ -2063,9 +2063,14 @@
         "description": "Show the options up to and including this position, counted from 0. Empty shows all.",
         "group": "Data"
       },
+      "variable": {
+        "label": "Value",
+        "description": "A variable the choice is written to and read back from, as on a Button Row.",
+        "group": "Data"
+      },
       "selectedValue": {
         "label": "Selected value",
-        "description": "Initial selection; also re-selects when the bound value changes.",
+        "description": "Initial selection when no Value variable is bound; also re-selects when the bound value changes.",
         "group": "Data"
       },
       "disabled": {

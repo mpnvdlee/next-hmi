@@ -1772,7 +1772,7 @@
       {
         "type": "Dropdown",
         "name": "Dropdown",
-        "description": "Pick one option from a list. Publishes the selection for sibling widgets to read and fires On Change.",
+        "description": "Pick one option from a list. Writes the choice to a bound variable, publishes it for sibling widgets to read and fires On Change.",
         "props": [
           {
             "key": "label",
@@ -1790,6 +1790,12 @@
             "key": "maxIndex",
             "label": "Max index",
             "type": "Integer",
+            "group": "Data"
+          },
+          {
+            "key": "variable",
+            "label": "Value",
+            "type": "String | Integer | Float",
             "group": "Data"
           },
           {

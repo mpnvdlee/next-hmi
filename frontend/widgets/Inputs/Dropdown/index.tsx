@@ -13,10 +13,18 @@ export const schema = {
       'Show the options up to and including this position, counted from 0. Empty shows all.',
     group: 'Data',
   },
+  variable: {
+    type: ['string', 'integer', 'float'] as const,
+    label: 'Value',
+    description: 'A variable the choice is written to and read back from, as on a Button Row.',
+    group: 'Data',
+    write: true,
+  },
   selectedValue: {
     type: ['string', 'integer', 'float'] as const,
     label: 'Selected value',
-    description: 'Initial selection; also re-selects when the bound value changes.',
+    description:
+      'Initial selection when no Value variable is bound; also re-selects when the bound value changes.',
     group: 'Data',
   },
   disabled: { type: 'boolean' as const, label: 'Disabled', group: 'Appearance' },
@@ -29,7 +37,7 @@ export const exportedProperties: ExportedProperty[] = [
 ];
 
 export const description =
-  'Pick one option from a list. Publishes the selection for sibling widgets to read and fires On Change.';
+  'Pick one option from a list. Writes the choice to a bound variable, publishes it for sibling widgets to read and fires On Change.';
 export const category = 'Inputs';
 export const icon = { type: 'builtin', name: 'list' } as const;
 
@@ -74,7 +82,12 @@ export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
   // As stored, not usePropString's decimal comma: it is matched against option values.
   const rawSelected = usePropVar(properties, 'selectedValue');
   const propSelectedValue = rawSelected == null ? '' : String(rawSelected);
-  const [selected, setSelected] = useState<string>(propSelectedValue);
+  const [localSelected, setSelected] = useState<string>(propSelectedValue);
+  const varKey = bindingKey(getPropBinding(properties, 'variable'));
+  const boundValue = usePropVar(properties, 'variable');
+  const writeVariable = useWriteVariable(properties, 'variable');
+  // Bound, the variable is the selection; unbound, the dropdown keeps its own.
+  const selected = varKey ? (boundValue == null ? '' : String(boundValue)) : localSelected;
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [popupRect, setPopupRect] = useState<PopupRect | null>(null);
@@ -183,7 +196,8 @@ export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
     // the popup open over the page with only Escape to close it.
     const option = menuOptions[index];
     if (option && option.value !== selected) {
-      setSelected(option.value);
+      if (varKey) writeVariable(option.raw);
+      else setSelected(option.value);
       publishSelected(option.raw);
       const actions = (properties?.onChange as ActionsConfig | undefined)?.onChange;
       executeWidgetActions(actions, { scope, evalCtx });
