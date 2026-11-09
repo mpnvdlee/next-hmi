@@ -426,6 +426,11 @@ function evaluateCompare(
       return looseEquals(left, right);
     case '!==':
       return !looseEquals(left, right);
+    case 'contains':
+      // Text search: case-insensitive, and an empty right side matches everything.
+      return String(left ?? '')
+        .toLowerCase()
+        .includes(String(right ?? '').toLowerCase());
     default:
       return false;
   }

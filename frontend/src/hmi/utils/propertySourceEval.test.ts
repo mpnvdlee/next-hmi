@@ -417,6 +417,15 @@ describe('propertySourceEval', () => {
         evaluatePropertyValue({ $compare: { left: 5, operator: '!==', right: '6' } }, mockContext),
       ).toBe(true);
     });
+
+    it('contains matches text case-insensitively, empty matching all', () => {
+      const has = (left: unknown, right: unknown) =>
+        evaluatePropertyValue({ $compare: { left, operator: 'contains', right } }, mockContext);
+      expect(has('Bag 400g', 'bag')).toBe(true);
+      expect(has('Bag 400g', 'tray')).toBe(false);
+      expect(has('Bag 400g', '')).toBe(true);
+      expect(has(null, 'x')).toBe(false);
+    });
   });
 
   describe('$not wrapper', () => {

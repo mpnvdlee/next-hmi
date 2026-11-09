@@ -18,6 +18,12 @@ heading.
   a PLC enum parameter becomes a dropdown. It keeps showing what the variable
   holds until the PLC confirms the new choice.
 
+- **Filter a list as the operator types.** `$compare` gains **contains**
+  (∋): true when the left text holds the right one, ignoring case, and always
+  true for an empty right side. Compare a list row's **Visible** against a
+  String Input's value and the list narrows with every keystroke, without a
+  custom widget.
+
 ## [1.2.0] - 2026-11-08
 
 Opens the HMI to the systems around it and shuts out the ones that should not

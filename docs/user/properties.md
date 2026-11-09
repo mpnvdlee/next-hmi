@@ -71,7 +71,7 @@ The power is in composition. Here a Label's text is a live tag and its colour is
 
 Three sources cover almost every "it depends" on a screen, and they are usually used together.
 
-**`$compare`** produces a Boolean by comparing two values, each of which is itself a property — so both sides can be tags, constants, or anything else. Operators: `>`, `<`, `>=`, `<=`, `===` (equal), `!==` (not equal). The ordering operators compare numerically; equality is forgiving about `5` vs `"5"`.
+**`$compare`** produces a Boolean by comparing two values, each of which is itself a property — so both sides can be tags, constants, or anything else. Operators: `>`, `<`, `>=`, `<=`, `===` (equal), `!==` (not equal), `contains` (∋). The ordering operators compare numerically; equality is forgiving about `5` vs `"5"`. `contains` is a text search: true when the left text holds the right one, ignoring case, and always true for an empty right side — a list row's **Visible** compared against a String Input's value filters the list as the operator types.
 
 **`$if`** picks one of two values from a Boolean condition — typically a `$compare`, but any Boolean source works (`$userGroups`, `$pageIsActive`, a `$var` on a bool tag).
 
