@@ -248,6 +248,61 @@ describe('peer discovery', () => {
     ]);
   });
 
+  it('forgetPeerCertificate drops every pin of the device when its runtime ID is known', async () => {
+    const calls = stubFetch({});
+
+    await useProjectsStore.getState().forgetPeerCertificate('10.0.0.4', 8443, 'rid-1');
+
+    expect(calls[0].url).toBe('/api/manager/peers/trust?host=10.0.0.4&port=8443&runtimeId=rid-1');
+  });
+
+  it('probePeer sends the address only, never a password', async () => {
+    const calls = stubFetchWithBodies();
+
+    await useProjectsStore.getState().probePeer('10.0.0.4', 8443, 'https');
+
+    expect(calls).toEqual([
+      {
+        url: '/api/manager/peer-probe',
+        method: 'POST',
+        body: { host: '10.0.0.4', port: 8443, scheme: 'https' },
+      },
+    ]);
+  });
+
+  it('pairPeer carries the confirmed fingerprint and the operator’s choices', async () => {
+    const calls = stubFetchWithBodies();
+
+    await useProjectsStore.getState().pairPeer('10.0.0.4', 8443, 'pw', 'https', {
+      fingerprint: 'ab'.repeat(32),
+      allowInsecureHttp: false,
+      remember: true,
+    });
+
+    expect(calls[0].body).toEqual({
+      host: '10.0.0.4',
+      port: 8443,
+      password: 'pw',
+      scheme: 'https',
+      fingerprint: 'ab'.repeat(32),
+      allowInsecureHttp: false,
+      remember: true,
+    });
+  });
+
+  it('listPeerProjects without a token asks for the remembered key of that device', async () => {
+    const calls = stubFetchWithBodies();
+
+    await useProjectsStore.getState().listPeerProjects('10.0.0.4', 8443, '', 'https', 'rid-1');
+
+    expect(calls[0].body).toEqual({
+      host: '10.0.0.4',
+      port: 8443,
+      scheme: 'https',
+      runtimeId: 'rid-1',
+    });
+  });
+
   it('removeManualPeer deletes by host and port query params', async () => {
     const calls = stubFetch({});
 

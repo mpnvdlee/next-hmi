@@ -1,8 +1,10 @@
 """Authenticated manager-to-manager project transfer.
 
-The wire transport is deliberately HTTP for trusted LANs.  The device-admin
-password is used only by ``/pair``; later calls use a random bearer token whose
-digest is the only token material persisted by the destination manager.
+The device-admin password is used only by ``/pair``, and is sent only once the
+operator has confirmed the peer's certificate — or, for a peer without HTTPS,
+explicitly accepted sending it in the clear. Later calls use a random bearer
+token whose digest is the only token material persisted by the destination
+manager.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ import threading
 import time
 import uuid
 import zipfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass
@@ -200,6 +202,8 @@ class PeerEndpoint:
     host: str
     port: int
     address: str
+    # The certificate ``verify`` is anchored on; ``None`` over plain HTTP.
+    fingerprint: str | None = None
 
     def client(self, timeout: httpx.Timeout) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=timeout, verify=self.verify)
@@ -207,9 +211,9 @@ class PeerEndpoint:
     async def certificate_mismatch(self) -> str | None:
         """Whether a changed certificate explains a failed request to this peer.
 
-        A pin rejection arrives as an opaque verification error, so the probe
-        that ``ensure_pin`` no longer does up front happens here, on the failure
-        path. ``None`` for a plain-HTTP peer or a pin that still matches.
+        A pin rejection arrives as an opaque verification error, so a fresh
+        probe happens here, on the failure path. ``None`` for a plain-HTTP peer
+        or a pin that still matches.
 
         Runs the handshake off the event loop: it is a blocking socket connect
         plus TLS handshake with a multi-second timeout (see
@@ -324,12 +328,52 @@ def _peer_refusal(response: httpx.Response) -> str | None:
 
 
 async def _peer_endpoint(host: str, port: int, scheme: PeerScheme = "http") -> PeerEndpoint:
-    """Resolve, address-check, and (over HTTPS) pin the peer's certificate."""
+    """Resolve, address-check, and (over HTTPS) anchor on the peer's pinned certificate."""
     return await asyncio.to_thread(_resolve_private_peer, host, port, scheme)
 
 
+_IpAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+
+
+def _endpoint(
+    host: str,
+    port: int,
+    address: _IpAddress,
+    pem: str | None = None,
+    fingerprint: str | None = None,
+) -> PeerEndpoint:
+    """An endpoint on the resolved address; HTTPS anchored on ``pem`` when given."""
+    rendered = f"[{address}]" if address.version == 6 else str(address)
+    return PeerEndpoint(
+        f"{'https' if pem else 'http'}://{rendered}:{port}",
+        {"Host": f"{host}:{port}"},
+        peer_trust.ssl_context(pem) if pem else True,
+        host,
+        port,
+        str(address),
+        fingerprint if pem else None,
+    )
+
+
 def _resolve_private_peer(host: str, port: int, scheme: PeerScheme = "http") -> PeerEndpoint:
-    """Resolve once and pin the connection to private unicast addresses."""
+    """Resolve once, and over HTTPS require the certificate pinned at pairing."""
+    address = _resolve_private_address(host, port)
+    pin = peer_trust.load_pin(host, port)
+    # A peer seen over TLS once is never spoken to in the clear again. The
+    # scheme reaches us from an mDNS TXT record any host on the LAN can forge,
+    # so it may only ever upgrade the transport, never downgrade it.
+    if pin is not None:
+        return _endpoint(host, port, address, pin.pem, pin.fingerprint)
+    if scheme == "https":
+        raise ValidationError(
+            f"The certificate of peer {host}:{port} has not been verified. "
+            "Verify the device and pair with it first."
+        )
+    return _endpoint(host, port, address)
+
+
+def _resolve_private_address(host: str, port: int) -> _IpAddress:
+    """Resolve once; every answer must be a private unicast address."""
     try:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except OSError as exc:
@@ -352,34 +396,68 @@ def _resolve_private_peer(host: str, port: int, scheme: PeerScheme = "http") -> 
         raise ValidationError(
             "Peer host must resolve exclusively to private trusted-LAN addresses"
         )
-    address = sorted(parsed, key=lambda item: (item.version, str(item)))[0]
-    rendered = f"[{address}]" if address.version == 6 else str(address)
-    headers = {"Host": f"{host}:{port}"}
-    # A peer seen over TLS once is never spoken to in the clear again. The
-    # scheme reaches us from an mDNS TXT record any host on the LAN can forge,
-    # so it may only ever upgrade the transport, never downgrade it.
-    if peer_trust.load_pin(host, port) is not None:
-        scheme = "https"
-    if scheme != "https":
-        return PeerEndpoint(
-            f"http://{rendered}:{port}", headers, True, host, port, str(address)
-        )
+    return sorted(parsed, key=lambda item: (item.version, str(item)))[0]
+
+
+async def _fetch_certificate(host: str, port: int, address: _IpAddress) -> tuple[str, str]:
+    """The certificate the peer presents right now, trusted for nothing yet."""
     try:
-        pin = peer_trust.ensure_pin(host, port, str(address))
+        return await asyncio.to_thread(peer_trust.fetch_certificate, str(address), port)
     except peer_trust.CertificateMismatch as exc:
         raise ValidationError(str(exc)) from exc
     except OSError as exc:
         raise ValidationError(
             f"Could not start a TLS session with peer {host}:{port}: {exc}"
         ) from exc
-    return PeerEndpoint(
-        f"https://{rendered}:{port}",
-        headers,
-        peer_trust.ssl_context(pin),
-        host,
-        port,
-        str(address),
+
+
+_RUNTIME_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+async def _peer_info(client: httpx.AsyncClient, peer: PeerEndpoint) -> dict[str, str | None]:
+    """The peer's own hostname and runtimeId, both ``None`` from a peer predating them.
+
+    Over HTTPS the client is anchored on the certificate being verified, so the
+    answer comes from whoever holds it — not from another host answering a
+    second connection.
+    """
+    response = await client.get(f"{peer.base_url}/api/manager/peer/info", headers=peer.headers)
+    payload: Any = None
+    if response.status_code < 400:
+        with suppress(ValueError):
+            payload = response.json()
+    if not isinstance(payload, dict):
+        payload = {}
+    runtime_id = payload.get("runtimeId")
+    if not isinstance(runtime_id, str) or not _RUNTIME_ID.fullmatch(runtime_id):
+        runtime_id = None
+    hostname = payload.get("hostname")
+    hostname = _bounded_peer_text(hostname) if isinstance(hostname, str) else ""
+    return {"runtimeId": runtime_id, "hostname": hostname or None}
+
+
+def _certificate_changed(host: str, *, since: str = "when you paired") -> str:
+    return (
+        f"Certificate changed: pairing stopped. {host} shows a different certificate "
+        f"than {since}. Someone may be intercepting the connection. No password was sent."
     )
+
+
+def _auth_headers(
+    peer: PeerEndpoint, token: str | None, runtime_id: str | None
+) -> dict[str, str]:
+    """Headers for a bearer route: the caller's token, else the one remembered for the peer.
+
+    A remembered token is bound to the certificate it was paired over, and
+    ``peer.fingerprint`` is the one this connection's handshake enforces — so
+    it only ever reaches the device that issued it.
+    """
+    bearer = token or peer_tokens.remembered(runtime_id, peer.fingerprint)
+    if not bearer:
+        raise ValidationError(
+            f"Not signed in to peer {peer.host}:{peer.port}: pair with it first"
+        )
+    return {**peer.headers, "Authorization": f"Bearer {bearer}"}
 
 
 def _rename_bound(source: Path, destination: Path, binding) -> None:
@@ -492,6 +570,50 @@ async def pair(body: PairBody, request: Request) -> dict[str, Any]:
     }
 
 
+@public_router.get("/info")
+async def peer_info(request: Request) -> dict[str, Any]:
+    """Who this manager says it is, so a peer can show it before anything is sent.
+
+    The same two values the mDNS record already carries, and as much a claim:
+    a caller binds them to this manager by fetching them over the TLS session
+    whose certificate the operator confirms.
+    """
+    _require_private_client(request)
+    return {"runtimeId": peer_discovery.runtime_id, "hostname": peer_discovery.hostname}
+
+
+def _custom_widget_count(paths: Iterable[str]) -> int:
+    """Widget entry points among project-relative paths, as the compiler finds them.
+
+    ``custom-widgets/<Name>/index.tsx`` and ``custom-widgets/<Group>/<Name>/index.tsx``.
+    Separators and case are normalised because an archive is written by the
+    other side, and on Windows or macOS ``Custom-Widgets\\X\\index.tsx`` lands
+    in the same folder the compiler reads.
+    """
+    count = 0
+    for path in paths:
+        parts = [part.casefold() for part in path.replace("\\", "/").split("/")]
+        parts = [part for part in parts if part not in ("", ".")]
+        if len(parts) in (3, 4) and parts[0] == "custom-widgets" and parts[-1] == "index.tsx":
+            count += 1
+    return count
+
+
+def _project_custom_widget_count(project_root: Path) -> int:
+    widgets = project_root / "custom-widgets"
+    entries = [*widgets.glob("*/index.tsx"), *widgets.glob("*/*/index.tsx")]
+    return _custom_widget_count(entry.relative_to(project_root).as_posix() for entry in entries)
+
+
+def _archive_custom_widget_count(zip_path: Path) -> int:
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            return _custom_widget_count(archive.namelist())
+    except zipfile.BadZipFile:
+        # Unpacking refuses it next, with its own message.
+        return 0
+
+
 @public_router.get("/projects")
 async def peer_projects(request: Request) -> dict[str, Any]:
     _require_peer(request)
@@ -520,6 +642,9 @@ async def peer_projects(request: Request) -> dict[str, Any]:
                 "inProjectsRoot": root is not None
                 and Path(entry.path).expanduser().resolve().parent == root,
                 "running": running_entry(manifest, entry.id) is not None,
+                # Custom widgets are code the puller builds and serves; it asks
+                # its operator to trust the source before pulling any.
+                "customWidgets": _project_custom_widget_count(Path(entry.path).expanduser()),
             }
             for entry in manifest.projects
             if Path(entry.path).expanduser().is_dir()
@@ -647,16 +772,92 @@ async def list_peer_certificate_pins() -> dict[str, Any]:
 
 
 @manager_router.delete("/peers/trust")
-async def forget_peer_certificate_pin(host: str, port: int = 8000) -> dict[str, Any]:
-    """Drop a pinned certificate so the next contact re-pins it.
+async def forget_peer_certificate_pin(
+    host: str, port: int = 8000, runtimeId: str | None = None
+) -> dict[str, Any]:
+    """Drop a pinned certificate so the next contact asks to verify it again.
 
     The only recovery path after a peer renews its certificate — and the reason
     it is an explicit operator action: dropping a pin discards the evidence that
-    would otherwise expose an interception.
+    would otherwise expose an interception. Drops every pin of the same device
+    (by ``runtimeId``) with it.
     """
-    if not peer_trust.forget(host, port):
+    if not peer_trust.forget(host, port, runtimeId):
         raise NotFoundError(f"No pinned certificate for {host}:{port}")
     return {"host": host, "port": port, "forgotten": True}
+
+
+class PeerProbeBody(BaseModel):
+    host: str = Field(min_length=1, max_length=255)
+    port: int = Field(default=8000, ge=1, le=65535)
+    scheme: PeerScheme = "http"
+
+
+@manager_router.post("/peer-probe")
+async def probe_peer(body: PeerProbeBody) -> dict[str, Any]:
+    """What a peer shows before anything is sent to it: its certificate and identity.
+
+    Sends no password and no token. ``trust`` is ``new`` (the operator must
+    compare the fingerprint), ``pinned`` (this certificate was confirmed for this
+    address or runtimeId before), ``changed`` (a pin for either names another
+    certificate — pairing is refused), or ``none`` over plain HTTP.
+    """
+    address = await asyncio.to_thread(_resolve_private_address, body.host, body.port)
+    pinned = peer_trust.load_pin(body.host, body.port)
+    base = {"host": body.host, "port": body.port, "address": str(address)}
+    if pinned is None and body.scheme != "https":
+        peer = _endpoint(body.host, body.port, address)
+        try:
+            async with peer.client(httpx.Timeout(10.0)) as client:
+                info = await _peer_info(client, peer)
+        except httpx.HTTPError as exc:
+            raise await peer.unreachable(exc) from exc
+        # A device that has shown a confirmed certificate once does not lose
+        # it; a plain-HTTP answer in its name is the downgrade pins exist for.
+        claimed = info["runtimeId"]
+        trust = "changed" if claimed and peer_trust.has_runtime_pin(claimed) else "none"
+        return {
+            **base,
+            **info,
+            "scheme": "http",
+            "fingerprint": None,
+            "trust": trust,
+            "remembered": False,
+        }
+
+    pem, fingerprint = await _fetch_certificate(body.host, body.port, address)
+    days = peer_trust.expiry_days(pem)
+    if days is not None and days < 0:
+        raise ValidationError(
+            f"The certificate of peer {body.host}:{body.port} expired {abs(days)} days "
+            "ago. Renew it on that device (Settings > HTTPS) first."
+        )
+    peer = _endpoint(body.host, body.port, address, pem, fingerprint)
+    try:
+        async with peer.client(httpx.Timeout(10.0)) as client:
+            info = await _peer_info(client, peer)
+    except httpx.HTTPError as exc:
+        raise await peer.unreachable(exc) from exc
+    runtime_id = info["runtimeId"]
+    if peer_trust.conflicting_pin(body.host, body.port, runtime_id, fingerprint) is not None:
+        trust = "changed"
+    elif peer_trust.is_pinned(body.host, body.port, runtime_id, fingerprint):
+        trust = "pinned"
+        # The certificate already confirmed for this device: the same device,
+        # so it keeps its pin at this address as well.
+        if pinned is None or (runtime_id is not None and pinned.runtimeId != runtime_id):
+            peer_trust.save_pin(body.host, body.port, fingerprint, pem, runtime_id)
+    else:
+        trust = "new"
+    return {
+        **base,
+        **info,
+        "scheme": "https",
+        "fingerprint": fingerprint,
+        "trust": trust,
+        "remembered": trust == "pinned"
+        and peer_tokens.remembered(runtime_id, fingerprint) is not None,
+    }
 
 
 class RemotePairBody(BaseModel):
@@ -665,20 +866,20 @@ class RemotePairBody(BaseModel):
     scheme: PeerScheme = "http"
     password: str = Field(min_length=1, max_length=512)
     name: str | None = None
+    # The SHA-256 the operator confirmed against the peer's own Settings > HTTPS.
+    fingerprint: str | None = Field(default=None, max_length=128)
+    allowInsecureHttp: bool = False
+    remember: bool = False
 
 
-@manager_router.post("/peer-pair")
-async def pair_remote(body: RemotePairBody) -> dict[str, Any]:
-    peer = await _peer_endpoint(body.host, body.port, body.scheme)
-    try:
-        async with peer.client(httpx.Timeout(10.0)) as client:
-            response = await client.post(
-                f"{peer.base_url}/api/manager/peer/pair",
-                headers=peer.headers,
-                json={"password": body.password, "name": body.name},
-            )
-    except httpx.HTTPError as exc:
-        raise await peer.unreachable(exc) from exc
+async def _post_pair(
+    client: httpx.AsyncClient, peer: PeerEndpoint, body: RemotePairBody
+) -> dict[str, Any]:
+    response = await client.post(
+        f"{peer.base_url}/api/manager/peer/pair",
+        headers=peer.headers,
+        json={"password": body.password, "name": body.name},
+    )
     if response.status_code >= 400:
         refusal = _peer_refusal(response)
         raise ConflictError(
@@ -687,29 +888,80 @@ async def pair_remote(body: RemotePairBody) -> dict[str, Any]:
             else f"Peer pairing failed: HTTP {response.status_code}"
         )
     result = response.json()
-    # Surface what was pinned so an operator can compare it with the peer's own
-    # fingerprint out of band — the one check TOFU cannot make for them.
-    pin = peer_trust.load_pin(body.host, body.port)
-    if isinstance(result, dict) and pin is not None:
-        result["certificateFingerprint"] = pin.fingerprint
+    if not isinstance(result, dict) or not isinstance(result.get("token"), str):
+        raise ConflictError("Peer pairing failed: the peer returned no token")
     return result
+
+
+@manager_router.post("/peer-pair")
+async def pair_remote(body: RemotePairBody) -> dict[str, Any]:
+    address = await asyncio.to_thread(_resolve_private_address, body.host, body.port)
+    if peer_trust.load_pin(body.host, body.port) is None and body.scheme != "https":
+        if not body.allowInsecureHttp:
+            raise ValidationError(
+                "Pairing needs HTTPS on the other device: over plain HTTP its "
+                "device-admin password would cross the network unencrypted. No "
+                "password was sent."
+            )
+        peer = _endpoint(body.host, body.port, address)
+        try:
+            async with peer.client(httpx.Timeout(10.0)) as client:
+                result = await _post_pair(client, peer, body)
+        except httpx.HTTPError as exc:
+            raise await peer.unreachable(exc) from exc
+        return {**result, "remembered": False}
+
+    if not body.fingerprint:
+        raise ValidationError(
+            f"Verify the certificate of peer {body.host}:{body.port} before pairing. "
+            "No password was sent."
+        )
+    pem, presented = await _fetch_certificate(body.host, body.port, address)
+    if presented != body.fingerprint.strip().lower():
+        raise ConflictError(_certificate_changed(body.host, since="the one you confirmed"))
+    # Anchored on the confirmed certificate: every handshake below, the one
+    # that carries the password included, fails unless the peer still holds it.
+    peer = _endpoint(body.host, body.port, address, pem, presented)
+    try:
+        async with peer.client(httpx.Timeout(10.0)) as client:
+            runtime_id = (await _peer_info(client, peer))["runtimeId"]
+            if peer_trust.conflicting_pin(body.host, body.port, runtime_id, presented):
+                raise ConflictError(_certificate_changed(body.host))
+            peer_trust.save_pin(body.host, body.port, presented, pem, runtime_id)
+            result = await _post_pair(client, peer, body)
+    except httpx.HTTPError as exc:
+        raise await peer.unreachable(exc) from exc
+    remembered = bool(body.remember and runtime_id)
+    if remembered:
+        peer_tokens.remember(runtime_id, result["token"], presented)
+    elif runtime_id:
+        peer_tokens.forget_remembered(runtime_id)
+    return {
+        **result,
+        "certificateFingerprint": presented,
+        "runtimeId": runtime_id,
+        "remembered": remembered,
+    }
 
 
 class RemoteProjectsBody(BaseModel):
     host: str = Field(min_length=1, max_length=255)
     port: int = Field(default=8000, ge=1, le=65535)
     scheme: PeerScheme = "http"
-    token: str = Field(min_length=1)
+    # Either the token from pairing, or the peer's runtimeId to use the token
+    # remembered for it.
+    token: str | None = Field(default=None, min_length=1)
+    runtimeId: str | None = Field(default=None, max_length=64)
 
 
 @manager_router.post("/peer-projects")
 async def list_remote_projects(body: RemoteProjectsBody) -> dict[str, Any]:
     peer = await _peer_endpoint(body.host, body.port, body.scheme)
+    headers = _auth_headers(peer, body.token, body.runtimeId)
     try:
         async with peer.client(httpx.Timeout(10.0)) as client:
             response = await client.get(
-                f"{peer.base_url}/api/manager/peer/projects",
-                headers={**peer.headers, "Authorization": f"Bearer {body.token}"},
+                f"{peer.base_url}/api/manager/peer/projects", headers=headers
             )
     except httpx.HTTPError as exc:
         raise await peer.unreachable(exc) from exc
@@ -1247,7 +1499,9 @@ class TransferBody(BaseModel):
     peerHost: str = Field(min_length=1, max_length=255)
     peerPort: int = Field(default=8000, ge=1, le=65535)
     peerScheme: PeerScheme = "http"
-    token: str = Field(min_length=1)
+    # Without a token, the one remembered for ``peerRuntimeId`` is used.
+    token: str | None = Field(default=None, min_length=1)
+    peerRuntimeId: str | None = Field(default=None, max_length=64)
     collisionPolicy: Literal["reject", "replace", "copy"] = "reject"
     confirmReplace: bool = False
     start: bool = False
@@ -1273,7 +1527,7 @@ def _prune_finished_transfers() -> None:
 
 
 def _fingerprint(body: TransferBody) -> str:
-    canonical = body.model_dump(exclude={"transferId", "token"}, mode="json")
+    canonical = body.model_dump(exclude={"transferId", "token", "peerRuntimeId"}, mode="json")
     return hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
 
 
@@ -1346,6 +1600,7 @@ async def _send_transfer(
         _sender_update(state.transferId, status="active", phase="packing")
         cancel = _sender_cancellations[state.transferId]
         peer = await _peer_endpoint(body.peerHost, body.peerPort, body.peerScheme)
+        auth_headers = _auth_headers(peer, body.token, body.peerRuntimeId)
 
         def progress(done: int, total: int) -> None:
             if cancel.is_set():
@@ -1389,7 +1644,7 @@ async def _send_transfer(
                 async with peer.client(_HTTP_TIMEOUT) as client:
                     response = await client.post(
                         f"{peer.base_url}/api/manager/peer/transfers",
-                        headers={**peer.headers, "Authorization": f"Bearer {body.token}"},
+                        headers=auth_headers,
                         data=fields,
                         files={
                             "file": (
@@ -1517,13 +1772,11 @@ async def cancel_transfer(transfer_id: str) -> dict[str, Any]:
                 peer = await _peer_endpoint(
                     body.peerHost, body.peerPort, body.peerScheme
                 )
+                headers = _auth_headers(peer, body.token, body.peerRuntimeId)
                 async with peer.client(httpx.Timeout(5.0)) as client:
                     await client.delete(
                         f"{peer.base_url}/api/manager/peer/transfers/{transfer_id}",
-                        headers={
-                            **peer.headers,
-                            "Authorization": f"Bearer {body.token}",
-                        },
+                        headers=headers,
                     )
             except (httpx.HTTPError, ValidationError):
                 pass
@@ -1558,10 +1811,11 @@ async def _reconcile_terminal_state_with_receiver(
         return
     try:
         peer = await _peer_endpoint(body.peerHost, body.peerPort, body.peerScheme)
+        headers = _auth_headers(peer, body.token, body.peerRuntimeId)
         async with peer.client(httpx.Timeout(10.0)) as client:
             response = await client.get(
                 f"{peer.base_url}/api/manager/peer/transfers/{state.transferId}/status",
-                headers={**peer.headers, "Authorization": f"Bearer {body.token}"},
+                headers=headers,
             )
     except (httpx.HTTPError, ValidationError):
         return
@@ -1605,11 +1859,15 @@ class PullBody(BaseModel):
     peerHost: str = Field(min_length=1, max_length=255)
     peerPort: int = Field(default=8000, ge=1, le=65535)
     peerScheme: PeerScheme = "http"
-    token: str = Field(min_length=1)
+    token: str | None = Field(default=None, min_length=1)
+    peerRuntimeId: str | None = Field(default=None, max_length=64)
     collisionPolicy: Literal["reject", "replace", "copy"] = "reject"
     confirmReplace: bool = False
     start: bool = False
     transferId: str | None = None
+    # The operator's acknowledgement that the source is trusted to run code
+    # here; required whenever the archive carries custom widgets.
+    trustCustomWidgets: bool = False
 
     _validate_project_ids = field_validator("sourceProjectId", "destinationProjectId")(
         validate_project_id
@@ -1631,7 +1889,11 @@ def _prune_finished_pulls() -> None:
 
 
 def _pull_fingerprint(body: PullBody) -> str:
-    canonical = body.model_dump(exclude={"transferId", "token"}, mode="json")
+    # The acknowledgement is consent, not a parameter: a pull refused for want
+    # of it is retried under the same id once it is given.
+    canonical = body.model_dump(
+        exclude={"transferId", "token", "peerRuntimeId", "trustCustomWidgets"}, mode="json"
+    )
     return hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
 
 
@@ -1807,13 +2069,14 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
         state.phase = "downloading"
         _pull_journal_update(state.transferId, status="active", phase="downloading")
         peer = await _peer_endpoint(body.peerHost, body.peerPort, body.peerScheme)
+        auth_headers = _auth_headers(peer, body.token, body.peerRuntimeId)
         last_persisted_at = 0.0
         try:
             async with peer.client(_HTTP_TIMEOUT) as client:  # noqa: SIM117 -- no autofix offered; inner context expr depends on `client`, and combining `async with` clauses is left as-is per the mechanical-only policy for this family
                 async with client.stream(
                     "GET",
                     f"{peer.base_url}/api/manager/peer/projects/{body.sourceProjectId}/archive",
-                    headers={**peer.headers, "Authorization": f"Bearer {body.token}"},
+                    headers=auth_headers,
                 ) as response:
                     if response.status_code >= 400:
                         text = (await _bounded_error_body(response)).decode(
@@ -1854,6 +2117,15 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
         if previous_archive is not None and previous_archive != archive_sha256:
             raise ConflictError(
                 "Source project changed since this transferId was first attempted; use a new id"
+            )
+        # Checked on the archive itself, not on what the source's listing said:
+        # the listing is the source's word, the archive is what gets installed.
+        widgets = await asyncio.to_thread(_archive_custom_widget_count, zip_path)
+        if widgets and not body.trustCustomWidgets:
+            raise ConflictError(
+                f"This project contains {widgets} custom "
+                f"{'widget' if widgets == 1 else 'widgets'}, code that would run on "
+                "this device. Confirm you trust the source of this project to pull it."
             )
         state.phase = "extracting"
         # `bytesTotal` is 0 when the peer omitted Content-Length; snapping

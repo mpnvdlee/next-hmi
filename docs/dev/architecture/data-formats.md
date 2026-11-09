@@ -59,6 +59,9 @@ Outside any project, the runtime keeps its own state:
   .thumbnails/            ← per-project main-page screenshots (<projectId>.png), installation-local
   .restart-pending        ← sentinel written by /api/system/restart
   .peer-tokens.json       ← hashed manager peer tokens (no bearer plaintext)
+  .peer-trust.json        ← confirmed peer certificates: pins keyed by host:port, each with its runtimeId
+  .peer-pairings.json     ← tokens held for remembered peers, keyed by runtimeId and bound to a certificate fingerprint (0600)
+  .peer-identity.json     ← this runtime's persistent runtimeId
   .mcp-tokens.json        ← hashed MCP and API v1 tokens, each covering every project: id, name, access (MCP) or kind "api" + scopes, authGeneration, createdAt
   .peer-transfer-sender.json   ← durable outgoing (push) phases, byte counts, and retry fingerprints (no bearer plaintext)
   .peer-transfer-receipts.json ← durable incoming (push-receive) claims, apply phases, identities, and receipts

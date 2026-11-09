@@ -116,6 +116,48 @@ export interface PeerProject {
    * folder nor can be replaced by one. Absent from a peer predating the field.
    */
   inProjectsRoot?: boolean;
+  /** How many custom widgets the project carries, by the peer's own count.
+   * Absent from a peer predating the field: unknown, never "none". */
+  customWidgets?: number;
+}
+
+/**
+ * - `new`: a certificate never confirmed here; the operator compares it.
+ * - `pinned`: the certificate already confirmed for this address or device.
+ * - `changed`: a pin names another certificate (or the device dropped to
+ *   plain HTTP); pairing is refused.
+ * - `none`: the peer answers over plain HTTP.
+ */
+export type PeerTrust = 'new' | 'pinned' | 'changed' | 'none';
+
+/** What a peer shows before anything is sent to it. */
+export interface PeerProbe {
+  host: string;
+  port: number;
+  /** The resolved address the manager actually connects to. */
+  address: string;
+  scheme: PeerScheme;
+  hostname: string | null;
+  runtimeId: string | null;
+  fingerprint: string | null;
+  trust: PeerTrust;
+  /** This manager holds a pairing key for the device, bound to this certificate. */
+  remembered: boolean;
+}
+
+export interface PeerPairing {
+  token: string;
+  certificateFingerprint?: string;
+  runtimeId?: string | null;
+  remembered?: boolean;
+}
+
+export interface PeerPairOptions {
+  /** The SHA-256 the operator confirmed; required over HTTPS. */
+  fingerprint?: string | null;
+  /** The operator's explicit "isolated network" consent; required over HTTP. */
+  allowInsecureHttp?: boolean;
+  remember?: boolean;
 }
 
 export interface PeerTransferStatus {
@@ -162,18 +204,24 @@ interface ProjectsStore {
   loadPeers(): Promise<PeerListResponse | null>;
   addManualPeer(host: string, port: number, name?: string, scheme?: PeerScheme): Promise<void>;
   removeManualPeer(host: string, port: number): Promise<void>;
-  forgetPeerCertificate(host: string, port: number): Promise<void>;
+  /** Drops the pin for this address, and every pin of the device `runtimeId` names. */
+  forgetPeerCertificate(host: string, port: number, runtimeId?: string | null): Promise<void>;
+  /** Reads the peer's certificate and identity. Sends no password. */
+  probePeer(host: string, port: number, scheme: PeerScheme): Promise<PeerProbe>;
   pairPeer(
     host: string,
     port: number,
     password: string,
     scheme?: PeerScheme,
-  ): Promise<{ token: string; certificateFingerprint?: string }>;
+    options?: PeerPairOptions,
+  ): Promise<PeerPairing>;
+  /** An empty `token` uses the pairing key remembered for `runtimeId`. */
   listPeerProjects(
     host: string,
     port: number,
     token: string,
     scheme?: PeerScheme,
+    runtimeId?: string | null,
   ): Promise<PeerProject[]>;
   beginPeerTransfer(args: {
     sourceProjectId: string;
@@ -182,7 +230,9 @@ interface ProjectsStore {
     peerHost: string;
     peerPort: number;
     peerScheme: PeerScheme;
-    token: string;
+    /** Omitted: the pairing key remembered for `peerRuntimeId` is used. */
+    token?: string;
+    peerRuntimeId?: string | null;
     collisionPolicy: 'reject' | 'replace' | 'copy';
     confirmReplace: boolean;
     start: boolean;
@@ -197,11 +247,14 @@ interface ProjectsStore {
     peerHost: string;
     peerPort: number;
     peerScheme: PeerScheme;
-    token: string;
+    token?: string;
+    peerRuntimeId?: string | null;
     collisionPolicy: 'reject' | 'replace' | 'copy';
     confirmReplace: boolean;
     start: boolean;
     transferId: string;
+    /** The operator trusts the source to run its custom widgets here. */
+    trustCustomWidgets?: boolean;
   }): Promise<PeerTransferStatus>;
   getPeerPull(transferId: string): Promise<PeerTransferStatus>;
   cancelPeerPull(transferId: string): Promise<PeerTransferStatus>;
@@ -381,22 +434,30 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     );
   },
 
-  forgetPeerCertificate: async (host: string, port: number) => {
-    await managerApiJson(`/api/manager/peers/trust?host=${encodeURIComponent(host)}&port=${port}`, {
-      method: 'DELETE',
-    });
+  forgetPeerCertificate: async (host: string, port: number, runtimeId?: string | null) => {
+    const device = runtimeId ? `&runtimeId=${encodeURIComponent(runtimeId)}` : '';
+    await managerApiJson(
+      `/api/manager/peers/trust?host=${encodeURIComponent(host)}&port=${port}${device}`,
+      { method: 'DELETE' },
+    );
   },
 
-  pairPeer: async (host, port, password, scheme: PeerScheme = 'http') =>
-    managerApiJson<{ token: string; certificateFingerprint?: string }>('/api/manager/peer-pair', {
+  probePeer: async (host, port, scheme) =>
+    managerApiJson<PeerProbe>('/api/manager/peer-probe', {
       method: 'POST',
-      body: { host, port, password, scheme },
+      body: { host, port, scheme },
     }),
 
-  listPeerProjects: async (host, port, token, scheme: PeerScheme = 'http') => {
+  pairPeer: async (host, port, password, scheme: PeerScheme = 'http', options = {}) =>
+    managerApiJson<PeerPairing>('/api/manager/peer-pair', {
+      method: 'POST',
+      body: { host, port, password, scheme, ...options },
+    }),
+
+  listPeerProjects: async (host, port, token, scheme: PeerScheme = 'http', runtimeId = null) => {
     const result = await managerApiJson<{ projects: PeerProject[] }>('/api/manager/peer-projects', {
       method: 'POST',
-      body: { host, port, token, scheme },
+      body: { host, port, token: token || undefined, scheme, runtimeId: runtimeId ?? undefined },
     });
     return result.projects;
   },

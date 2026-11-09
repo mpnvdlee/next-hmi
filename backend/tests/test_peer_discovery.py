@@ -10,12 +10,21 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from core import peer_discovery as pd_mod
+from core import runtime_home
 from core.peer_discovery import PeerDiscovery
+
+
+@pytest.fixture(autouse=True)
+def home(monkeypatch, tmp_path: Path) -> Path:
+    """``start()`` persists the runtimeId; never into the developer's runtime home."""
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: tmp_path)
+    return tmp_path
 
 
 def test_discovered_excludes_own_runtime_id() -> None:
@@ -39,6 +48,16 @@ def test_start_is_idempotent_and_noop_without_zeroconf(monkeypatch) -> None:
     assert pd._started is False
     # A second call doesn't blow up either.
     asyncio.run(pd.start(port=8000))
+
+
+def test_runtime_id_survives_a_restart(monkeypatch) -> None:
+    """Peers pin this device's certificate and remember its pairing by it."""
+    monkeypatch.setattr(pd_mod, "_ZEROCONF_AVAILABLE", False)
+    first = PeerDiscovery()
+    asyncio.run(first.start(port=8000))
+    restarted = PeerDiscovery()
+    asyncio.run(restarted.start(port=8000))
+    assert restarted.runtime_id == first.runtime_id
 
 
 def test_runtime_id_stable_per_instance() -> None:

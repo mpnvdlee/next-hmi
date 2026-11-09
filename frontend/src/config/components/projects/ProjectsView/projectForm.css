@@ -157,3 +157,99 @@
 .project-form__toggle input:disabled {
   cursor: not-allowed;
 }
+
+/* Peer pairing: Verify device → Sign in → Send. */
+.project-form__status--ok {
+  color: var(--cfg-success);
+}
+
+.project-form__steps {
+  display: flex;
+  gap: var(--cfg-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: project-form-step;
+}
+
+.project-form__step {
+  counter-increment: project-form-step;
+  font-size: var(--cfg-text-xs, var(--cfg-text-sm));
+  color: var(--cfg-text-muted);
+}
+
+.project-form__step::before {
+  content: counter(project-form-step) '. ';
+}
+
+.project-form__step + .project-form__step::before {
+  content: '→ ' counter(project-form-step) '. ';
+}
+
+.project-form__step--active {
+  color: var(--cfg-text);
+  font-weight: var(--cfg-fw-medium);
+}
+
+.project-form__step--done {
+  color: var(--cfg-success);
+}
+
+.project-form__device {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: color-mix(in srgb, var(--cfg-surface-dark) 25%, var(--cfg-surface));
+}
+
+.project-form__device-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--cfg-space-1) var(--cfg-space-3);
+  margin: 0;
+  font-size: var(--cfg-text-sm);
+}
+
+.project-form__device-facts dt {
+  color: var(--cfg-text-muted);
+}
+
+.project-form__device-facts dd {
+  margin: 0;
+  color: var(--cfg-text);
+  word-break: break-all;
+}
+
+.project-form__fingerprint {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--cfg-font-mono);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+}
+
+.project-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--cfg-space-2);
+}
+
+.project-form__instructions {
+  margin: 0;
+  padding-left: calc(var(--cfg-space-2) + 1rem);
+  font-size: var(--cfg-text-xs, var(--cfg-text-sm));
+  color: var(--cfg-text-muted);
+}
+
+.project-form__disclosure summary {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+  cursor: pointer;
+}
+
+.project-form__disclosure .project-form__toggle {
+  margin-top: var(--cfg-space-1);
+}

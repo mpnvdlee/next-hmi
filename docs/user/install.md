@@ -47,7 +47,9 @@ origin root; an individual project's HMI is at
   .restart-pending        sentinel for /api/system/restart
   .peer-tokens.json       hashed manager peer tokens (no bearer plaintext)
   .mcp-tokens.json        hashed MCP and API tokens
-  .peer-trust.json        pinned peer TLS certificates (trust on first use)
+  .peer-trust.json        peer TLS certificates you confirmed when pairing
+  .peer-pairings.json     pairing keys for peers you chose to remember (owner-only)
+  .peer-identity.json     this runtime's runtime ID, as peers pin it
   .install-id.json        random installation ID used by usage reporting
   .telemetry.json         usage-reporting on/off (absent means on), contact prompt dismissed
   .telemetry-session.json whether the last run stopped cleanly, and its version
@@ -421,27 +423,55 @@ with — pick **HTTPS** in the transfer dialog, or store it on a manual peer
 entry. A runtime serving TLS advertises `scheme=https` in its mDNS record, so
 picking a discovered peer fills the protocol in for you.
 
-Peer certificates are trusted on first use rather than through a CA, because a
-plant LAN rarely has one:
+Peer certificates are trusted because you compared them, not through a CA,
+because a plant LAN rarely has one. The transfer dialog pairs in three steps —
+**Verify device → Sign in → Send**:
 
-1. On the first HTTPS contact with a `host:port`, the manager records that
-   peer's certificate (SHA-256 digest and PEM) in
-   `<runtime_home>/.peer-trust.json`.
-2. Every later connection to that peer must present the same certificate. It
-   is the sole trust anchor, so a mismatch aborts the TLS handshake before the
-   bearer token or any project bytes reach the socket.
-3. Pairing returns the pinned fingerprint. Compare it once against the peer's
-   own certificate to close the first-contact gap, which is the one thing
-   trust-on-first-use cannot verify for you.
+1. **Verify device.** The manager connects to the peer without sending
+   anything and shows its name, address, runtime ID and the SHA-256
+   fingerprint of the certificate it presents. On the peer, open
+   **Settings › HTTPS** and compare that fingerprint with its **SHA-256**.
+   Only **It matches, continue** goes on; **It doesn’t match** stops, and
+   nothing has been sent.
+2. **Sign in.** Only now is the peer's device-admin password asked for. The
+   manager checks, during the TLS handshake of the pairing request itself,
+   that the peer still presents exactly the certificate you confirmed;
+   otherwise no password leaves this manager. The confirmed certificate is
+   then pinned in `<runtime_home>/.peer-trust.json`, by the address you used
+   and by the peer's runtime ID.
+3. **Send.** Every later connection to that peer must present the same
+   certificate. It is the sole trust anchor, so a mismatch aborts the TLS
+   handshake before the bearer token or any project bytes reach the socket.
+
+The pin follows the device rather than its address: the same device at a new
+address is recognised by its certificate and keeps its pin, while a different
+certificate at a pinned address, or claiming a pinned runtime ID, stops pairing
+with **Certificate changed: pairing stopped** — never a silent re-pin.
+
+**Remember this device** (on by default) keeps the pairing key the peer issues,
+in `<runtime_home>/.peer-pairings.json` (readable by the manager's user only),
+so the next transfer to the same device needs no password. The key is only
+ever sent over the certificate it was paired over. Changing the peer's
+device-admin password revokes it; the dialog then asks for the password again.
 
 A peer that has ever been reached over HTTPS is never contacted over plain HTTP
 again, even if it later advertises otherwise — mDNS records are unauthenticated
 and would otherwise be a downgrade path.
 
+**A peer without HTTPS.** The dialog refuses to pair with it — **Pairing needs
+HTTPS on the other device** — because the password would cross the network
+unencrypted. Turn HTTPS on there (**Settings › HTTPS**, choose **HTTPS**; it
+restarts on its HTTPS port, 8443 unless changed), then verify the device again
+with protocol HTTPS and that port. On a network that is genuinely closed to
+other devices, **Isolated network without HTTPS?** lets you pair anyway after
+ticking *I understand the password is sent unencrypted, and this network is
+closed to other devices.* Over plain HTTP no pairing key is remembered.
+
 Renewing a peer's certificate breaks transfers to it on purpose: a certificate
 that changed without warning looks exactly like an interception. Confirm the
-new certificate is genuine, then drop the pin — **Forget pinned certificate**
-in the transfer dialog, or:
+new certificate is genuine, then drop the pin — **Forget pinned certificate and
+verify again** in the transfer dialog, which drops every pin of that device and
+shows the new certificate to compare — or:
 
 ```bash
 curl -X DELETE "https://<manager>/api/manager/peers/trust?host=<peer>&port=8000"
@@ -450,8 +480,9 @@ curl -X DELETE "https://<manager>/api/manager/peers/trust?host=<peer>&port=8000"
 `GET /api/manager/peers/trust` lists the current pins and their fingerprints.
 
 Peer discovery itself (mDNS) is unauthenticated regardless of protocol — it
-advertises which runtimes exist, nothing more. Transfers to a discovered peer
-still require the device-admin password once and a bearer token thereafter.
+advertises which runtimes exist, nothing more, and anything on the LAN can
+advertise itself under any name. That is why the certificate is compared before
+the password is typed, whether the peer was discovered or entered by hand.
 
 ### What TLS covers
 

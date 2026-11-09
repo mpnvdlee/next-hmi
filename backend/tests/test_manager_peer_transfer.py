@@ -2181,6 +2181,90 @@ def test_pull_happy_path_installs_via_shared_stage_and_install(
     assert load_manifest().projects[0].id == "source-id"
 
 
+def _write_custom_widget(project: Path, relative: str = "Gauge") -> None:
+    widget = project / "custom-widgets" / relative
+    widget.mkdir(parents=True)
+    (widget / "index.tsx").write_text("export default () => null;\n", encoding="utf-8")
+
+
+def test_pulling_custom_widgets_needs_the_trust_acknowledgement(
+    monkeypatch, tmp_path: Path
+):
+    """Enforced on the archive itself: the source's own listing is only its word."""
+    _, root = _configure_home(monkeypatch, tmp_path)
+    source = tmp_path / "widget-source"
+    source.mkdir()
+    write_project_metadata(source, ProjectMetadata(id="source-id", name="Source"))
+    (source / "pages.json").write_text('{"pages": []}', encoding="utf-8")
+    (source / "users.json").write_text('{"users": []}', encoding="utf-8")
+    _write_custom_widget(source)
+    archive = io.BytesIO()
+    pack_project(source, archive)
+    _patch_peer_download(monkeypatch, archive.getvalue())
+
+    with TestClient(_app()) as client:
+        begun = client.post("/api/manager/pulls", json=_pull_body(transferId="pull-widgets"))
+        assert begun.status_code == 202, begun.text
+        refused = _wait_for_pull(client, "pull-widgets")
+        assert refused["status"] == "error", refused
+        assert "contains 1 custom widget," in refused["message"]
+        assert not (root / "pulled-copy").exists()
+        assert load_manifest().projects == []
+
+        # The same id: consent is not a transfer parameter.
+        retried = client.post(
+            "/api/manager/pulls",
+            json=_pull_body(transferId="pull-widgets", trustCustomWidgets=True),
+        )
+        assert retried.status_code == 202, retried.text
+        status = _wait_for_pull(client, "pull-widgets")
+
+    assert status["status"] == "complete", status
+    assert (root / "pulled-copy" / "custom-widgets" / "Gauge" / "index.tsx").is_file()
+
+
+def test_peer_project_listing_counts_custom_widgets(monkeypatch, tmp_path: Path):
+    _, root = _configure_home(monkeypatch, tmp_path)
+    plain = root / "plain"
+    plain.mkdir()
+    with_widgets = root / "with-widgets"
+    _write_custom_widget(with_widgets)
+    _write_custom_widget(with_widgets, "Dials/Needle")
+    (with_widgets / "custom-widgets" / "Gauge" / "helper.ts").write_text("", encoding="utf-8")
+    manifest = load_manifest()
+    manifest.projects.extend(
+        ProjectEntry(id=path.name, name=path.name, path=str(path), addedAt="2026-01-01T00:00:00Z")
+        for path in (plain, with_widgets)
+    )
+    save_manifest(manifest)
+
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        listed = client.get(
+            "/api/manager/peer/projects", headers={"Authorization": f"Bearer {token}"}
+        )
+
+    assert listed.status_code == 200, listed.text
+    counts = {entry["id"]: entry["customWidgets"] for entry in listed.json()["projects"]}
+    assert counts == {"plain": 0, "with-widgets": 2}
+
+
+def test_custom_widgets_are_counted_the_way_the_receiving_filesystem_will_see_them():
+    assert (
+        manager_peers_api._custom_widget_count(
+            [
+                "custom-widgets/Gauge/index.tsx",
+                "Custom-Widgets\\Dial\\index.tsx",
+                "./custom-widgets/Group/Meter/INDEX.TSX",
+                "custom-widgets/Gauge/helper.ts",
+                "custom-widgets/index.tsx",
+                "pages/custom-widgets/Gauge/index.tsx",
+            ]
+        )
+        == 3
+    )
+
+
 def test_pull_transport_failure_keeps_the_transports_own_message(
     monkeypatch, tmp_path: Path
 ):
@@ -2543,6 +2627,88 @@ def _patch_refusing_peer(monkeypatch, status_code: int, payload: object) -> None
     monkeypatch.setattr(manager_peers_api, "httpx", fake_httpx)
 
 
+def _insecure_pair_body(**overrides) -> dict:
+    """A plain-HTTP pairing the operator explicitly accepted on an isolated network."""
+    return {
+        "host": "10.0.0.4",
+        "port": 8000,
+        "password": "admin",
+        "allowInsecureHttp": True,
+        **overrides,
+    }
+
+
+def test_http_pairing_never_sends_the_password_without_the_explicit_override(
+    monkeypatch, tmp_path: Path
+):
+    _configure_home(monkeypatch, tmp_path)
+    sent: list[object] = []
+
+    class _RecordingPeer(_FakePeerRefusal):
+        async def post(self, url: str, headers=None, json=None, **_kwargs):
+            sent.append(json)
+            return self
+
+    fake_httpx = SimpleNamespace(**vars(httpx))
+    fake_httpx.AsyncClient = lambda *a, **k: _RecordingPeer(201, {"token": "id.secret"})
+    monkeypatch.setattr(manager_peers_api, "httpx", fake_httpx)
+
+    with TestClient(_app()) as client:
+        refused = client.post(
+            "/api/manager/peer-pair", json=_insecure_pair_body(allowInsecureHttp=False)
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["detail"].startswith("Pairing needs HTTPS on the other device")
+        assert sent == []
+
+        allowed = client.post("/api/manager/peer-pair", json=_insecure_pair_body())
+
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["token"] == "id.secret"
+    assert allowed.json()["remembered"] is False
+    assert sent == [{"password": "admin", "name": None}]
+
+
+def test_probe_over_http_flags_a_device_that_was_paired_over_https(
+    monkeypatch, tmp_path: Path
+):
+    """An HTTP answer in the name of a pinned device is a downgrade, not a new device."""
+    from core import peer_trust
+
+    _configure_home(monkeypatch, tmp_path)
+    peer_trust.save_pin("10.0.0.9", 8443, "f" * 64, "unused", "rid-pinned")
+    claims = {"10.0.0.4": "rid-pinned", "10.0.0.5": "rid-new"}
+
+    async def fake_info(client, peer):
+        return {"runtimeId": claims[peer.host], "hostname": "line-2"}
+
+    monkeypatch.setattr(manager_peers_api, "_peer_info", fake_info)
+    with TestClient(_app()) as client:
+        downgraded = client.post(
+            "/api/manager/peer-probe", json={"host": "10.0.0.4", "port": 8000}
+        )
+        new = client.post("/api/manager/peer-probe", json={"host": "10.0.0.5", "port": 8000})
+
+    assert downgraded.status_code == 200, downgraded.text
+    assert downgraded.json()["trust"] == "changed"
+    assert new.json()["trust"] == "none"
+    assert new.json()["fingerprint"] is None
+    assert new.json()["hostname"] == "line-2"
+
+
+def test_peer_info_names_this_manager_without_a_token(monkeypatch, tmp_path: Path):
+    from core.peer_discovery import peer_discovery
+
+    _configure_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(peer_discovery, "_runtime_id", "rid-self")
+    monkeypatch.setattr(peer_discovery, "_hostname", "line-2-panel")
+    with TestClient(_app()) as client:
+        response = client.get("/api/manager/peer/info")
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"runtimeId": "rid-self", "hostname": "line-2-panel"}
+
+
 def test_pairing_surfaces_the_peers_own_refusal(monkeypatch, tmp_path: Path):
     """The peer's `detail` says what to fix; the status code alone does not."""
     _configure_home(monkeypatch, tmp_path)
@@ -2553,7 +2719,7 @@ def test_pairing_surfaces_the_peers_own_refusal(monkeypatch, tmp_path: Path):
     with TestClient(_app()) as client:
         response = client.post(
             "/api/manager/peer-pair",
-            json={"host": "10.0.0.4", "port": 8000, "password": "wrong"},
+            json=_insecure_pair_body(password="wrong"),
         )
 
     assert response.status_code == 409, response.text
@@ -2569,7 +2735,7 @@ def test_pairing_falls_back_to_the_status_code_without_a_usable_detail(
     with TestClient(_app()) as client:
         response = client.post(
             "/api/manager/peer-pair",
-            json={"host": "10.0.0.4", "port": 8000, "password": "wrong"},
+            json=_insecure_pair_body(password="wrong"),
         )
 
     assert response.status_code == 409, response.text
@@ -2600,7 +2766,7 @@ def test_a_peers_refusal_cannot_flood_this_managers_screen(monkeypatch, tmp_path
     with TestClient(_app()) as client:
         response = client.post(
             "/api/manager/peer-pair",
-            json={"host": "10.0.0.4", "port": 8000, "password": "wrong"},
+            json=_insecure_pair_body(password="wrong"),
         )
 
     assert response.status_code == 409, response.text

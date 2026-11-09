@@ -101,7 +101,9 @@ Because the id travels with the archive, importing a project that is *already* r
 
 **Transfer** (on a project row) pushes that project to another manager on the LAN; **⇩ Pull from peer** (in the toolbar) fetches one the other way. Both use the same packing code path as the zip, over the wire. The editor's top bar carries the same **Transfer** button for the project you have open — save your changes first, since only what is on disk travels.
 
-Pair once with the destination's existing device-admin password; after that a revocable peer token authenticates the transfer. Discovery is by mDNS, and a peer can always be entered manually as `host:port` — a peer found both ways is offered once, not twice. The full trust model and the HTTPS certificate pinning are in [Installing and running](install.md#peer-transfer-over-https).
+Pairing takes three steps — **Verify device → Sign in → Send**. First compare the other device's certificate fingerprint with the **SHA-256** under **Settings › HTTPS** on that device; only then type its device-admin password. After that a revocable peer token authenticates the transfer, and **Remember this device** keeps it so the next transfer needs no password. Discovery is by mDNS, and a peer can always be entered manually as `host:port` — a peer found both ways is offered once, not twice. The full trust model and the HTTPS certificate pinning are in [Installing and running](install.md#peer-transfer-over-https).
+
+**Pulling a project with custom widgets.** Custom widgets are code: they are built on this device when the project starts and run in the browser of everyone who opens it. Before pulling a project that has them — or one whose source does not say — the dialog asks you to tick *I trust the source of this project and want to run its widgets*, and the manager refuses the pull without it.
 
 **When the far side already has that project.** The dialog checks before it
 sends, so a clash on the project's **id**, its **destination folder**, or both
@@ -118,12 +120,12 @@ it, instead of printing a raw error: a wrong device-admin password (the
 *peer's*, not this manager's), a pairing lockout with the countdown to wait
 out, a host name that didn't resolve, an address outside the trusted LAN, a
 port with nothing listening, a failed TLS handshake, or a peer certificate that
-no longer matches the one pinned at first contact. Progress is named the same
+no longer matches the one you confirmed when pairing. Progress is named the same
 way as it runs — packing, uploading, extracting, backing up, installing,
 registering, starting.
 
 > [!IMPORTANT]
-> Transfer defaults to plain HTTP and assumes a trusted LAN. Serve the peer over HTTPS before sending anything across a network you don't control.
+> Pairing needs HTTPS on the other device: over plain HTTP its password would cross the network unencrypted. Pairing over HTTP is possible only after you confirm, under **Isolated network without HTTPS?**, that the network is closed to other devices.
 
 ## Move, repair, and remove
 

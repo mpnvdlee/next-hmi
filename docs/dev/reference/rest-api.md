@@ -49,6 +49,7 @@ Access: **public** — no credential. **session** — the manager session cookie
 | `POST` | `/api/manager/auth/logout` | public | Only clears the cookie. |
 | `POST` | `/api/manager/mcp/pair` | password | Mints an MCP or API token for a script that has no session. |
 | `POST` | `/api/manager/peer/pair` | password | Also refused unless the client address is private (loopback only with `NEXTHMI_ALLOW_LOOPBACK_PEERS=1`), as on every peer route. |
+| `GET` | `/api/manager/peer/info` | public | A pairing manager shows the operator who answered before sending anything: `{ runtimeId, hostname }`, what the mDNS record already advertises. Private client addresses only. |
 | `GET`, `POST`, `DELETE` | `/api/manager/peer/projects`, `…/projects/{id}/archive`, `…/transfers`, `…/transfers/{id}`, `…/transfers/{id}/status` | token | Peer token from pairing. The upload's token and size are checked in `_auth_gate` before the body is read. |
 | any | `/mcp`, `/mcp/*` | session or token | MCP token; see [mcp.md](mcp.md). |
 | any | `/api/v1/*` | password or token | HTTP Basic or an API token; a session cookie alone is `401`. See [API v1](#api-v1). |
@@ -1004,22 +1005,30 @@ model, operator workflow, collision policies, and reliability guarantees.
 
 The workflow always names a local source project and a remote destination
 project. Transport is HTTP or HTTPS per peer (`scheme` / `peerScheme`, default
-`http`). Plain HTTP is for an explicitly trusted LAN only — bearer
-authentication does not provide confidentiality against interception; HTTPS
-pins the peer's certificate on first contact. The destination persists only a
-SHA-256 digest of each random peer token.
+`http`). Pairing needs HTTPS unless the operator explicitly accepts plain HTTP
+on an isolated network — bearer authentication does not provide
+confidentiality against interception. HTTPS pins only a certificate the
+operator confirmed. The destination persists only a SHA-256 digest of each
+random peer token.
 
 - `POST /api/manager/peer/pair` — public pairing endpoint. Body
   `{ password, name? }`; `201 { tokenId, token, transport, trustedLanOnly }`,
   the plaintext token returned once. `403` when the caller is not on a private
   address, `422` on a wrong password, `429` on the device-admin login throttle.
+- `GET /api/manager/peer/info` — public: `{ runtimeId, hostname }`, the same
+  claims the mDNS record carries. `runtimeId` is persistent per runtime home.
+  `403` when the caller is not on a private address.
 - `GET /api/manager/peer/projects` — bearer-authenticated project list for
   explicit destination selection, covering projects whose folder exists. Each
-  entry is `{ id, name, folder, inProjectsRoot, running }`. `inProjectsRoot` is
+  entry is `{ id, name, folder, inProjectsRoot, running, customWidgets }`.
+  `inProjectsRoot` is
   whether that project's folder really is a child of the peer's projects root —
   the only place a transfer can install — so the caller can tell a folder
   clash from a same-named project registered elsewhere on the peer's disk. The
-  modal reads a missing value as `true`.
+  modal reads a missing value as `true`. `customWidgets` counts the project's
+  widget entry points (`custom-widgets/<Name>/index.tsx` and
+  `custom-widgets/<Group>/<Name>/index.tsx`); the modal reads a missing value
+  as unknown and asks the operator to trust the source before pulling.
 - `POST /api/manager/peer/transfers` — bearer-authenticated multipart receive (`201`):
   `file`, `transferId`, `sourceProjectId`, `destinationProjectId`,
   `destinationFolder`, `collisionPolicy`, `confirmReplace`, and `start`.
@@ -1033,18 +1042,45 @@ SHA-256 digest of each random peer token.
   `recovery_required` receipt.
 - `GET /api/manager/peer/transfers/{transferId}/status` — read the durable
   receiver claim/apply/receipt status with the same bearer token.
+- `POST /api/manager/peer-probe` — session-authenticated; sends no password
+  and no token. Body `{ host, port = 8000, scheme }` →
+  `{ host, port, address, scheme, hostname, runtimeId, fingerprint, trust,
+  remembered }`. Over HTTPS it reads the certificate the peer presents
+  (`fingerprint`, SHA-256 hex) and fetches `peer/info` over a connection
+  anchored on exactly that certificate. `trust` is `new` (compare the
+  fingerprint), `pinned` (confirmed before for this address or runtimeId; a
+  new address of the same device is pinned too), `changed` (a pin for the
+  address or the runtimeId names another certificate, or a pinned runtimeId
+  answers over plain HTTP) or `none` (plain HTTP, `fingerprint: null`). A pinned
+  address is always probed over HTTPS. `remembered` says this manager holds a
+  pairing key for the device bound to this certificate. `422` for an expired
+  certificate or a failed TLS handshake.
 - `POST /api/manager/peer-pair` and `POST /api/manager/peer-projects` —
   session-authenticated browser proxies for pairing and destination discovery.
-  Bodies `{ host, port = 8000, scheme, password, name? }` and
-  `{ host, port, scheme, token }`. Pairing adds `certificateFingerprint` when a
-  certificate is pinned for the peer. A peer that refuses or cannot be reached
-  is `409` with an explanatory `detail` (the peer's own `detail` forwarded, or
-  the classified transport failure).
+  Bodies `{ host, port = 8000, scheme, password, name?, fingerprint?,
+  allowInsecureHttp = false, remember = false }` and
+  `{ host, port, scheme, token?, runtimeId? }`. Over HTTPS pairing requires the
+  `fingerprint` the operator confirmed (`422` without it): the manager re-reads
+  the certificate, answers `409` "Certificate changed: pairing stopped" when it
+  differs or when a pin for the address or the peer's runtimeId names another
+  one, and otherwise anchors the pairing request's handshake on it and pins it
+  (address + runtimeId) — no password is sent on any refusal. Over plain HTTP
+  pairing is `422` "Pairing needs HTTPS on the other device" unless
+  `allowInsecureHttp` is true. The answer adds `certificateFingerprint`,
+  `runtimeId` and `remembered`; with `remember` over HTTPS the token is kept in
+  `<runtime_home>/.peer-pairings.json` keyed by runtimeId, otherwise any token
+  kept for that runtimeId is dropped. `peer-projects` without a `token` uses
+  the one remembered for `runtimeId`, and only over the certificate it was
+  paired on. A peer that refuses or cannot be reached is `409` with an
+  explanatory `detail` (the peer's own `detail` forwarded, or the classified
+  transport failure).
 - `POST /api/manager/transfers` — starts an outgoing explicit-source transfer
   with HTTP 202. Body `{ sourceProjectId, destinationProjectId,
-  destinationFolder, peerHost, peerPort = 8000, peerScheme, token,
-  collisionPolicy, confirmReplace, start, transferId? }` — an omitted
-  `transferId` is minted by the server. `GET` / `DELETE
+  destinationFolder, peerHost, peerPort = 8000, peerScheme, token?,
+  peerRuntimeId?, collisionPolicy, confirmReplace, start, transferId? }` — an
+  omitted `transferId` is minted by the server; an omitted `token` uses the one
+  remembered for `peerRuntimeId`, as for `peer-projects`. An `https` peer
+  without a confirmed pin is refused before any token is sent. `GET` / `DELETE
   /api/manager/transfers/{transferId}` polls or cancels it. The state object is
   `{ transferId, sourceProjectId, destinationProjectId, phase, failedPhase,
   status, bytesDone, bytesTotal, message, result }`, with the failure text in
@@ -1059,19 +1095,25 @@ SHA-256 digest of each random peer token.
   HTTP 202, taking the same body as `/transfers`: this manager downloads
   `GET /api/manager/peer/projects/{sourceProjectId}/archive` from the paired
   peer and installs it locally, reusing the same collision/backup/rollback
-  core as the receive endpoint above. `GET` / `DELETE
+  core as the receive endpoint above. The body also takes
+  `trustCustomWidgets = false`: a downloaded archive with custom widget entry
+  points fails with "This project contains N custom widgets…" before anything
+  is extracted unless it is `true`. It is consent, not a parameter, so it is
+  left out of the retry fingerprint and a refused pull retries under the same
+  id. `GET` / `DELETE
   /api/manager/pulls/{transferId}` polls or cancels it, with the same
   idempotent-retry and durable-across-restart behavior as `/transfers`.
 - `GET /api/manager/peers/discovered`, `POST /api/manager/peers/manual` (body
   `{ host, port = 8000, scheme, name? }`), and
   `DELETE /api/manager/peers/manual?host=...&port=...` (→ `{ host, port, removed: true }`)
   — manager-owned mDNS and manual discovery.
-- `GET /api/manager/peers/trust` → `{ pins: [{ host, port, fingerprint, pinnedAt }] }`
-  — the certificates pinned on first contact. The PEM itself never leaves the
+- `GET /api/manager/peers/trust` → `{ pins: [{ host, port, fingerprint, pinnedAt, runtimeId }] }`
+  — the certificates the operator confirmed. The PEM itself never leaves the
   server.
-- `DELETE /api/manager/peers/trust?host=...&port=8000` →
-  `{ host, port, forgotten: true }`; `404` when nothing is pinned for that
-  host/port. The only recovery path after a peer renews its certificate, and an
+- `DELETE /api/manager/peers/trust?host=...&port=8000&runtimeId=...` →
+  `{ host, port, forgotten: true }`; drops the address's pin and every pin of
+  the same runtimeId (the one given, and the dropped pin's own). `404` when
+  nothing was pinned. The only recovery path after a peer renews its certificate, and an
   explicit operator action by design — dropping a pin discards the evidence that
   would otherwise expose an interception.
 - `GET /api/manager/peer-tokens` and
