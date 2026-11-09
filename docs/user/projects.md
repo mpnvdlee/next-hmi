@@ -33,6 +33,8 @@ Browse to the origin root (`http://localhost:8000` by default) and sign in with 
 
 The id is the project's address: it is what appears in `/runtime/<id>/` and `/editor/<id>/`, and in the instance log folder. It is derived from the name when the project is created, and it stays put afterwards unless you change it deliberately — see **Rename** below.
 
+Ids ignore upper and lower case: `line3` and `LINE3` count as the same id, because on Windows and macOS they would share one folder. A new project whose name gives an id that is already taken gets a free one instead (`LINE3-2`), and an import, a push or a pull that would add a second one is refused. An installation that already holds two such ids keeps working, and the log warns about them at startup — rename one of them.
+
 Each row shows a picture of that project's main page as it looked the last time
 the project was saved in the editor. A project that has never been saved shows
 a plain placeholder instead. The picture is stored on this installation only —
@@ -97,19 +99,23 @@ metadata block but no `users.json` is refused on the way in, rather than
 registering an entry that then refuses to start. Exporting such a project is
 still allowed, so a damaged one can be carried somewhere else and repaired.
 
-Because the id travels with the archive, importing a project that is *already* registered on this installation is refused with a conflict — before the dialog asks about any code in it. Remove the existing entry first, or import onto a different machine.
+Because the id travels with the archive, importing a project that is *already* registered on this installation is refused with a conflict — before the dialog asks about any code in it. Remove the existing entry first, or import onto a different machine. When the archive's id differs from a registered one only in upper and lower case — an archive of `LINE3` beside `line3` — the dialog names the existing project and offers a free id: click **Use LINE3-2 instead** to import the archive under that id.
 
 ## Push & pull between devices
 
 **Transfer** (on a project row) pushes that project to another manager on the LAN; **⇩ Pull from peer** (in the toolbar) fetches one the other way. Both use the same packing code path as the zip, over the wire. The editor's top bar carries the same **Transfer** button for the project you have open — save your changes first, since only what is on disk travels.
 
-Pairing takes three steps — **Verify device → Sign in → Send**. First compare the other device's certificate fingerprint with the **SHA-256** under **Settings › HTTPS** on that device; only then type its device-admin password. After that a revocable peer token authenticates the transfer, and **Remember this device** keeps it so the next transfer needs no password. Discovery is by mDNS, and a peer can always be entered manually as `host:port` — a peer found both ways is offered once, not twice. The full trust model and the HTTPS certificate pinning are in [Installing and running](install.md#peer-transfer-over-https).
+Pairing takes three steps — **Verify device → Sign in → Send** (**Fetch** when pulling). The dialog starts on HTTPS, port 8443; picking a discovered device fills in its own protocol and port. First compare the other device's certificate fingerprint with the **SHA-256** under **Settings › HTTPS** on that device; only then type its device-admin password. After that a peer token authenticates the transfer; it expires after 90 days without use, and the other device can revoke it under **Settings › Tokens**. Tick **Remember this device** (off by default) to keep it, so the next transfer needs no password; **Forget pinned certificate and verify again** drops it along with the pin. Discovery is by mDNS, and a peer can always be entered manually as `host:port` — a peer found both ways is offered once, not twice. The full trust model and the HTTPS certificate pinning are in [Installing and running](install.md#peer-transfer-over-https).
 
 **Pulling a project that contains code.** Custom widgets, external libraries and import-map entries are code (see [Download & upload a project](#download--upload-a-project) above). When the source says the project has any, the dialog names it — for example *This project contains code: 2 custom widgets, 1 external library.*, then each item — and asks you to tick *I trust the source of this project and want to run its code*; it asks too when the source does not say. The manager checks the downloaded project itself before installing it, and refuses the pull without that tick.
 
 **When the far side already has that project.** The dialog checks before it
 sends, so a clash on the project's **id**, its **destination folder**, or both
-is named up front rather than surfacing as a failure. Pick how to resolve it:
+is named up front rather than surfacing as a failure. An id that differs only
+in upper and lower case is a clash too, but the far side is what spots it: the
+transfer fails with *A project or folder of that name already exists on the
+target. Project ids ignore upper and lower case.* and the same choices open.
+Pick how to resolve it:
 
 | Resolution | Does |
 |---|---|
@@ -121,8 +127,10 @@ is named up front rather than surfacing as a failure. Pick how to resolve it:
 it, instead of printing a raw error: a wrong device-admin password (the
 *peer's*, not this manager's), a pairing lockout with the countdown to wait
 out, a host name that didn't resolve, an address outside the trusted LAN, a
-port with nothing listening, a failed TLS handshake, or a peer certificate that
-no longer matches the one you confirmed when pairing. Progress is named the same
+port with nothing listening, a failed TLS handshake, a peer certificate that
+no longer matches the one you confirmed when pairing, or a peer that no longer
+accepts this device because the pairing was revoked or expired — **Pair again**
+then asks for its device-admin password. Progress is named the same
 way as it runs — packing, uploading, extracting, backing up, installing,
 registering, starting.
 

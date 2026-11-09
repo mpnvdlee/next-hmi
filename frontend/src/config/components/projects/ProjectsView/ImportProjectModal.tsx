@@ -7,6 +7,7 @@ import ProjectCodeWarning from './ProjectCodeWarning';
 import {
   describeError,
   ProjectCodeUnconfirmedError,
+  ProjectIdCaseConflictError,
   type ProjectCode,
   useProjectsStore,
 } from '@config/store/projectsStore';
@@ -39,6 +40,11 @@ export default function ImportProjectModal({ defaultRoot, onCancel, onImported }
   // Set once the server has refused the archive for carrying code.
   const [code, setCode] = useState<ProjectCode | null>(null);
   const [trusted, setTrusted] = useState(false);
+  // Set once the server has refused the archive's id as a case variant of a
+  // registered one, and offered this free id instead.
+  const [suggestedId, setSuggestedId] = useState<string | null>(null);
+  // The id the archive is imported under once the operator took the offer.
+  const [projectId, setProjectId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const suggested = useMemo(() => suggestPath(defaultRoot, file), [defaultRoot, file]);
@@ -48,26 +54,41 @@ export default function ImportProjectModal({ defaultRoot, onCancel, onImported }
 
   const validation = useDestinationPathValidation(path);
 
-  const canSubmit =
+  const ready =
     !!file &&
     path.trim().length > 0 &&
     validation?.ok === true &&
     (code === null || trusted) &&
     !submitting;
+  // The same id would only be refused again.
+  const canSubmit = ready && suggestedId === null;
 
-  async function handleSubmit() {
-    if (!canSubmit || !file) return;
+  async function submit(id: string | null) {
+    if (!file) return;
     setSubmitting(true);
     setError(null);
+    setSuggestedId(null);
     try {
-      await importProject(file, path.trim(), trusted);
+      await importProject(file, path.trim(), trusted, id ?? undefined);
       onImported();
     } catch (e) {
       if (e instanceof ProjectCodeUnconfirmedError) setCode(e.projectCode);
-      else setError(describeError(e));
+      else if (e instanceof ProjectIdCaseConflictError) {
+        setError(e.message);
+        setSuggestedId(e.suggestedId);
+      } else setError(describeError(e));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleSubmit() {
+    if (canSubmit) void submit(projectId);
+  }
+
+  function acceptSuggestion(id: string) {
+    setProjectId(id);
+    void submit(id);
   }
 
   return (
@@ -88,6 +109,9 @@ export default function ImportProjectModal({ defaultRoot, onCancel, onImported }
             setFile(e.target.files?.[0] ?? null);
             setCode(null);
             setTrusted(false);
+            setError(null);
+            setSuggestedId(null);
+            setProjectId(null);
           }}
         />
       </label>
@@ -139,6 +163,16 @@ export default function ImportProjectModal({ defaultRoot, onCancel, onImported }
         </p>
       )}
       {error && <p className="project-form__status project-form__status--error">{error}</p>}
+      {suggestedId && (
+        <div className="project-form__row">
+          <Button size="sm" disabled={!ready} onClick={() => acceptSuggestion(suggestedId)}>
+            Use {suggestedId} instead
+          </Button>
+        </div>
+      )}
+      {projectId && !suggestedId && (
+        <p className="project-form__hint">Imports under the project id {projectId}.</p>
+      )}
 
       {code && (
         <ProjectCodeWarning

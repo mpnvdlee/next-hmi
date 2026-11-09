@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import {
   ProjectCodeUnconfirmedError,
+  ProjectIdCaseConflictError,
   type ProjectCode,
   useProjectsStore,
 } from '@config/store/projectsStore';
@@ -14,6 +15,14 @@ const NONE: ProjectCode = { customWidgets: [], externalLibraries: [], importOver
 
 function unconfirmed(code: Partial<ProjectCode>) {
   return new ProjectCodeUnconfirmedError('409', { ...NONE, ...code });
+}
+
+const CASE_CONFLICT =
+  "The project 'line3' already exists. Project ids ignore upper and lower case, because on " +
+  'Windows and macOS they share one folder.';
+
+function caseConflict() {
+  return new ProjectIdCaseConflictError(CASE_CONFLICT, 'LINE3-2');
 }
 
 const importProject = vi.fn();
@@ -58,7 +67,7 @@ describe('ImportProjectModal', () => {
 
     await clickImport();
 
-    expect(importProject).toHaveBeenCalledWith(ZIP, '/projects/plant', false);
+    expect(importProject).toHaveBeenCalledWith(ZIP, '/projects/plant', false, undefined);
     expect(onImported).toHaveBeenCalled();
   });
 
@@ -93,7 +102,45 @@ describe('ImportProjectModal', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: TRUST }));
     await clickImport();
 
-    expect(importProject).toHaveBeenLastCalledWith(ZIP, '/projects/plant', true);
+    expect(importProject).toHaveBeenLastCalledWith(ZIP, '/projects/plant', true, undefined);
+    expect(onImported).toHaveBeenCalled();
+  });
+
+  it('names the case clash and imports under the suggested id in one click', async () => {
+    importProject.mockRejectedValueOnce(caseConflict()).mockResolvedValueOnce({});
+    await chooseZip(ZIP);
+
+    await clickImport();
+
+    expect(screen.getByText(CASE_CONFLICT)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
+    expect(onImported).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Use LINE3-2 instead' }));
+    });
+
+    expect(importProject).toHaveBeenLastCalledWith(ZIP, '/projects/plant', false, 'LINE3-2');
+    expect(onImported).toHaveBeenCalled();
+  });
+
+  it('keeps the suggested id when the import then asks for trust', async () => {
+    importProject
+      .mockRejectedValueOnce(caseConflict())
+      .mockRejectedValueOnce(unconfirmed({ customWidgets: ['Leak'] }))
+      .mockResolvedValueOnce({});
+    await chooseZip(ZIP);
+    await clickImport();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Use LINE3-2 instead' }));
+    });
+    expect(screen.queryByText(CASE_CONFLICT)).not.toBeInTheDocument();
+    expect(screen.getByText('Imports under the project id LINE3-2.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: TRUST }));
+    await clickImport();
+
+    expect(importProject).toHaveBeenLastCalledWith(ZIP, '/projects/plant', true, 'LINE3-2');
     expect(onImported).toHaveBeenCalled();
   });
 
@@ -109,6 +156,11 @@ describe('ImportProjectModal', () => {
     expect(screen.queryByText(/contains code/)).not.toBeInTheDocument();
     importProject.mockResolvedValueOnce({});
     await clickImport();
-    expect(importProject).toHaveBeenLastCalledWith(expect.any(File), '/projects/other', false);
+    expect(importProject).toHaveBeenLastCalledWith(
+      expect.any(File),
+      '/projects/other',
+      false,
+      undefined,
+    );
   });
 });

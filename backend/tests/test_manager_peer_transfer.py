@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import socket
+import tempfile
 import threading
 import time
 import zipfile
@@ -98,6 +99,10 @@ def _pair(client: TestClient) -> str:
     )
     assert response.status_code == 201
     return response.json()["token"]
+
+
+def _token_id(token: str) -> str:
+    return token.split(".", 1)[0]
 
 
 def _receive(
@@ -252,8 +257,11 @@ def test_confirmed_replace_backs_up_stopped_project_without_touching_running_set
         )
     assert response.status_code == 201
     body = response.json()
+    assert body["replaced"] is True
+    # Where the backup sits is this device's business, not the sender's.
+    assert "backupPath" not in body
     assert (
-        Path(body["backupPath"]).joinpath("old.txt").read_text(encoding="utf-8")
+        (root / "destination.bak-tx-replace" / "old.txt").read_text(encoding="utf-8")
         == "old"
     )
     assert read_project_metadata(destination).id == "destination-id"
@@ -904,7 +912,9 @@ def test_private_peer_resolution_rejects_public_and_mixed_dns(monkeypatch):
         manager_peers_api._resolve_private_peer("rebind.example", 8000)
 
 
-def _seed_applied_pending_start(home: Path, root: Path, archive: bytes) -> None:
+def _seed_applied_pending_start(
+    home: Path, root: Path, archive: bytes, token_id: str | None = None
+) -> None:
     target = root / "source-copy"
     target.mkdir()
     write_project_metadata(target, ProjectMetadata(id="source-id", name="Source"))
@@ -951,6 +961,7 @@ def _seed_applied_pending_start(home: Path, root: Path, archive: bytes) -> None:
                         },
                         "collisionPolicy": "reject",
                         "startRequested": True,
+                        "tokenId": token_id,
                     }
                 },
             }
@@ -964,20 +975,21 @@ def test_restart_requires_authenticated_retry_before_pending_start(
 ):
     home, root = _configure_home(monkeypatch, tmp_path)
     archive = _archive(tmp_path)
-    _seed_applied_pending_start(home, root, archive)
     starts: list[str] = []
     monkeypatch.setattr(
         manager_peers_api.supervisor,
         "start",
         lambda project_id: starts.append(project_id) or {"status": "running"},
     )
-    manager_peers_api.reconcile_transfer_journals()
-    assert starts == []
-    journal = json.loads((home / ".peer-transfer-receipts.json").read_text())
-    assert journal["receipts"]["tx-pending-start"]["status"] == "applied_pending_start"
 
     with TestClient(_app()) as client:
         token = _pair(client)
+        _seed_applied_pending_start(home, root, archive, _token_id(token))
+        manager_peers_api.reconcile_transfer_journals()
+        assert starts == []
+        journal = json.loads((home / ".peer-transfer-receipts.json").read_text())
+        assert journal["receipts"]["tx-pending-start"]["status"] == "applied_pending_start"
+
         retry = _receive(
             client,
             token,
@@ -2564,11 +2576,14 @@ def test_cancel_incoming_unknown_transfer_returns_404(monkeypatch, tmp_path: Pat
 
 def test_cancel_incoming_recovery_required_returns_409(monkeypatch, tmp_path: Path):
     _configure_home(monkeypatch, tmp_path)
-    manager_peers_api._journal_update(
-        "tx-recovery", status="recovery_required", phase="recovery_required"
-    )
     with TestClient(_app()) as client:
         token = _pair(client)
+        manager_peers_api._journal_update(
+            "tx-recovery",
+            status="recovery_required",
+            phase="recovery_required",
+            tokenId=_token_id(token),
+        )
         resp = client.delete(
             "/api/manager/peer/transfers/tx-recovery",
             headers={"Authorization": f"Bearer {token}"},
@@ -2590,12 +2605,14 @@ def test_cancel_incoming_reports_too_late_and_does_not_cancel(
     monkeypatch, tmp_path: Path, phase: str, status: str
 ):
     _configure_home(monkeypatch, tmp_path)
-    manager_peers_api._journal_update("tx-late", status=status, phase=phase)
     cancel = threading.Event()
     manager_peers_api._receive_cancellations["tx-late"] = cancel
     try:
         with TestClient(_app()) as client:
             token = _pair(client)
+            manager_peers_api._journal_update(
+                "tx-late", status=status, phase=phase, tokenId=_token_id(token)
+            )
             resp = client.delete(
                 "/api/manager/peer/transfers/tx-late",
                 headers={"Authorization": f"Bearer {token}"},
@@ -2615,14 +2632,17 @@ def test_cancel_incoming_sets_the_live_event_and_journals_the_request(
     monkeypatch, tmp_path: Path
 ):
     home, _ = _configure_home(monkeypatch, tmp_path)
-    manager_peers_api._journal_update(
-        "tx-cancel-live", status="active", phase="extracting"
-    )
     cancel = threading.Event()
     manager_peers_api._receive_cancellations["tx-cancel-live"] = cancel
     try:
         with TestClient(_app()) as client:
             token = _pair(client)
+            manager_peers_api._journal_update(
+                "tx-cancel-live",
+                status="active",
+                phase="extracting",
+                tokenId=_token_id(token),
+            )
             resp = client.delete(
                 "/api/manager/peer/transfers/tx-cancel-live",
                 headers={"Authorization": f"Bearer {token}"},
@@ -2643,12 +2663,12 @@ def test_cancel_incoming_without_a_live_event_reports_not_requested(
     # durable journal — cancelling a cancellable-looking transfer from that
     # state must not crash, and honestly reports it couldn't interrupt it.
     _configure_home(monkeypatch, tmp_path)
-    manager_peers_api._journal_update(
-        "tx-orphaned", status="active", phase="extracting"
-    )
     assert "tx-orphaned" not in manager_peers_api._receive_cancellations
     with TestClient(_app()) as client:
         token = _pair(client)
+        manager_peers_api._journal_update(
+            "tx-orphaned", status="active", phase="extracting", tokenId=_token_id(token)
+        )
         resp = client.delete(
             "/api/manager/peer/transfers/tx-orphaned",
             headers={"Authorization": f"Bearer {token}"},
@@ -2664,20 +2684,11 @@ class _FakePeerRefusal:
         self.status_code = status_code
         self._payload = payload
 
-    def json(self) -> object:
+    def body(self) -> bytes:
+        # An exception stands for a body that is not JSON at all.
         if isinstance(self._payload, Exception):
-            raise self._payload
-        return self._payload
-
-    @property
-    def text(self) -> str:
-        # The upload path's fallback reads this when the body isn't a usable
-        # `{"detail": ...}` object — real httpx buffers a non-streamed
-        # response's body regardless of content type, so this stands in for
-        # that rather than requiring JSON specifically.
-        if isinstance(self._payload, Exception):
-            return str(self._payload)
-        return json.dumps(self._payload)
+            return str(self._payload).encode()
+        return json.dumps(self._payload).encode()
 
     async def __aenter__(self) -> _FakePeerRefusal:
         return self
@@ -2685,13 +2696,10 @@ class _FakePeerRefusal:
     async def __aexit__(self, *exc: object) -> bool:
         return False
 
-    async def post(self, url: str, headers=None, json=None, **_kwargs) -> _FakePeerRefusal:
-        # `**_kwargs` absorbs the upload endpoint's `data=`/`files=`, which a
-        # pairing or lookup POST never sends.
-        return self
-
-    async def get(self, url: str, headers=None) -> _FakePeerRefusal:
-        return self
+    def stream(self, method: str, url: str, **_kwargs) -> _FakeStreamContext:
+        # `**_kwargs` absorbs `headers=`, `json=` and the upload's
+        # `data=`/`files=`.
+        return _FakeStreamContext(_FakeStreamResponse(self.body(), self.status_code))
 
 
 def _patch_refusing_peer(monkeypatch, status_code: int, payload: object) -> None:
@@ -2725,9 +2733,9 @@ def test_http_pairing_never_sends_the_password_without_the_explicit_override(
     sent: list[object] = []
 
     class _RecordingPeer(_FakePeerRefusal):
-        async def post(self, url: str, headers=None, json=None, **_kwargs):
-            sent.append(json)
-            return self
+        def stream(self, method: str, url: str, **kwargs):
+            sent.append(kwargs.get("json"))
+            return super().stream(method, url)
 
     fake_httpx = SimpleNamespace(**vars(httpx))
     fake_httpx.AsyncClient = lambda *a, **k: _RecordingPeer(201, {"token": "id.secret"})
@@ -2746,7 +2754,15 @@ def test_http_pairing_never_sends_the_password_without_the_explicit_override(
     assert allowed.status_code == 200, allowed.text
     assert allowed.json()["token"] == "id.secret"
     assert allowed.json()["remembered"] is False
-    assert sent == [{"password": "admin", "name": None}]
+    # The other device lists this one under its paired devices by these.
+    assert sent == [
+        {
+            "password": "admin",
+            "name": None,
+            "hostname": manager_peers_api.peer_discovery.hostname,
+            "runtimeId": manager_peers_api.peer_discovery.runtime_id,
+        }
+    ]
 
 
 def test_probe_over_http_flags_a_device_that_was_paired_over_https(
@@ -2774,6 +2790,57 @@ def test_probe_over_http_flags_a_device_that_was_paired_over_https(
     assert new.json()["trust"] == "none"
     assert new.json()["fingerprint"] is None
     assert new.json()["hostname"] == "line-2"
+
+
+def test_probe_names_a_cloned_identity_instead_of_a_changed_certificate(
+    monkeypatch, tmp_path: Path
+):
+    """A copied runtime home carries this device's runtimeId to another one."""
+    from core.peer_discovery import peer_discovery
+
+    _configure_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(peer_discovery, "_runtime_id", "rid-cloned")
+
+    async def fake_info(client, peer):
+        return {"runtimeId": "rid-cloned", "hostname": "line-2"}
+
+    monkeypatch.setattr(manager_peers_api, "_peer_info", fake_info)
+    with TestClient(_app()) as client:
+        probed = client.post("/api/manager/peer-probe", json={"host": "10.0.0.4", "port": 8000})
+
+    assert probed.status_code == 409, probed.text
+    assert probed.json()["detail"] == (
+        "This device has the same identity as the one you are pairing with. "
+        "Delete .peer-identity.json in one of their runtime homes and restart it."
+    )
+
+
+def test_forgetting_a_device_drops_its_remembered_pairing_key(monkeypatch, tmp_path: Path):
+    from core import peer_trust
+
+    _configure_home(monkeypatch, tmp_path)
+    peer_trust.save_pin("10.0.0.4", 8443, "a" * 64, "unused", "rid-a")
+    peer_trust.save_pin("10.0.0.9", 8443, "a" * 64, "unused", "rid-a")
+    peer_tokens.remember("rid-a", "id.secret-a", "a" * 64)
+    peer_tokens.remember("rid-b", "id.secret-b", "b" * 64)
+
+    with TestClient(_app()) as client:
+        # By address alone: the pin there names the device.
+        forgotten = client.delete(
+            "/api/manager/peers/trust", params={"host": "10.0.0.4", "port": 8443}
+        )
+        # By runtimeId, with no pin left at that address.
+        by_device = client.delete(
+            "/api/manager/peers/trust",
+            params={"host": "10.0.0.5", "port": 8443, "runtimeId": "rid-b"},
+        )
+
+    assert forgotten.status_code == 200, forgotten.text
+    assert peer_trust.list_pins() == []
+    assert peer_tokens.remembered("rid-a", "a" * 64) is None
+    # Nothing was pinned for rid-b, but its pairing key is gone all the same.
+    assert by_device.status_code == 404, by_device.text
+    assert peer_tokens.remembered("rid-b", "b" * 64) is None
 
 
 def test_peer_info_names_this_manager_without_a_token(monkeypatch, tmp_path: Path):
@@ -2825,7 +2892,7 @@ def test_pairing_falls_back_to_the_status_code_without_a_usable_detail(
 def test_peer_project_lookup_surfaces_the_peers_own_refusal(monkeypatch, tmp_path: Path):
     _configure_home(monkeypatch, tmp_path)
     _patch_refusing_peer(
-        monkeypatch, 401, {"detail": "Invalid or revoked peer token"}
+        monkeypatch, 403, {"detail": "Peer source must be on a private trusted LAN"}
     )
 
     with TestClient(_app()) as client:
@@ -2835,7 +2902,8 @@ def test_peer_project_lookup_surfaces_the_peers_own_refusal(monkeypatch, tmp_pat
         )
 
     assert response.status_code == 409, response.text
-    assert "Invalid or revoked peer token" in response.json()["detail"]
+    assert "Peer source must be on a private trusted LAN" in response.json()["detail"]
+    assert "code" not in response.json()
 
 
 def test_a_peers_refusal_cannot_flood_this_managers_screen(monkeypatch, tmp_path: Path):
@@ -3222,3 +3290,305 @@ def test_reject_refuses_a_leftover_folder_no_project_is_registered_under(
         )
     assert received.status_code == 409, received.text
     assert "already exists" in received.json()["detail"]
+
+
+# ── a peer's answers are bounded (size and time) ─────────────────────────────
+
+
+class _MeteredStreamResponse(_FakeStreamResponse):
+    """Counts the bytes this manager actually read, and can trickle them."""
+
+    def __init__(self, body: bytes, *, known_length: bool = True, delay: float = 0.0) -> None:
+        super().__init__(body, known_length=known_length)
+        self.consumed = 0
+        self._delay = delay
+
+    async def aiter_bytes(self, chunk_size: int = 65536):
+        async for chunk in super().aiter_bytes(chunk_size):
+            if self._delay:
+                await asyncio.sleep(self._delay)
+            self.consumed += len(chunk)
+            yield chunk
+
+
+class _OneResponsePeer:
+    def __init__(self, response: _FakeStreamResponse) -> None:
+        self._response = response
+
+    async def __aenter__(self) -> _OneResponsePeer:
+        return self
+
+    async def __aexit__(self, *exc: object) -> bool:
+        return False
+
+    def stream(self, method: str, url: str, **_kwargs) -> _FakeStreamContext:
+        return _FakeStreamContext(self._response)
+
+
+def _patch_peer_response(monkeypatch, response: _FakeStreamResponse) -> None:
+    monkeypatch.setattr(
+        manager_peers_api,
+        "_resolve_private_peer",
+        lambda host, port, scheme="http": manager_peers_api.PeerEndpoint(
+            "http://peer.invalid", {"Host": f"{host}:{port}"}, True, host, port, "10.0.0.5"
+        ),
+    )
+    fake_httpx = SimpleNamespace(**vars(httpx))
+    fake_httpx.AsyncClient = lambda *a, **k: _OneResponsePeer(response)
+    monkeypatch.setattr(manager_peers_api, "httpx", fake_httpx)
+
+
+@pytest.fixture
+def scratch(monkeypatch, tmp_path: Path) -> Path:
+    """Where the pull downloads to, so a test can see what it left behind."""
+    directory = tmp_path / "scratch"
+    directory.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(directory))
+    return directory
+
+
+@pytest.mark.parametrize("known_length", [True, False], ids=["declared", "undeclared"])
+def test_a_pull_stops_at_the_archive_size_limit_and_keeps_nothing(
+    monkeypatch, tmp_path: Path, scratch: Path, known_length: bool
+):
+    _, root = _configure_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("NEXTHMI_MAX_PROJECT_ZIP_MB", "1")
+    response = _MeteredStreamResponse(b"x" * (4 * 1024 * 1024), known_length=known_length)
+    _patch_peer_response(monkeypatch, response)
+
+    with TestClient(_app()) as client:
+        begun = client.post("/api/manager/pulls", json=_pull_body(transferId="pull-huge"))
+        assert begun.status_code == 202, begun.text
+        status = _wait_for_pull(client, "pull-huge")
+
+    assert status["status"] == "error", status
+    assert status["message"] == (
+        "Peer 10.0.0.5:8000 sent an archive larger than the 1 MB this device "
+        "accepts; the download was stopped"
+    )
+    # Stopped at the limit, not after the whole body.
+    assert response.consumed <= 1024 * 1024 + 64 * 1024
+    assert list(scratch.iterdir()) == []
+    assert not (root / "pulled-copy").exists()
+
+
+def test_a_pull_that_outlasts_its_deadline_is_stopped(
+    monkeypatch, tmp_path: Path, scratch: Path
+):
+    _configure_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(manager_peers_api, "_DOWNLOAD_DEADLINE_SECONDS", 0.3)
+    # Every read arrives well inside the per-read timeout; only the total is late.
+    body = b"x" * (64 * 1024 * 100)
+    response = _MeteredStreamResponse(body, delay=0.02)
+    _patch_peer_response(monkeypatch, response)
+
+    with TestClient(_app()) as client:
+        begun = client.post("/api/manager/pulls", json=_pull_body(transferId="pull-slow"))
+        assert begun.status_code == 202, begun.text
+        status = _wait_for_pull(client, "pull-slow")
+
+    assert status["status"] == "error", status
+    assert status["message"].startswith("Downloading from peer 10.0.0.5:8000 took longer than")
+    assert response.consumed < len(body)
+    assert list(scratch.iterdir()) == []
+
+
+def test_an_oversized_json_reply_from_a_peer_is_refused(monkeypatch, tmp_path: Path):
+    _configure_home(monkeypatch, tmp_path)
+    response = _MeteredStreamResponse(b'{"projects": [' + b" " * (16 * 1024 * 1024) + b"]}")
+    _patch_peer_response(monkeypatch, response)
+
+    with TestClient(_app()) as client:
+        listed = client.post(
+            "/api/manager/peer-projects",
+            json={"host": "10.0.0.5", "port": 8000, "token": "peer-token"},
+        )
+
+    assert listed.status_code == 409, listed.text
+    assert listed.json()["detail"] == (
+        "Peer 10.0.0.5:8000 sent a reply larger than 4 MB; it was refused"
+    )
+    assert response.consumed <= 4 * 1024 * 1024 + 64 * 1024
+
+
+# ── a refused pairing is told apart from every other failure ────────────────
+
+
+_REVOKED = {"detail": "Invalid or revoked peer token"}
+_REFUSED_TEXT = (
+    "10.0.0.5 no longer accepts this device: the pairing was revoked or has expired. "
+    "Pair again with its device-admin password."
+)
+
+
+def test_a_refused_token_has_its_own_code_on_project_lookup(monkeypatch, tmp_path: Path):
+    _configure_home(monkeypatch, tmp_path)
+    _patch_peer_response(monkeypatch, _FakeStreamResponse(json.dumps(_REVOKED).encode(), 401))
+
+    with TestClient(_app()) as client:
+        listed = client.post(
+            "/api/manager/peer-projects",
+            json={"host": "10.0.0.5", "port": 8000, "token": "revoked"},
+        )
+
+    assert listed.status_code == 409, listed.text
+    assert listed.json() == {
+        "detail": _REFUSED_TEXT,
+        "code": manager_peers_api.PEER_PAIRING_REFUSED,
+    }
+
+
+def test_a_refused_token_has_its_own_code_on_a_push(monkeypatch, tmp_path: Path):
+    app, _ = _sender_app_with_project(monkeypatch, tmp_path)
+    _patch_peer_response(monkeypatch, _FakeStreamResponse(json.dumps(_REVOKED).encode(), 401))
+
+    with TestClient(app) as client:
+        begun = client.post("/api/manager/transfers", json=_begin_body(transferId="tx-revoked"))
+        assert begun.status_code == 202, begun.text
+        status = _wait_for_transfer(client, "tx-revoked")
+
+    assert status["status"] == "error", status
+    assert status["code"] == manager_peers_api.PEER_PAIRING_REFUSED
+    assert status["message"] == _REFUSED_TEXT
+    durable = json.loads(manager_peers_api._sender_journal_path().read_text())
+    assert durable["transfers"]["tx-revoked"]["code"] == manager_peers_api.PEER_PAIRING_REFUSED
+
+
+def test_a_refused_token_has_its_own_code_on_a_pull(monkeypatch, tmp_path: Path):
+    _configure_home(monkeypatch, tmp_path)
+    _patch_peer_download(monkeypatch, json.dumps(_REVOKED).encode(), status_code=401)
+
+    with TestClient(_app()) as client:
+        begun = client.post("/api/manager/pulls", json=_pull_body(transferId="pull-revoked"))
+        assert begun.status_code == 202, begun.text
+        status = _wait_for_pull(client, "pull-revoked")
+
+    assert status["status"] == "error", status
+    assert status["code"] == manager_peers_api.PEER_PAIRING_REFUSED
+    assert status["message"] == _REFUSED_TEXT
+
+
+def test_any_other_refusal_carries_no_code(monkeypatch, tmp_path: Path):
+    _configure_home(monkeypatch, tmp_path)
+    _patch_peer_download(
+        monkeypatch, b'{"detail": "Project \'source-id\' not found"}', status_code=404
+    )
+
+    with TestClient(_app()) as client:
+        client.post("/api/manager/pulls", json=_pull_body(transferId="pull-missing"))
+        status = _wait_for_pull(client, "pull-missing")
+
+    assert status["status"] == "error", status
+    assert status["code"] is None
+
+
+def test_a_refused_remembered_pairing_can_be_forgotten(monkeypatch, tmp_path: Path):
+    _configure_home(monkeypatch, tmp_path)
+    peer_tokens.remember("rid-line3", "id.revoked", "f" * 64)
+
+    with TestClient(_app()) as client:
+        forgotten = client.delete("/api/manager/peer-pairings/rid-line3")
+        again = client.delete("/api/manager/peer-pairings/rid-line3")
+
+    assert forgotten.json() == {"runtimeId": "rid-line3", "forgotten": True}
+    assert again.json() == {"runtimeId": "rid-line3", "forgotten": False}
+    assert peer_tokens.remembered("rid-line3", "f" * 64) is None
+
+
+# ── a transfer belongs to the pairing that sent it ──────────────────────────
+
+
+def _bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_a_pairing_reads_and_cancels_only_its_own_transfers(monkeypatch, tmp_path: Path):
+    _configure_home(monkeypatch, tmp_path)
+    archive = _archive(tmp_path)
+    with TestClient(_app()) as client:
+        owner = _pair(client)
+        other = _pair(client)
+        assert _receive(client, owner, archive, transferId="tx-owned").status_code == 201
+
+        status_path = "/api/manager/peer/transfers/tx-owned/status"
+        assert client.get(status_path, headers=_bearer(owner)).status_code == 200
+        assert client.get(status_path, headers=_bearer(other)).status_code == 404
+        cancel_path = "/api/manager/peer/transfers/tx-owned"
+        assert client.delete(cancel_path, headers=_bearer(other)).status_code == 404
+        assert client.delete(cancel_path, headers=_bearer(owner)).json()["tooLate"] is True
+        # Not even a replay of the very same request reads another pairing's outcome.
+        replay = _receive(client, other, archive, transferId="tx-owned")
+        assert replay.status_code == 409, replay.text
+        assert _receive(client, owner, archive, transferId="tx-owned").status_code == 201
+
+
+def test_a_peer_sees_no_path_of_this_device(monkeypatch, tmp_path: Path):
+    home, root = _configure_home(monkeypatch, tmp_path)
+    destination = root / "destination"
+    destination.mkdir()
+    write_project_metadata(destination, ProjectMetadata(id="destination-id", name="Old"))
+    manifest = load_manifest()
+    manifest.projects.append(
+        ProjectEntry(
+            id="destination-id",
+            name="Old",
+            path=str(destination),
+            addedAt="2026-01-01T00:00:00Z",
+        )
+    )
+    save_manifest(manifest)
+
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        received = _receive(
+            client,
+            token,
+            _archive(tmp_path),
+            transferId="tx-paths",
+            destinationProjectId="destination-id",
+            destinationFolder="destination",
+            collisionPolicy="replace",
+            confirmReplace="true",
+        )
+        status = client.get(
+            "/api/manager/peer/transfers/tx-paths/status", headers=_bearer(token)
+        )
+
+    assert received.status_code == 201, received.text
+    assert status.status_code == 200, status.text
+    for answer in (received.json(), status.json()):
+        assert str(tmp_path) not in json.dumps(answer)
+    assert status.json()["result"]["replaced"] is True
+    # The device-admin's own record keeps them.
+    journal = json.loads((home / ".peer-transfer-receipts.json").read_text())
+    assert journal["receipts"]["tx-paths"]["result"]["backupPath"] == str(
+        root / "destination.bak-tx-paths"
+    )
+
+
+def test_a_failure_that_quotes_a_path_reaches_the_peer_without_it(
+    monkeypatch, tmp_path: Path
+):
+    _, root = _configure_home(monkeypatch, tmp_path)
+    original = manager_peers_api._atomic_rename_noreplace
+
+    def appear(source, destination, binding):
+        if destination == root / "source-copy" and not destination.exists():
+            destination.mkdir()
+        return original(source, destination, binding)
+
+    monkeypatch.setattr(manager_peers_api, "_atomic_rename_noreplace", appear)
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        refused = _receive(client, token, _archive(tmp_path), transferId="tx-quoted")
+        status = client.get(
+            "/api/manager/peer/transfers/tx-quoted/status", headers=_bearer(token)
+        )
+
+    assert refused.status_code == 409
+    assert status.status_code == 200, status.text
+    assert status.json()["message"] == (
+        "Path appeared during transfer and was preserved: source-copy"
+    )
+    assert "targetPath" not in status.json()
+    assert "containerPath" not in status.json()

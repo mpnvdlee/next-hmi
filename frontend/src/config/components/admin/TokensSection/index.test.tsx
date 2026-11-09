@@ -8,6 +8,8 @@ vi.mock('./tokensApi', () => ({
   revokeToken: vi.fn(),
   createApiToken: vi.fn(),
   createMcpToken: vi.fn(),
+  listPairedDevices: vi.fn(async () => []),
+  revokePairedDevice: vi.fn(),
 }));
 
 function token(overrides: Partial<ListedToken> = {}): ListedToken {

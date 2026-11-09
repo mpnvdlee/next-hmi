@@ -955,11 +955,12 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - The format fields are read from the project's own `config.json` (see [data-formats.md](../architecture/data-formats.md)) and are `null` when `status` is `"missing"`. `unsupportedFormat` is `formatVersion > PROJECT_FORMAT_VERSION` (this build is older than the project); `needsUpgrade` is `formatVersion < PROJECT_FORMAT_VERSION` **or** `minAppVersion` is `null` (a project with no release stamp is replayed through the chain rather than trusted). `minAppVersion` is the release that stamped the format — display only, for naming the version an operator needs. `lastMigration` is `{ fromVersion, toVersion, at, backup }` or `null`.
 - `POST /api/projects`
   - Body: `{ name, path, template? }`. Validates the destination is empty + writable, seeds from the chosen template, writes a fresh `project` metadata block (stamped at the current format) into `config.json`, and appends to the manifest. `201` with the manifest entry. `409` when the path already carries project metadata or its id is already registered.
+  - The id is slugged from `name` and suffixed `-2`, `-3`… past every registered id, compared ignoring case: `LINE3` next to a registered `line3` becomes `LINE3-2`. Project ids ignore upper and lower case everywhere a project is registered (create, register, import, peer push and pull — `core.manifest.save_manifest` refuses a new one with `409`), because the id names folders under the runtime home (`.widget-build/<id>`, `.logs/instances/<id>`, `.thumbnails/<id>.png`) that are one folder on Windows and macOS. A manifest that already holds such a pair keeps working, and the manager logs a warning about it at startup.
   - A destination inside the default projects root has that root created first — Docker and headless Linux have no `~/Documents`. A destination elsewhere must already have a parent.
   - `template` — `"empty"` (default) seeds from `project-seed/`; `"example"` seeds the bundled NEXT BREW demo from `project-example/`. An unknown value, or a template this build does not bundle, is `422`.
 - `POST /api/projects/register`
   - Body: `{ path, name? }`. Adds an existing on-disk project folder to the manifest; the folder must already carry a `project` block in `config.json`.
-  - `201` with the manifest entry. `422` when the path is not a directory or has no project metadata; `409` when the id is already in the manifest — the UI offers Locate instead.
+  - `201` with the manifest entry. `422` when the path is not a directory or has no project metadata; `409` when the id is already in the manifest — the UI offers Locate instead — or differs from a registered one only in case, with a detail naming that project.
 - `POST /api/projects/validate-path`
   - Body: `{ path }`. Non-throwing validation used by the create / import dialogs. Returns `{ ok, resolvedPath, reason? }`; `reason` is `path-is-file`, `not-readable`, `parent-missing`, `parent-not-writable`, or the resolution error. On success it adds `exists`, `isEmpty`, and `parentWritable`.
 - `GET /api/projects/browse-dir?path=<absolute path>`
@@ -980,7 +981,7 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
 - `GET /api/projects/{id}/export`
   - Streams the project as a zip with `Content-Disposition: attachment; filename="<name>.nexthmi.zip"` (the project name, made filename-safe). 409 if the folder is missing on disk.
 - `POST /api/projects/import`
-  - Multipart upload: `file` (zip), `destinationPath`, optional `name`, optional `trustCustomWidgets` (boolean, default false). Validates destination, unpacks, adds a manifest entry; `201` with the entry. An archive that carries code — custom widgets as the compiler discovers them in the unpacked `custom-widgets/`, any `.js`/`.mjs` file under `external-libraries/`, or any key of `external-modules.json` — is refused unless `trustCustomWidgets` is true, with `409` `{ detail, code: "custom_widgets_unconfirmed", customWidgets: ["<Group>/<Name>", …], externalLibraries: ["<top-level entry>", …], importOverrides: ["<key>", …] }` — that code builds at project start and runs in every viewer's browser, so the operator confirms the source first. An id that is already registered is reported first, as its own `409`. `422` on invalid zip, unsafe or symlink archive members, an archive member with a `.`, `..` or empty path segment, a reusable-component `$var` violation at any nested child/default-value source, or a malformed JSON, invalid UTF-8, unreadable, symlinked, or reparse-point component path. Component errors report `components/<file>.json#/<JSON pointer>`; file-content errors use the root pointer with a stable reason. `409` on id collision with an existing entry, or a destination that already holds a project. The destination is cleaned up and no manifest entry is added after any validation failure.
+  - Multipart upload: `file` (zip), `destinationPath`, optional `name`, optional `trustCustomWidgets` (boolean, default false), optional `projectId`. Validates destination, unpacks, adds a manifest entry; `201` with the entry. `projectId` registers the archive under that id instead of its own and rewrites the id in its `config.json`; `422` when the id grammar rejects it. An archive whose id differs from a registered one only in case is refused with `409` `{ detail, code: "project_id_case_conflict", suggestedId }` — `detail` names the registered project, and `suggestedId` is free ignoring case (`LINE3` next to `line3` gets `LINE3-2`); the import dialog offers it as **Use `<id>` instead**, which sends it back as `projectId`. An archive that carries code — custom widgets as the compiler discovers them in the unpacked `custom-widgets/`, any `.js`/`.mjs` file under `external-libraries/`, or any key of `external-modules.json` — is refused unless `trustCustomWidgets` is true, with `409` `{ detail, code: "custom_widgets_unconfirmed", customWidgets: ["<Group>/<Name>", …], externalLibraries: ["<top-level entry>", …], importOverrides: ["<key>", …] }` — that code builds at project start and runs in every viewer's browser, so the operator confirms the source first. An id that is already registered is reported first, as its own `409`. `422` on invalid zip, unsafe or symlink archive members, an archive member with a `.`, `..` or empty path segment, a reusable-component `$var` violation at any nested child/default-value source, or a malformed JSON, invalid UTF-8, unreadable, symlinked, or reparse-point component path. Component errors report `components/<file>.json#/<JSON pointer>`; file-content errors use the root pointer with a stable reason. `409` on id collision with an existing entry, or a destination that already holds a project. The destination is cleaned up and no manifest entry is added after any validation failure.
 - `GET /api/projects/_runtime-home`
   - Used by the create dialog to suggest the default folder. Returns `runtimeHome` and `defaultProjectsRoot`. Read-only — it creates nothing. Unset, the default root is the user's Documents folder; where that does not exist (Docker, headless Linux) `validate-path` reports `parent-missing` for the suggestion, and `POST /api/projects` creates the root when the destination is inside it.
 
@@ -1012,9 +1013,14 @@ operator confirmed. The destination persists only a SHA-256 digest of each
 random peer token.
 
 - `POST /api/manager/peer/pair` — public pairing endpoint. Body
-  `{ password, name? }`; `201 { tokenId, token, transport, trustedLanOnly }`,
+  `{ password, name?, hostname?, runtimeId? }` — the last two what the pairing
+  manager says about itself, kept with the token (and the caller's address) for
+  the list of paired devices; a `runtimeId` outside `[A-Za-z0-9_-]{1,64}` is
+  dropped. `201 { tokenId, token, transport, trustedLanOnly }`,
   the plaintext token returned once. `403` when the caller is not on a private
   address, `422` on a wrong password, `429` on the device-admin login throttle.
+  Every bearer route below answers `401` for a token that is unknown, revoked,
+  issued under an earlier device-admin password, or unused for 90 days.
 - `GET /api/manager/peer/info` — public: `{ runtimeId, hostname }`, the same
   claims the mDNS record carries. `runtimeId` is persistent per runtime home.
   `403` when the caller is not on a private address.
@@ -1039,13 +1045,24 @@ random peer token.
   The folder must be one direct child of `defaultProjectsRoot`. `reject` is the
   default. `copy` requires a new ID. `replace` requires explicit confirmation,
   a stopped registered destination, and its exact target-root folder; it keeps
-  a sibling backup and rolls back on apply/manifest failure. No project starts
+  a sibling backup and rolls back on apply/manifest failure. A destination id
+  that differs from a registered one only in case is refused at the manifest
+  commit and rolled back, `409` "Destination project id or folder already
+  exists: … project ids ignore upper and lower case" (a pull ends in `error`
+  with the same message). No project starts
   unless requested, and unrelated processes/running entries are untouched.
+  The answer is the install result `{ transferId, sourceProjectId,
+  destinationProjectId, destinationFolder, replaced, startRequested, started,
+  startError }`. A `transferId` already claimed by another pairing is `409`.
 - `DELETE /api/manager/peer/transfers/{transferId}` — cancel an in-flight
   receive; `{ transferId, cancelRequested, tooLate? }`, `409` for a
   `recovery_required` receipt.
 - `GET /api/manager/peer/transfers/{transferId}/status` — read the durable
-  receiver claim/apply/receipt status with the same bearer token.
+  receiver claim/apply/receipt status. Both answer only the token whose
+  transfer it is (`404` for any other), and the status leaves out every
+  absolute path and on-disk identity of the destination (`targetPath`,
+  `containerPath`, `backupPath`, `*Identity`), cutting the projects root from
+  any message that quotes one.
 - `POST /api/manager/peer-probe` — session-authenticated; sends no password
   and no token. Body `{ host, port = 8000, scheme }` →
   `{ host, port, address, scheme, hostname, runtimeId, fingerprint, trust,
@@ -1082,7 +1099,9 @@ random peer token.
   the one remembered for `runtimeId`, and only over the certificate it was
   paired on. A peer that refuses or cannot be reached is `409` with an
   explanatory `detail` (the peer's own `detail` forwarded, or the classified
-  transport failure).
+  transport failure); a peer refusing the token itself (its `401`) is `409`
+  with `code: "peer_pairing_refused"`. A JSON reply from a peer over 4 MB is
+  refused with `409`.
 - `POST /api/manager/transfers` — starts an outgoing explicit-source transfer
   with HTTP 202. Body `{ sourceProjectId, destinationProjectId,
   destinationFolder, peerHost, peerPort = 8000, peerScheme, token?,
@@ -1092,8 +1111,9 @@ random peer token.
   without a confirmed pin is refused before any token is sent. `GET` / `DELETE
   /api/manager/transfers/{transferId}` polls or cancels it. The state object is
   `{ transferId, sourceProjectId, destinationProjectId, phase, failedPhase,
-  status, bytesDone, bytesTotal, message, result }`, with the failure text in
-  `message`. Same-ID/same-parameter retries are idempotent; different
+  code, status, bytesDone, bytesTotal, message, result }`, with the failure text
+  in `message` and `code` `"peer_pairing_refused"` when the peer refused the
+  token (otherwise `null`). Same-ID/same-parameter retries are idempotent; different
   parameters or archive bytes return 409. The sender retains the caller's
   stable ID, phase, byte progress, and archive fingerprint across restart but
   does not persist the bearer token. A failed transfer also reports
@@ -1109,7 +1129,9 @@ random peer token.
   folder, a project carrying any code (as for import) fails with "This project
   contains code: …" before anything is installed, unless it is `true`. It is consent, not a parameter, so it is
   left out of the retry fingerprint and a refused pull retries under the same
-  id. `GET` / `DELETE
+  id. The download stops, and its partial archive is deleted, once it passes
+  `NEXTHMI_MAX_PROJECT_ZIP_MB` (the receive limit; checked against
+  `Content-Length` first) or 11 minutes in all. `GET` / `DELETE
   /api/manager/pulls/{transferId}` polls or cancels it, with the same
   idempotent-retry and durable-across-restart behavior as `/transfers`.
 - `GET /api/manager/peers/discovered`, `POST /api/manager/peers/manual` (body
@@ -1126,9 +1148,17 @@ random peer token.
   `404`). `404` when nothing was pinned. The only recovery path after a peer renews its certificate, and an
   explicit operator action by design — dropping a pin discards the evidence that
   would otherwise expose an interception.
-- `GET /api/manager/peer-tokens` and
-  `DELETE /api/manager/peer-tokens/{tokenId}` — list non-secret metadata or
-  revoke a pairing. Device-admin password changes revoke all pairings.
+- `GET /api/manager/peer-tokens` → `{ tokens: [{ id, name, hostname, runtimeId,
+  address, createdAt, lastUsedAt, expiresAt }] }` and
+  `DELETE /api/manager/peer-tokens/{tokenId}` — list the pairings this device
+  issued (the dashboard's **Paired devices**; `hostname`/`runtimeId` are the
+  pairing request's claims, `null` when absent; `lastUsedAt` is `null` until
+  first use; `expiresAt` is 90 days after the last use, or after pairing) or
+  revoke one. Listing prunes the expired ones. Device-admin password changes
+  revoke all pairings.
+- `DELETE /api/manager/peer-pairings/{runtimeId}` → `{ runtimeId, forgotten }`
+  — drop the token this manager remembered for a device, keeping its pinned
+  certificate: what **Pair again** does after the device refused it.
 
 Project IDs are validated with the same canonical URL/filesystem-safe grammar
 at the manifest, metadata, transfer, and supervisor boundaries. Receiver

@@ -38,7 +38,7 @@ Sign in to the manager dashboard and open **Settings** — this is installation-
 | **Runtime home** | Where per-installation state lives — the manifest, logs, the widget-build cache, TLS material. See [Installing and running](install.md#runtime-home). |
 | **Logs** | Opens the **Application logs** viewer: the last 500 lines with the log file's path, a **Refresh**, and **Download full log** for the whole file. |
 | **Security** | Change the **device-admin password** that gates the dashboard itself. |
-| **Tokens** | The [MCP](mcp.md) and [API](api.md) tokens, each covering every project: name, kind, access level or scopes, and creation time. **Create token** makes a new one and shows it once; **Revoke** takes one back. |
+| **Tokens** | The [MCP](mcp.md) and [API](api.md) tokens, each covering every project: name, kind, access level or scopes, and creation time. **Create token** makes a new one and shows it once; **Revoke** takes one back. Below them, **Paired devices**: every device that can [send projects here and fetch them](projects.md#push--pull-between-devices) without the device-admin password — its name, runtime ID and address, when it paired and was last used, and when the pairing expires (90 days without use). **Revoke** cuts one off at once. |
 | **HTTPS** | Certificate status, regenerate or upload your own, and restart into TLS. Full walkthrough in [HTTPS](install.md#https). |
 
 ## The warnings pill

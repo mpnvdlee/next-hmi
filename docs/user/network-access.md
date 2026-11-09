@@ -90,7 +90,7 @@ The manager is the device's front door, at the address without
 | **Device-admin password** over HTTP Basic | [API v1](api.md) on every project, with every scope. |
 | **API token** | [API v1](api.md) on every project, limited to the scopes ticked when it was created. Created under **Settings › Tokens** on the dashboard. |
 | **MCP token** | The [MCP endpoint](mcp.md) on every project, to read, or to read and write (writes only where **MCP write enabled** is ticked). Created under **Settings › Tokens** on the dashboard. |
-| **Peer token** | Sending and fetching projects between two NEXT HMI devices, after one pairing with the other device's device-admin password. See [Managing projects](install.md#managing-projects). |
+| **Peer token** | Sending and fetching projects between two NEXT HMI devices, after one pairing with the other device's device-admin password. Expires after 90 days without use; listed and revoked under **Settings › Tokens**. See [Managing projects](install.md#managing-projects). |
 | **A project user's password** | Signing in on that project's screens. It changes what the screens show and who actions are recorded as. It never opens the editor or the API. See [Users, groups & permissions](users.md). |
 
 ## What protects the open part

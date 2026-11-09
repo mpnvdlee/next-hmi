@@ -4,6 +4,7 @@ import ModalShell from '@config/components/ui/ModalShell';
 import Select from '@config/components/ui/Select';
 import {
   describeError,
+  PEER_PAIRING_REFUSED,
   type DiscoveredPeer,
   type PeerProbe,
   type PeerProject,
@@ -11,6 +12,7 @@ import {
   type PeerTransferStatus,
   useProjectsStore,
 } from '@config/store/projectsStore';
+import { isApiError } from '@shared/utils/api';
 import { basename } from '@shared/utils/paths';
 import { randomUuid } from '@shared/utils/id';
 import { explainFailure, phaseLabel } from './peerTransferMessages';
@@ -63,8 +65,6 @@ const RESOLUTIONS: ReadonlyArray<{ value: CollisionPolicy; label: string }> = [
   { value: 'replace', label: 'Replace the existing project' },
 ];
 
-const STEPS = ['Verify device', 'Sign in', 'Send'] as const;
-
 /** A SHA-256 hex digest as two lines of four-character groups, easy to compare by eye. */
 function fingerprintLines(fingerprint: string): [string, string] {
   const group = (half: string) => half.match(/.{1,4}/g)?.join(' ') ?? half;
@@ -92,11 +92,14 @@ export default function PeerTransferModal({
   const cancelPeerPull = useProjectsStore((state) => state.cancelPeerPull);
   const loadPeers = useProjectsStore((state) => state.loadPeers);
   const forgetPeerCertificate = useProjectsStore((state) => state.forgetPeerCertificate);
+  const forgetPeerPairing = useProjectsStore((state) => state.forgetPeerPairing);
   const localProjects = useProjectsStore((state) => state.projects);
 
   const [host, setHost] = useState('');
-  const [port, setPort] = useState(8000);
-  const [scheme, setScheme] = useState<PeerScheme>('http');
+  // Pairing needs HTTPS, and a device serving it listens on 8443 unless changed.
+  // A discovered peer brings its own protocol and port.
+  const [port, setPort] = useState(8443);
+  const [scheme, setScheme] = useState<PeerScheme>('https');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState('');
   // Nothing is sent to a peer before its certificate is on screen: the probe
@@ -105,8 +108,12 @@ export default function PeerTransferModal({
   const [confirmed, setConfirmed] = useState(false);
   const [mismatchReported, setMismatchReported] = useState(false);
   const [insecureAccepted, setInsecureAccepted] = useState(false);
-  const [remember, setRemember] = useState(true);
+  // Opt-in: a remembered key signs in to the other device without its password.
+  const [remember, setRemember] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
+  // The device refused the remembered key when signing in with it; a transfer
+  // refused the same way says so on its own status.
+  const [keyRefused, setKeyRefused] = useState(false);
   const [trustWidgets, setTrustWidgets] = useState(false);
   const [remoteProjects, setRemoteProjects] = useState<PeerProject[]>([]);
   const [peerSuggestions, setPeerSuggestions] = useState<DiscoveredPeer[]>([]);
@@ -269,14 +276,22 @@ export default function PeerTransferModal({
 
   const paired = signedIn;
   const deviceName = probe?.hostname ?? host.trim();
-  // Over HTTPS: a certificate confirmed now or earlier. Over HTTP: only the
-  // operator's explicit word that this network is closed.
+  // The operator's explicit word that this network is closed: pairing goes on
+  // over plain HTTP, with nothing verified.
+  const insecure = probe?.scheme === 'http' && probe.trust === 'none' && insecureAccepted;
+  // Over HTTPS: a certificate confirmed now or earlier. Over HTTP: the override.
   const verified =
     !!probe &&
     (probe.scheme === 'https'
       ? probe.trust === 'pinned' || (probe.trust === 'new' && confirmed)
-      : probe.trust === 'none' && insecureAccepted);
+      : insecure);
   const stepIndex = paired ? 2 : verified ? 1 : 0;
+  const steps = [
+    insecure ? 'Not verified (HTTP)' : 'Verify device',
+    'Sign in',
+    isPull ? 'Fetch' : 'Send',
+  ];
+  const pairingRefused = keyRefused || transfer?.code === PEER_PAIRING_REFUSED;
   // A pin mismatch mid-transfer surfaces on the transfer's own `message`
   // (set by the poller from a 200 response), not on `error` (set only when
   // the request that fetches status itself fails) — check both so the
@@ -299,7 +314,8 @@ export default function PeerTransferModal({
 
   const collisionRefused = refusedFolder !== null;
   const showResolution = clash.kind !== 'none' || policy !== 'reject' || collisionRefused;
-  const failure = failureText ? explainFailure(failureText, showResolution) : null;
+  const failure =
+    failureText && !pairingRefused ? explainFailure(failureText, showResolution) : null;
   // A source archive that no longer matches the first attempt can never
   // succeed under the same id, however many times the retry is pressed.
   const mustRestart = !!failureText?.includes('use a new id');
@@ -310,6 +326,7 @@ export default function PeerTransferModal({
     setConfirmed(false);
     setInsecureAccepted(false);
     setMismatchReported(false);
+    setKeyRefused(false);
   }
 
   // Picking a discovered/manual peer carries its port and protocol with it —
@@ -340,9 +357,10 @@ export default function PeerTransferModal({
           );
           setSignedIn(true);
         } catch (reason) {
-          // The remembered key can be revoked (its password changed there):
-          // fall back to signing in with the password.
-          setError(describeError(reason));
+          // Revoked there, or expired unused: offered to pair again. Any
+          // other failure leaves the password to sign in with.
+          if (isApiError(reason) && reason.code === PEER_PAIRING_REFUSED) setKeyRefused(true);
+          else setError(describeError(reason));
         }
       }
     } catch (reason) {
@@ -416,6 +434,28 @@ export default function PeerTransferModal({
     }
   }
 
+  async function pairAgain() {
+    setBusy(true);
+    setError(null);
+    try {
+      // The key this manager kept for the device is dead; without it the next
+      // contact asks for the password instead of trying it again.
+      if (probe?.runtimeId) await forgetPeerPairing(probe.runtimeId);
+      setKeyRefused(false);
+      setTransfer(null);
+      setSignedIn(false);
+      setToken('');
+      // The other device files a transfer under the pairing that sent it, so
+      // the new pairing starts a transfer of its own.
+      setTransferId(`${isPull ? 'pull' : 'tx'}-${randomUuid()}`);
+      setStartedParams(null);
+    } catch (reason) {
+      setError(describeError(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function editDestinationFolder(next: string) {
     setDestinationFolder(next);
     // A fresh name starts clean: the refusal that forced the choices open was
@@ -480,7 +520,8 @@ export default function PeerTransferModal({
   const transferActive = transfer?.status === 'active';
   // A failed or cancelled transfer hands the form back so the resolution can
   // be amended in place; only a completed one is done with it.
-  const showForm = paired && !transferActive && transfer?.status !== 'complete';
+  const showForm =
+    paired && !pairingRefused && !transferActive && transfer?.status !== 'complete';
 
   // Replacement installs into the existing project's own folder, and that
   // folder has to be one in the target's projects root — a project registered
@@ -572,6 +613,19 @@ export default function PeerTransferModal({
       : label;
   })();
 
+  const insecureToggle = (
+    <label className="project-form__toggle">
+      <input
+        type="checkbox"
+        checked={insecureAccepted}
+        onChange={(event) => setInsecureAccepted(event.target.checked)}
+      />
+      <span>
+        I understand the password is sent unencrypted, and this network is closed to other devices.
+      </span>
+    </label>
+  );
+
   const folderField = (
     <label className="project-form__field">
       <span className="project-form__label">
@@ -587,20 +641,22 @@ export default function PeerTransferModal({
   );
 
   return (
-    <ModalShell onClose={onClose} dialogClassName="name-modal cfg-flex-col">
+    <ModalShell onClose={onClose} dialogClassName="name-modal peer-transfer-modal cfg-flex-col">
       <div className="name-modal__title">
         {isPull ? 'Pull a project from a peer' : `Transfer "${source?.name}" to a peer`}
       </div>
       <ol className="project-form__steps">
-        {STEPS.map((label, index) => (
+        {steps.map((label, index) => (
           <li
-            key={label}
+            key={index}
             className={`project-form__step${
               index === stepIndex
                 ? ' project-form__step--active'
-                : index < stepIndex
-                  ? ' project-form__step--done'
-                  : ''
+                : index === 0 && insecure
+                  ? ' project-form__step--skipped'
+                  : index < stepIndex
+                    ? ' project-form__step--done'
+                    : ''
             }`}
             aria-current={index === stepIndex ? 'step' : undefined}
           >
@@ -717,7 +773,7 @@ export default function PeerTransferModal({
         </div>
       )}
 
-      {!paired && probe?.scheme === 'http' && probe.trust === 'none' && (
+      {!paired && probe?.scheme === 'http' && probe.trust === 'none' && !insecureAccepted && (
         <div className="project-form__failure">
           <p className="project-form__status project-form__status--error">
             Pairing needs HTTPS on the other device
@@ -729,28 +785,24 @@ export default function PeerTransferModal({
           </ol>
           <details className="project-form__disclosure">
             <summary>Isolated network without HTTPS?</summary>
-            <label className="project-form__toggle">
-              <input
-                type="checkbox"
-                checked={insecureAccepted}
-                onChange={(event) => setInsecureAccepted(event.target.checked)}
-              />
-              <span>
-                I understand the password is sent unencrypted, and this network is closed to other
-                devices.
-              </span>
-            </label>
+            {insecureToggle}
           </details>
+        </div>
+      )}
+      {!paired && insecure && (
+        <div className="project-form__field">
+          <p className="project-form__status">
+            Unencrypted connection: the certificate cannot be verified.
+          </p>
+          {insecureToggle}
         </div>
       )}
 
       {verified && probe?.scheme === 'https' && (
-        <p className="project-form__status project-form__status--ok">
-          {`${deviceName} verified · certificate pinned`}
-        </p>
+        <p className="project-form__status project-form__status--ok">{`${deviceName} verified`}</p>
       )}
 
-      {verified && !paired && (
+      {verified && !paired && !pairingRefused && (
         <>
           <label className="project-form__field">
             <span className="project-form__label">
@@ -817,6 +869,21 @@ export default function PeerTransferModal({
         </div>
       )}
 
+      {pairingRefused && (
+        <div className="project-form__failure" role="alert">
+          <p className="project-form__status project-form__status--error">
+            {`${deviceName} no longer accepts this device`}
+          </p>
+          <p className="project-form__hint">
+            {`The pairing was revoked or has expired. Pair again with the device-admin password of ${deviceName} to send or fetch projects.`}
+          </p>
+          <div className="project-form__actions">
+            <Button variant="primary" disabled={busy} onClick={() => void pairAgain()}>
+              Pair again
+            </Button>
+          </div>
+        </div>
+      )}
       {failure && (
         <div className="project-form__failure">
           <p className="project-form__status project-form__status--error">{failure.cause}</p>

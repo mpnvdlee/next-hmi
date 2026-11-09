@@ -59,3 +59,26 @@ export async function revokeToken(tokenId: string) {
     method: 'DELETE',
   });
 }
+
+/** One row of `GET /api/manager/peer-tokens`: a device paired with this one for project transfer. */
+export interface PairedDevice {
+  id: string;
+  /** What the device said about itself when it paired; `null` when it said nothing. */
+  hostname: string | null;
+  runtimeId: string | null;
+  /** The address the pairing request came from. */
+  address: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+  /** 90 days after the last use, or after pairing when it was never used. */
+  expiresAt: string;
+}
+
+export const listPairedDevices = async () =>
+  (await managerApiJson<{ tokens: PairedDevice[] }>('/api/manager/peer-tokens')).tokens;
+
+export async function revokePairedDevice(id: string) {
+  await managerApiJson(`/api/manager/peer-tokens/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}

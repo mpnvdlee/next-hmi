@@ -274,15 +274,21 @@ def allow_loopback_peers(monkeypatch):
     monkeypatch.setenv("NEXTHMI_ALLOW_LOOPBACK_PEERS", "1")
 
 
+_refuse_own_identity = manager_peers_api._refuse_own_identity
+
+
 @pytest.fixture
-def tls_peer(tmp_path: Path, allow_loopback_peers):
+def tls_peer(tmp_path: Path, allow_loopback_peers, monkeypatch):
     """A manager app served over TLS on loopback, plus one local project to send.
 
     Sender and receiver are the same process and share one runtime home, so a
     transfer lands beside its own source — enough to drive the real HTTPS
-    upload path end to end.
+    upload path end to end. They share one runtimeId too, which would otherwise
+    read as a cloned runtime home.
     """
     import uvicorn
+
+    monkeypatch.setattr(manager_peers_api, "_refuse_own_identity", lambda runtime_id: None)
     from api.manager_auth_api import router as auth_router
     from api.manager_peers_api import manager_router, public_router
     from core import manager_auth
@@ -502,6 +508,73 @@ def test_the_same_device_at_a_new_address_keeps_its_pin(tls_peer, monkeypatch) -
     assert (moved.fingerprint, moved.runtimeId) == (fingerprint, "rid-moved")
 
 
+def test_a_pin_made_before_confirmation_existed_is_confirmed_once(
+    tls_peer, password_checks, monkeypatch
+) -> None:
+    """Earlier releases pinned silently on first contact and wrote no runtimeId."""
+    import json
+
+    from core.peer_discovery import peer_discovery
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(peer_discovery, "_runtime_id", "rid-legacy")
+    app, port, _ = tls_peer
+    pem, fingerprint = peer_trust.fetch_certificate("127.0.0.1", port)
+    peer_trust._trust_path().write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "pins": {
+                    f"127.0.0.1:{port}": {
+                        "fingerprint": fingerprint,
+                        "pem": pem,
+                        "pinnedAt": "2026-01-01T00:00:00Z",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert peer_trust.load_pin("127.0.0.1", port).confirmed is False
+
+    with TestClient(app) as client:
+        first = _probe(client, port)
+        assert (first["trust"], first["fingerprint"]) == ("new", fingerprint)
+        assert password_checks == []
+        paired = _pair(client, port, first["fingerprint"])
+        assert paired.status_code == 200, paired.text
+        again = _probe(client, port)
+
+    confirmed = peer_trust.load_pin("127.0.0.1", port)
+    assert (confirmed.runtimeId, confirmed.confirmed) == ("rid-legacy", True)
+    assert again["trust"] == "pinned"
+
+
+def test_a_peer_with_this_devices_own_identity_is_named_as_a_clone(
+    tls_peer, password_checks, monkeypatch
+) -> None:
+    """Sender and receiver share a runtime home here, as a cloned VM's two copies do."""
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(manager_peers_api, "_refuse_own_identity", _refuse_own_identity)
+    app, port, _ = tls_peer
+    with TestClient(app) as client:
+        probed = client.post(
+            "/api/manager/peer-probe",
+            json={"host": "127.0.0.1", "port": port, "scheme": "https"},
+        )
+        _, fingerprint = peer_trust.fetch_certificate("127.0.0.1", port)
+        paired = _pair(client, port, fingerprint)
+
+    for response in (probed, paired):
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"].startswith(
+            "This device has the same identity as the one you are pairing with."
+        )
+    assert password_checks == []
+    assert peer_trust.list_pins() == []
+
+
 def test_a_remembered_device_needs_no_password_next_time(
     tls_peer, password_checks, monkeypatch
 ) -> None:
@@ -530,6 +603,39 @@ def test_a_remembered_device_needs_no_password_next_time(
     if os.name == "posix":
         assert stat.S_IMODE(peer_tokens.pairings_path().stat().st_mode) == 0o600
     assert peer_tokens.pairings_path().parent == peer_trust._trust_path().parent
+
+
+def test_a_revoked_remembered_pairing_is_refused_with_its_own_code(
+    tls_peer, monkeypatch
+) -> None:
+    """The other device revoked it: told apart from any other failure, and
+    forgetting it leaves the certificate pin in place."""
+    from api.manager_peers_api import PEER_PAIRING_REFUSED
+    from core import peer_tokens
+    from core.peer_discovery import peer_discovery
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(peer_discovery, "_runtime_id", "rid-revoked")
+    app, port, _ = tls_peer
+    with TestClient(app) as client:
+        paired = _pair(client, port, _probe(client, port)["fingerprint"], remember=True)
+        assert paired.status_code == 200, paired.text
+        # Revoked from the other device's dashboard; sender and receiver share
+        # this process.
+        assert peer_tokens.revoke(paired.json()["tokenId"])
+
+        listed = client.post(
+            "/api/manager/peer-projects",
+            json={"host": "127.0.0.1", "port": port, "scheme": "https", "runtimeId": "rid-revoked"},
+        )
+        assert listed.status_code == 409, listed.text
+        assert listed.json()["code"] == PEER_PAIRING_REFUSED
+
+        forgotten = client.delete("/api/manager/peer-pairings/rid-revoked")
+        assert forgotten.json()["forgotten"] is True
+        again = _probe(client, port)
+
+    assert (again["trust"], again["remembered"]) == ("pinned", False)
 
 
 def test_pairing_without_remember_keeps_no_pairing_key(tls_peer, monkeypatch) -> None:

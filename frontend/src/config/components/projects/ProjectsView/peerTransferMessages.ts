@@ -138,7 +138,8 @@ export function explainFailure(text: string, canResolve: boolean): FailureExplan
   }
   if (text.includes('project id or folder already exists')) {
     return {
-      cause: 'A project or folder of that name already exists on the target.',
+      cause:
+        'A project or folder of that name already exists on the target. Project ids ignore upper and lower case.',
       action: canResolve
         ? 'Choose a different destination folder, or pick a resolution below.'
         : 'Choose a different destination folder.',

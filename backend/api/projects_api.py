@@ -23,6 +23,7 @@ from core.manifest import (
     default_projects_root,
     ensure_project_metadata,
     find_project,
+    find_project_ignoring_case,
     load_manifest,
     manifest_transaction,
     project_mcp_enabled,
@@ -32,6 +33,7 @@ from core.manifest import (
     save_manifest,
     set_project_mcp_enabled,
     set_project_metadata_name,
+    unique_slug,
     validate_project_id,
     write_project_metadata,
 )
@@ -69,6 +71,11 @@ _TEMPLATE_DIRNAMES: dict[str, str] = {
 # libraries, import-map overrides) but was sent without ``trustCustomWidgets``;
 # the import dialog keys its confirmation step on it.
 CUSTOM_WIDGETS_UNCONFIRMED = "custom_widgets_unconfirmed"
+
+# The 409 ``code`` of an import whose project id differs from a registered one
+# only in upper and lower case; its ``suggestedId`` is free to send back as
+# ``projectId``.
+PROJECT_ID_CASE_CONFLICT = "project_id_case_conflict"
 
 
 # ── request / response models ────────────────────────────────────────────────
@@ -216,6 +223,13 @@ def _validate_destination(target: Path, *, must_be_empty: bool) -> None:
         raise ValidationError(f"Parent directory does not exist: {parent}")
     if not os.access(parent, os.W_OK):
         raise ValidationError(f"Parent directory is not writable: {parent}")
+
+
+def _case_variant_message(existing: ProjectEntry) -> str:
+    return (
+        f"The project '{existing.id}' already exists. Project ids ignore upper and "
+        "lower case, because on Windows and macOS they share one folder."
+    )
 
 
 def _require_entry(manifest: ManifestV1, project_id: str) -> ProjectEntry:
@@ -448,9 +462,12 @@ def _register_imported_project(
     """Register an unpacked project and synchronize its embedded display name."""
     display_name = (requested_name or metadata.name or target.name).strip() or target.name
     with manifest_transaction() as manifest:
-        if find_project(manifest, metadata.id) is not None:
+        existing = find_project_ignoring_case(manifest, metadata.id)
+        if existing is not None:
             shutil.rmtree(target, ignore_errors=True)
-            raise ConflictError(duplicate_message)
+            raise ConflictError(
+                duplicate_message if existing.id == metadata.id else _case_variant_message(existing)
+            )
         entry = ProjectEntry(
             id=metadata.id,
             name=display_name,
@@ -748,10 +765,13 @@ def register_existing_project(body: RegisterProjectBody) -> dict[str, Any]:
 
     display_name = (body.name or "").strip() or metadata.name or target.name
     with manifest_transaction() as manifest:
-        if find_project(manifest, metadata.id) is not None:
+        existing = find_project_ignoring_case(manifest, metadata.id)
+        if existing is not None and existing.id == metadata.id:
             raise ConflictError(
                 f"Project at {target} is already registered (id {metadata.id}).",
             )
+        if existing is not None:
+            raise ConflictError(_case_variant_message(existing))
 
         entry = ProjectEntry(
             id=metadata.id,
@@ -887,15 +907,24 @@ async def import_project(
     destinationPath: str = Form(...),
     name: str | None = Form(default=None),
     trustCustomWidgets: bool = Form(default=False),
+    projectId: str | None = Form(default=None),
 ) -> Any:
     """Unpack an uploaded zip into ``destinationPath`` and register it.
 
     The new project is NOT made the default. If the archive's project id
-    already matches an existing manifest entry, returns 409. An archive that
-    carries code — custom widgets, external libraries or import-map overrides,
-    see ``widget_compiler.project_code`` — is refused with a 409 naming it
-    unless ``trustCustomWidgets`` is set: every viewer's browser runs it.
+    already matches an existing manifest entry, returns 409; one that differs
+    from it only in case is a 409 ``PROJECT_ID_CASE_CONFLICT`` carrying a free
+    ``suggestedId``, which ``projectId`` registers the archive under instead.
+    An archive that carries code — custom widgets, external libraries or
+    import-map overrides, see ``widget_compiler.project_code`` — is refused
+    with a 409 naming it unless ``trustCustomWidgets`` is set: every viewer's
+    browser runs it.
     """
+    if projectId is not None:
+        try:
+            validate_project_id(projectId)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
     target = _prepare_import_destination(destinationPath)
 
     try:
@@ -908,6 +937,9 @@ async def import_project(
             raise ValidationError(str(exc)) from exc
         except zipfile.BadZipFile as exc:
             raise ValidationError(f"Uploaded file is not a valid zip: {exc}") from exc
+        if projectId is not None and projectId != metadata.id:
+            metadata = metadata.model_copy(update={"id": projectId})
+            write_project_metadata(target, metadata)
         duplicate_message = (
             f"A project with id {metadata.id} is already registered. "
             "Remove it first or import a different archive."
@@ -915,8 +947,22 @@ async def import_project(
         # Asked before the trust question: confirming trust in an archive that
         # can never be imported here would only lead to this refusal anyway.
         # Registering checks again under the manifest lock.
-        if find_project(load_manifest(), metadata.id) is not None:
+        manifest = load_manifest()
+        existing = find_project_ignoring_case(manifest, metadata.id)
+        if existing is not None and existing.id == metadata.id:
             raise ConflictError(duplicate_message)
+        if existing is not None:
+            shutil.rmtree(target, ignore_errors=True)
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": _case_variant_message(existing),
+                    "code": PROJECT_ID_CASE_CONFLICT,
+                    "suggestedId": unique_slug(
+                        metadata.id, (entry.id for entry in manifest.projects)
+                    ),
+                },
+            )
         # Read from what landed on disk, with the compiler's own discovery, so
         # the list is exactly what would run whatever the member names said.
         code = widget_compiler.project_code(target)

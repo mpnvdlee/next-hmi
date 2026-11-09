@@ -179,21 +179,24 @@ const failures: FailureCase[] = [
     name: 'a collision, pointing at the resolutions that are on screen',
     text: 'Destination project id or folder already exists',
     canResolve: true,
-    cause: 'A project or folder of that name already exists on the target.',
+    cause:
+      'A project or folder of that name already exists on the target. Project ids ignore upper and lower case.',
     action: 'Choose a different destination folder, or pick a resolution below.',
   },
   {
     name: 'a collision with no resolutions rendered to point at',
     text: 'Destination project id or folder already exists',
     canResolve: false,
-    cause: 'A project or folder of that name already exists on the target.',
+    cause:
+      'A project or folder of that name already exists on the target. Project ids ignore upper and lower case.',
     action: 'Choose a different destination folder.',
   },
   {
     name: 'a collision on the copy destination',
     text: 'Copy destination project id or folder already exists',
     canResolve: false,
-    cause: 'A project or folder of that name already exists on the target.',
+    cause:
+      'A project or folder of that name already exists on the target. Project ids ignore upper and lower case.',
     action: 'Choose a different destination folder.',
   },
   {

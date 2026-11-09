@@ -33,17 +33,38 @@ advertises itself and never accepts a peer connection — see
   existing device-admin password (`POST /api/manager/peer/pair`). The destination returns a
   random bearer token and persists only its SHA-256 digest; the plaintext
   token lives in the transfer modal's component state (never web storage) —
-  or, when the operator keeps **Remember this device** (the default), on the
+  or, when the operator ticks **Remember this device** (off by default), on the
   initiating manager in `<runtime_home>/.peer-pairings.json` (`0600`, written
   through `write_text_atomic`), keyed by the peer's runtimeId and bound to the
   certificate it was paired over. A remembered token is only sent over a
   handshake anchored on that certificate (`peer_tokens.remembered`), so the
   next transfer to the device needs no password. Plain-HTTP pairings are never
-  remembered.
-- **Tokens** are individually revocable (`DELETE /api/manager/peer-tokens/{tokenId}`;
-  the dashboard has no control for it) and are all revoked automatically when
-  the device-admin password changes (`authGeneration` pinning in
-  `core/peer_tokens.py`).
+  remembered. Forgetting a device's pins (`DELETE /api/manager/peers/trust`)
+  also drops the token remembered for its runtimeId — the pin's, and the one
+  the request names.
+- **Tokens** expire after 90 days without use: a peer request with an expired
+  one is refused and the token pruned. Use is recorded in memory on every
+  request and written to `.peer-tokens.json` at most once an hour per token.
+  The pairing request carries the requesting device's own hostname and
+  runtimeId (claims, shown and trusted for nothing) and the destination records
+  the address it came from; **Settings › Tokens** lists every pairing under
+  **Paired devices** (device, paired, last used, expires — the warning colour
+  within 14 days) with **Revoke**
+  (`GET`/`DELETE /api/manager/peer-tokens`, device-admin session only). All of
+  them are revoked when the device-admin password changes (`authGeneration`
+  pinning in `core/peer_tokens.py`). A device whose token is refused — revoked,
+  expired, or from an earlier password — is told so with
+  `code: "peer_pairing_refused"`; the modal then shows "*host* no longer
+  accepts this device" and **Pair again**, which drops the key remembered for
+  it (`DELETE /api/manager/peer-pairings/{runtimeId}`, the pin stays) and
+  returns to Sign in.
+- **A transfer belongs to its pairing.** The destination's receipt records the
+  token that created it; its status, its cancel and a retry under its
+  `transferId` answer that token only (another one gets `404`, or `409` for a
+  retry). What a peer token reads carries no absolute path of the destination:
+  `targetPath`, `containerPath`, `backupPath` and the on-disk identities stay in
+  the receipt for the device-admin, and the projects root is cut from any
+  message that quotes a path.
 - **Transport** is HTTPS for pairing. A plain-HTTP peer is refused ("Pairing
   needs HTTPS on the other device") unless the request carries
   `allowInsecureHttp`, which the modal sends only after the operator ticks the
@@ -67,6 +88,20 @@ advertises itself and never accepts a peer connection — see
   `changed`. A renewed peer certificate breaks transfers until its pins are
   dropped (`DELETE /api/manager/peers/trust`, which drops every pin of the same
   runtimeId) and the new certificate confirmed, by design.
+- **Pins from before confirmation** — earlier releases pinned silently on
+  first contact and wrote no `runtimeId` key. Such a pin (`Pin.confirmed` is
+  false) still anchors the connection and still makes a different certificate
+  read as `changed`, but it never counts as confirmed: the probe reports
+  `trust: "new"` with the fingerprint to compare, and the pairing that follows
+  re-saves it with the runtimeId. A pin saved by this release always carries
+  the key, `null` for a peer too old to report one.
+- **A cloned identity** — a runtime home copied to another machine carries
+  `.peer-identity.json`, so two devices share a runtimeId: discovery hides
+  them from each other and a pin between them would read as changed. A probe
+  or pairing whose peer answers with this manager's own runtimeId is refused
+  with a `409` "This device has the same identity as the one you are pairing
+  with. Delete .peer-identity.json in one of their runtime homes and restart
+  it." instead.
 - **Pulled code** — a project's custom widgets, the `.js`/`.mjs` files of its
   `external-libraries/` and the keys of its `external-modules.json` are code
   the puller serves to every browser that opens the project
@@ -90,6 +125,13 @@ advertises itself and never accepts a peer connection — see
   address — so a runtime pinned to loopback
   advertises loopback and is rejected here by name, rather than luring peers
   to an address it never bound.
+- **What a peer sends back is bounded.** Every JSON reply is read through a
+  4 MB cap and refused above it (an error body is cut to 64 KB); a pull stops
+  as soon as the archive passes `max_zip_bytes()` (`NEXTHMI_MAX_PROJECT_ZIP_MB`,
+  the limit a push receiver applies) — at once when `Content-Length` says so —
+  and when the whole download outlasts 11 minutes, and the partial archive is
+  deleted either way. mDNS announcements are bounded too: see
+  [backend.md](../architecture/backend.md#main-modules).
 - The only unauthenticated peer surface is `GET /api/manager/peer/info`,
   which repeats what the mDNS record already advertises (runtimeId and
   hostname), and `POST /api/manager/peer/pair`, which takes the device-admin
@@ -113,14 +155,20 @@ From the editor's top bar:
 All three open `PeerTransferModal` (`frontend/src/config/components/projects/ProjectsView/PeerTransferModal.tsx`),
 which:
 
-1. Takes a peer host, protocol and port (autocompleted from mDNS discovery +
-   manually-added peers) and pairs in three steps, **Verify device → Sign
-   in → Send**: the probe's device card and fingerprint with "It doesn’t
-   match" / "It matches, continue"; then "<host> verified · certificate
-   pinned", the password and "Remember this device". A pinned, remembered
-   device goes straight to Send. A changed certificate stops at step 1 with
-   "Forget pinned certificate and verify again"; a plain-HTTP peer shows how to
-   turn HTTPS on, and the override behind "Isolated network without HTTPS?".
+1. Takes a peer host, protocol and port (HTTPS on 8443 to start with;
+   autocompleted from mDNS discovery + manually-added peers, which bring their
+   own) and pairs in three steps, **Verify device → Sign in → Send** (**Fetch**
+   for a pull), in a dialog of one fixed width: the probe's device card and
+   fingerprint (four-character groups on two lines) with "It doesn’t match" /
+   "It matches, continue"; then "<host> verified", the password and "Remember
+   this device" (unticked). The pin is saved at Sign in. A pinned, remembered
+   device goes straight to the last step, unless it refuses the remembered key
+   (see **Tokens** above). A changed certificate stops at step 1
+   with "Forget pinned certificate and verify again"; a plain-HTTP peer shows
+   how to turn HTTPS on, and the override behind "Isolated network without
+   HTTPS?" — once ticked, the refusal gives way to "Unencrypted connection: the
+   certificate cannot be verified." and step 1 reads "Not verified (HTTP)"
+   rather than done.
 2. For pull, lists the peer's registered projects to pick a source from, and
    asks the operator to trust the source of any project with code, naming it
    (see the trust model above).
@@ -162,7 +210,11 @@ as the missing evidence, treats that folder as occupied, and opens the same
 resolutions.
 
 - **`reject`** (default) — fails if the destination project id or folder
-  already exists.
+  already exists. Ids are compared ignoring case when the manifest commit
+  registers the install (`core.manifest.save_manifest`): `LINE3` beside a
+  registered `line3` is refused and rolled back, with the same "project id or
+  folder already exists" wording, since on Windows and macOS the two share
+  their folders under the runtime home.
 - **`copy`** — installs under a caller-supplied new project id; requires a
   free id and folder. An id-only clash therefore needs nothing else; a folder
   clash needs a different folder, which the modal pre-fills with the first

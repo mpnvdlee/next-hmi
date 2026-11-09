@@ -1102,6 +1102,120 @@ def test_import_reports_an_id_clash_before_asking_for_trust(
     assert not (tmp_path / "second").exists()
 
 
+# ── project ids that differ only in case ─────────────────────────────────────
+# On Windows and macOS `line3` and `LINE3` share `.widget-build/<id>`,
+# `.logs/instances/<id>` and `.thumbnails/<id>.png` under the runtime home.
+
+
+def _register_ids(home: Path, tmp_path: Path, *project_ids: str) -> None:
+    manifest = manifest_mod.ManifestV1(
+        projects=[
+            manifest_mod.ProjectEntry(
+                id=project_id, name=project_id, path=str(tmp_path / project_id),
+                addedAt="2026-05-24T10:00:00Z",
+            )
+            for project_id in project_ids
+        ],
+    )
+    manifest_mod.save_manifest(manifest, home / "projects.json")
+
+
+def _archive_with_id(tmp_path: Path, project_id: str) -> bytes:
+    source = tmp_path / f"archive-{project_id}"
+    source.mkdir()
+    (source / "users.json").write_text('{"users":[]}')
+    manifest_mod.write_project_metadata(
+        source, manifest_mod.ProjectMetadata(id=project_id, name="Line 3"),
+    )
+    return _build_zip(source)
+
+
+def _import(client: TestClient, payload: bytes, destination: Path, **data: str):
+    return client.post(
+        "/api/projects/import",
+        files={"file": ("line3.zip", payload, "application/zip")},
+        data={"destinationPath": str(destination), **data},
+    )
+
+
+def test_import_refuses_a_case_variant_and_suggests_a_free_id(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    _register_ids(home, tmp_path, "line3", "Line3-2")
+    destination = tmp_path / "imported"
+
+    resp = _import(client, _archive_with_id(tmp_path, "LINE3"), destination)
+
+    assert resp.status_code == 409, resp.text
+    body = resp.json()
+    assert body["code"] == "project_id_case_conflict"
+    assert body["detail"] == (
+        "The project 'line3' already exists. Project ids ignore upper and lower case, "
+        "because on Windows and macOS they share one folder."
+    )
+    assert body["suggestedId"] == "LINE3-3"
+    assert not destination.exists()
+    assert [p.id for p in manifest_mod.load_manifest(home / "projects.json").projects] == [
+        "line3", "Line3-2",
+    ]
+
+
+def test_import_registers_the_archive_under_the_suggested_id(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    _register_ids(home, tmp_path, "line3")
+    destination = tmp_path / "imported"
+
+    resp = _import(client, _archive_with_id(tmp_path, "LINE3"), destination, projectId="LINE3-2")
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["id"] == "LINE3-2"
+    metadata = manifest_mod.read_project_metadata(destination)
+    assert metadata is not None
+    assert metadata.id == "LINE3-2"
+    assert [p.id for p in manifest_mod.load_manifest(home / "projects.json").projects] == [
+        "line3", "LINE3-2",
+    ]
+
+
+def test_import_refuses_an_invalid_project_id(client: TestClient, tmp_path: Path) -> None:
+    destination = tmp_path / "imported"
+
+    resp = _import(client, _archive_with_id(tmp_path, "line3"), destination, projectId="../x")
+
+    assert resp.status_code == 422, resp.text
+    assert not destination.exists()
+
+
+def test_create_gives_a_case_variant_name_a_free_id(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    _register_ids(home, tmp_path, "line3")
+
+    resp = client.post("/api/projects", json={"name": "LINE3", "path": str(tmp_path / "new")})
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["id"] == "LINE3-2"
+
+
+def test_register_refuses_a_case_variant(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    _register_ids(home, tmp_path, "line3")
+    folder = tmp_path / "copied"
+    folder.mkdir()
+    manifest_mod.write_project_metadata(folder, manifest_mod.ProjectMetadata(id="LINE3"))
+
+    resp = client.post("/api/projects/register", json={"path": str(folder)})
+
+    assert resp.status_code == 409, resp.text
+    assert "The project 'line3' already exists" in resp.json()["detail"]
+    assert "ignore upper and lower case" in resp.json()["detail"]
+    assert [p.id for p in manifest_mod.load_manifest(home / "projects.json").projects] == [
+        "line3",
+    ]
+
+
 def test_import_of_external_code_needs_trust_confirmation(
     client: TestClient, tmp_path: Path, home: Path,
 ) -> None:

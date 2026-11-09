@@ -1,5 +1,6 @@
 import {
   ProjectCodeUnconfirmedError,
+  ProjectIdCaseConflictError,
   useProjectsStore,
   describeError,
   type ProjectEntry,
@@ -261,6 +262,14 @@ describe('peer discovery', () => {
     expect(calls[0].url).toBe('/api/manager/peers/trust?host=10.0.0.4&port=8443&runtimeId=rid-1');
   });
 
+  it('forgetPeerPairing drops only the pairing key kept for the device', async () => {
+    const calls = stubFetch({});
+
+    await useProjectsStore.getState().forgetPeerPairing('rid-1');
+
+    expect(calls).toEqual([{ url: '/api/manager/peer-pairings/rid-1', method: 'DELETE' }]);
+  });
+
   it('probePeer sends the address only, never a password', async () => {
     const calls = stubFetchWithBodies();
 
@@ -402,6 +411,34 @@ describe('importProject', () => {
     await useProjectsStore.getState().importProject(zip, '/projects/plant', true);
 
     expect(forms[0].get('trustCustomWidgets')).toBe('true');
+  });
+
+  it('carries the free id the server suggests for a case variant', async () => {
+    stubImport(409, {
+      detail: "The project 'line3' already exists. Project ids ignore upper and lower case.",
+      code: 'project_id_case_conflict',
+      suggestedId: 'LINE3-2',
+    });
+
+    const error = await useProjectsStore
+      .getState()
+      .importProject(zip, '/projects/plant')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ProjectIdCaseConflictError);
+    expect((error as ProjectIdCaseConflictError).suggestedId).toBe('LINE3-2');
+    expect(describeError(error)).toBe(
+      "The project 'line3' already exists. Project ids ignore upper and lower case.",
+    );
+  });
+
+  it('sends the id the caller picked', async () => {
+    const forms = stubImport(201, project());
+    vi.spyOn(useProjectsStore.getState(), 'load').mockResolvedValue();
+
+    await useProjectsStore.getState().importProject(zip, '/projects/plant', false, 'LINE3-2');
+
+    expect(forms[0].get('projectId')).toBe('LINE3-2');
   });
 
   it('keeps any other conflict an ordinary error', async () => {

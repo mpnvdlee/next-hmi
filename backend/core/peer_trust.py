@@ -12,6 +12,12 @@ A pin is keyed by the address it was confirmed at and carries the peer's
 certificate, and a different certificate claiming a pinned address or
 ``runtimeId`` is reported as changed instead of being re-pinned.
 
+Releases before confirmation pinned a certificate silently on first contact,
+and wrote no ``runtimeId`` key at all. Such a pin still anchors the
+connection and still flags a different certificate as changed, but it does
+not count as confirmed (``Pin.confirmed``): the next pairing shows its
+fingerprint for comparison, and saving it then records the ``runtimeId``.
+
 The pinned PEM is used as the sole trust anchor for that peer, so verification
 happens during the handshake — before any password, bearer token or project
 byte is written to the socket. Hostname checking is off by design: the pin
@@ -56,6 +62,9 @@ class Pin:
     pem: str
     pinnedAt: str
     runtimeId: str | None = None
+    # False for a pin written silently on first contact by a release before
+    # pairing asked for confirmation; see the module docstring.
+    confirmed: bool = True
 
 
 def _trust_path() -> Path:
@@ -96,6 +105,9 @@ def _pin_from(key: str, entry: Any) -> Pin | None:
         pem=pem,
         pinnedAt=str(entry.get("pinnedAt") or ""),
         runtimeId=runtime_id if isinstance(runtime_id, str) and runtime_id else None,
+        # `save_pin` always writes the key, null for a peer too old to report
+        # its runtimeId; only a silent first-contact pin lacks it.
+        confirmed="runtimeId" in entry,
     )
 
 
@@ -135,7 +147,8 @@ def conflicting_pin(
 def is_pinned(host: str, port: int, runtime_id: str | None, fingerprint: str) -> bool:
     """Whether this certificate is already confirmed for this address or runtimeId."""
     return any(
-        pin.fingerprint == fingerprint for pin in _related_pins(host, port, runtime_id)
+        pin.confirmed and pin.fingerprint == fingerprint
+        for pin in _related_pins(host, port, runtime_id)
     )
 
 

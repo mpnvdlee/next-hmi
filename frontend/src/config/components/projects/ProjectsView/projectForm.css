@@ -225,6 +225,17 @@
   color: var(--cfg-success);
 }
 
+/* Passed over, not done: an HTTP pairing the operator let through unverified. */
+.project-form__step--skipped {
+  font-style: italic;
+}
+
+/* One width through every step, so a long refusal wraps instead of widening
+   the dialog. Both classes so it wins over .name-modal's sizing. */
+.name-modal.peer-transfer-modal {
+  width: min(42.5rem, calc(100vw - (var(--cfg-space-6) * 2)));
+}
+
 .project-form__device {
   display: flex;
   flex-direction: column;

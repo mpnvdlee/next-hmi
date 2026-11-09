@@ -185,8 +185,10 @@ the bearer token prevents unauthenticated mutation but does not stop a network
 observer from intercepting the pairing password, token, or project data. Serve
 the peer over HTTPS to close that (see [Peer transfer over
 HTTPS](#peer-transfer-over-https)), keep peers on a private network either way,
-and do not expose the peer endpoints to the public Internet. Changing the
-device-admin password revokes every paired peer token. Outgoing connections
+and do not expose the peer endpoints to the public Internet. A pairing expires
+after 90 days without use; **Settings › Tokens** lists every device paired with
+this one under **Paired devices**, where **Revoke** cuts one off at once, and
+changing the device-admin password revokes them all. Outgoing connections
 resolve once and are pinned to a private unicast address; public, mixed,
 link-local, multicast, and unspecified results are rejected. Loopback peers
 require the explicit `NEXTHMI_ALLOW_LOOPBACK_PEERS=1` deployment override.
@@ -419,13 +421,14 @@ client IP the backend believes it is seeing.
 ### Peer transfer over HTTPS
 
 Manager-to-manager transfer speaks whichever protocol the peer is configured
-with — pick **HTTPS** in the transfer dialog, or store it on a manual peer
-entry. A runtime serving TLS advertises `scheme=https` in its mDNS record, so
-picking a discovered peer fills the protocol in for you.
+with. The transfer dialog starts on **HTTPS**, port 8443; a protocol can also
+be stored on a manual peer entry. A runtime serving TLS advertises
+`scheme=https` in its mDNS record, so picking a discovered peer fills its
+protocol and port in for you.
 
 Peer certificates are trusted because you compared them, not through a CA,
 because a plant LAN rarely has one. The transfer dialog pairs in three steps —
-**Verify device → Sign in → Send**:
+**Verify device → Sign in → Send** (**Fetch** when pulling):
 
 1. **Verify device.** The manager connects to the peer without sending
    anything and shows its name, address, runtime ID and the SHA-256
@@ -448,11 +451,28 @@ address is recognised by its certificate and keeps its pin, while a different
 certificate at a pinned address, or claiming a pinned runtime ID, stops pairing
 with **Certificate changed: pairing stopped** — never a silent re-pin.
 
-**Remember this device** (on by default) keeps the pairing key the peer issues,
-in `<runtime_home>/.peer-pairings.json` (readable by the manager's user only),
-so the next transfer to the same device needs no password. The key is only
-ever sent over the certificate it was paired over. Changing the peer's
-device-admin password revokes it; the dialog then asks for the password again.
+A certificate pinned by a release from before this confirmation step was
+pinned silently, on first contact. The first pairing after the upgrade shows
+its fingerprint to compare, like a new device, and confirming it then records
+the peer's runtime ID.
+
+**Remember this device** (off by default) keeps the pairing key the peer
+issues, in `<runtime_home>/.peer-pairings.json` (readable by the manager's user
+only), so the next transfer to the same device needs no password. The key is
+only ever sent over the certificate it was paired over. When the peer no longer
+accepts it — revoked under its **Settings › Tokens**, unused for 90 days, or
+its device-admin password changed — the dialog says so (*hmi-line3 no longer
+accepts this device*), and **Pair again** drops the key and asks for the
+password.
+Forgetting the device's pinned certificate (below) drops its key too.
+
+**A cloned runtime home.** The runtime ID lives in
+`<runtime_home>/.peer-identity.json`. A runtime home copied to another machine
+— a cloned VM or disk image — carries it along, and the two devices then hide
+each other from discovery and cannot pair: the dialog stops with *This device
+has the same identity as the one you are pairing with.* Delete
+`.peer-identity.json` in the copy's runtime home and restart it; a new runtime
+ID is made on the next start.
 
 A peer that has ever been reached over HTTPS is never contacted over plain HTTP
 again, even if it later advertises otherwise — mDNS records are unauthenticated
@@ -465,13 +485,15 @@ restarts on its HTTPS port, 8443 unless changed), then verify the device again
 with protocol HTTPS and that port. On a network that is genuinely closed to
 other devices, **Isolated network without HTTPS?** lets you pair anyway after
 ticking *I understand the password is sent unencrypted, and this network is
-closed to other devices.* Over plain HTTP no pairing key is remembered.
+closed to other devices.* The dialog then says *Unencrypted connection: the
+certificate cannot be verified.* and shows the first step as **Not verified
+(HTTP)**. Over plain HTTP no pairing key is remembered.
 
 Renewing a peer's certificate breaks transfers to it on purpose: a certificate
 that changed without warning looks exactly like an interception. Confirm the
 new certificate is genuine, then drop the pin — **Forget pinned certificate and
-verify again** in the transfer dialog, which drops every pin of that device and
-shows the new certificate to compare — or:
+verify again** in the transfer dialog, which drops every pin of that device,
+and its remembered pairing key, and shows the new certificate to compare — or:
 
 ```bash
 curl -X DELETE "https://<manager>/api/manager/peers/trust?host=<peer>&port=8000"

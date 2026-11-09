@@ -44,7 +44,7 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
 - `backend/core/project_packer.py`
   - one zip code path for export, import, and manager peer transfer — `pack_project()` / `unpack_project()` with symlink + traversal + size-cap guards
 - `backend/core/peer_discovery.py`
-  - mDNS advertise/browse over `_nexthmi._tcp.local.`; a `runtimeId` per runtime home (`.peer-identity.json`, kept across restarts because peers pin certificates by it) so multiple ports on one host don't shadow each other. A copied runtime home shares that id; delete `.peer-identity.json` in the copy (probe and pairing refuse a peer with this manager's own id). Started only by the manager.
+  - mDNS advertise/browse over `_nexthmi._tcp.local.`; a `runtimeId` per runtime home (`.peer-identity.json`, kept across restarts because peers pin certificates by it) so multiple ports on one host don't shadow each other. A copied runtime home shares that id; delete `.peer-identity.json` in the copy (probe and pairing refuse a peer with this manager's own id). Anything on the LAN can announce, so the state an announcement creates is bounded: at most 256 service names tracked (resolving or resolved; unresolved, then longest-seen, evicted first), at most 4 resolves at once, and a name that fails to resolve is dropped and not retried before a per-name backoff (5 s, doubling to 5 min) has passed. Started only by the manager.
 - `backend/core/exceptions.py`
   - domain exception hierarchy (`NextHmiError`, `NotFoundError`, `ConflictError`, `ValidationError`, `RateLimitError`, plus per-domain subclasses such as `ConfigValidationError` or `DatasourceConflictError`)
   - `register_exception_handlers(app)` — maps domain exceptions to consistent JSON error responses
@@ -249,7 +249,7 @@ current value and before its Boolean check, with the same folder exception. Ever
 - `backend/api/manager_auth_api.py` (manager only)
   - `GET /api/manager/auth/status`, `POST .../setup` (first-run password, behind the one-time setup code printed at startup), `POST .../login`, `POST .../logout` — device-admin session cookie.
 - `backend/api/manager_peers_api.py` (manager only)
-  - manager discovery, device-admin pairing, hashed/revocable peer tokens, peer certificate pins, explicit source/destination transfer, target-root receive, collision policy, progress/cancellation, and idempotent retry. The only peer-transfer surface — no project instance mounts one.
+  - manager discovery, device-admin pairing, hashed/revocable peer tokens that expire after 90 days without use, peer certificate pins, explicit source/destination transfer, target-root receive, collision policy, progress/cancellation, and idempotent retry. The only peer-transfer surface — no project instance mounts one.
 - `backend/api/mcp_auth_api.py` (manager only)
   - MCP and API bearer-token pairing, listing and revocation
 - `backend/api/v1_api.py` (manager only)
