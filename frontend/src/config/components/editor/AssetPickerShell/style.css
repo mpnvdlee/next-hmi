@@ -190,7 +190,8 @@
   border-color: color-mix(in srgb, var(--cfg-accent) 42%, var(--cfg-border));
 }
 
-.cfg-asset-picker-folder-btn__name {
+.cfg-asset-picker-folder-btn__name,
+.cfg-asset-picker-icon-btn__name {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -230,8 +231,22 @@
   outline-offset: 1px;
 }
 
-.cfg-asset-picker-icon-btn img {
-  object-fit: contain;
+/* Custom icons carry their file name, in a tile as wide as a folder's. */
+.cfg-asset-picker-grid--named {
+  grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+}
+
+.cfg-asset-picker-icon-btn--named {
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.2rem;
+  width: 100%;
+  height: auto;
+  min-height: 3.8rem;
+  padding: var(--cfg-space-2) 0.25rem;
+  font-size: 0.65rem;
+  line-height: 1.15;
+  text-align: center;
 }
 
 /* ── Image thumbnail button (re-used in ImageSourcePicker) ── */

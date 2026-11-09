@@ -1,5 +1,98 @@
 import { useState, useEffect } from 'react';
+import { isCustomIconAssetPath } from '@shared/utils/phosphorIcons';
 import { withBase } from '@shared/utils/runtimeBase';
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * What an icon draws with. Anything else goes with its subtree: `script`,
+ * `foreignObject` (an HTML island), `a` and the animation elements (which can
+ * turn a link into script), `image` and the filter primitives (outside loads).
+ */
+const ICON_ELEMENTS = new Set([
+  'svg',
+  'g',
+  'defs',
+  'symbol',
+  'use',
+  'path',
+  'rect',
+  'circle',
+  'ellipse',
+  'line',
+  'polyline',
+  'polygon',
+  'text',
+  'tspan',
+  'title',
+  'desc',
+  'linearGradient',
+  'radialGradient',
+  'stop',
+  'clipPath',
+  'mask',
+  'pattern',
+  'marker',
+  'style',
+]);
+
+/**
+ * A reference out of the icon, in an attribute or in CSS: a url() that is not a
+ * `#fragment`, an @import, image(), image-set() or src() that can name a URL
+ * as a plain string, or a backslash, since a CSS escape can spell `url(` unseen.
+ */
+const OUTSIDE_REF = /\\|@import|url\(\s*(?!['"]?\s*#)|image(?:-set)?\(|src\(/i;
+
+function isIconElement(node: Element): boolean {
+  return (
+    ICON_ELEMENTS.has(node.localName) &&
+    node.prefix === null &&
+    (node.namespaceURI === SVG_NS || node.namespaceURI === null) &&
+    !(node.localName === 'style' && OUTSIDE_REF.test(node.textContent ?? ''))
+  );
+}
+
+function cleanElement(el: Element): void {
+  for (const attr of [...el.attributes]) {
+    const name = attr.localName.toLowerCase();
+    if (
+      name.startsWith('on') ||
+      (name === 'href' && !attr.value.startsWith('#')) ||
+      OUTSIDE_REF.test(attr.value)
+    ) {
+      el.removeAttributeNode(attr);
+    }
+  }
+  for (const child of [...el.childNodes]) {
+    if (child instanceof Element) {
+      if (isIconElement(child)) cleanElement(child);
+      else child.remove();
+    } else if (child.nodeType === Node.CDATA_SECTION_NODE) {
+      child.replaceWith(child.textContent ?? '');
+    } else if (child.nodeType !== Node.TEXT_NODE) {
+      // Comments and processing instructions do not reach the HTML parser
+      // intact: `<!-->` ends an HTML comment at once and the first `>` ends a
+      // PI, so whatever followed would be parsed as markup.
+      child.remove();
+    }
+  }
+}
+
+/**
+ * Parse an SVG file as XML and keep only icon elements and their harmless
+ * attributes. The result reaches the HTML parser through innerHTML; the XML
+ * serializer escapes text and attribute values, and nothing is left that the
+ * HTML parser reads differently.
+ */
+function sanitizeSvg(text: string): string {
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const root = doc.documentElement;
+  if (root.localName !== 'svg' || !isIconElement(root) || doc.querySelector('parsererror')) {
+    return '';
+  }
+  cleanElement(root);
+  return new XMLSerializer().serializeToString(root);
+}
 
 /** `fill="…"` / `stroke="…"` presentation attributes, not `fill-opacity` or `stroke-width`. */
 const PAINT_ATTR = /\s(fill|stroke)="([^"]*)"/gi;
@@ -17,9 +110,7 @@ function toCurrentColor(paint: string): string {
 }
 
 function recolorSvg(svgText: string): string {
-  const match = svgText.match(/<svg[\s\S]*<\/svg>/i);
-  if (!match) return '';
-  let svg = match[0];
+  let svg = svgText;
   // A `color` attribute would resolve `currentColor` to the icon's own colour
   // instead of the widget's, so it goes rather than being repointed.
   svg = svg.replace(/\scolor="[^"]*"/gi, '');
@@ -67,7 +158,8 @@ function loadInlineSvg(url: string): Promise<string> {
         return r.text();
       })
       .then((text) => {
-        const svg = recolorSvg(text);
+        const clean = sanitizeSvg(text);
+        const svg = clean && recolorSvg(clean);
         resolved.set(url, svg);
         return svg;
       })
@@ -82,12 +174,14 @@ function cachedSvg(url: string | null | undefined): string {
 }
 
 /**
- * Fetches an SVG from a URL and repoints its colours at `currentColor`, so the
- * icon inherits CSS `color` from its parent, and returns the markup ready for
- * dangerouslySetInnerHTML. Fills stay fills and strokes stay strokes — only the
- * colours change, so outline icons keep their outlines.
+ * Fetches a custom icon, sanitises it and repoints its colours at
+ * `currentColor`, so the icon inherits CSS `color` from its parent, and returns
+ * the markup ready for dangerouslySetInnerHTML. Fills stay fills and strokes
+ * stay strokes — only the colours change, so outline icons keep their outlines.
+ * A value that is not a custom icon path is never fetched.
  */
-export function useInlineSvg(url: string | null | undefined): string {
+export function useInlineSvg(value: string | null | undefined): string {
+  const url = value && isCustomIconAssetPath(value) ? value : null;
   const [shown, setShown] = useState(() => ({ url, svg: cachedSvg(url) }));
   // Reset during render rather than from an effect, so a changed URL never
   // gets a frame of the previous icon.

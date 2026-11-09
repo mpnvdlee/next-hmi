@@ -267,9 +267,11 @@ page has settled, `useProjectWidgetWarmup` warms the widget code of every other
 page in the project (with a 3 s fallback when no ack comes), so a first visit
 is as fast as a revisit; the editor's preview iframe instead idle-warms every
 built-in once `ComponentsReadyGate` opens. A module already in memory renders
-without suspending (`settledLazy`), and `useInlineSvg` keeps each recoloured
-custom SVG icon per URL for the rest of the page load, so a revisited page
-draws its icons on the first frame. A page's variables do not gate the reveal
+without suspending (`settledLazy`). A built-in widget draws a custom SVG icon
+as a CSS mask image, which the browser's image cache serves to a revisited
+page; `useInlineSvg`, for a custom widget that inlines one, keeps each
+recoloured icon per URL for the rest of the page load, so a revisited page
+draws it on the first frame. A page's variables do not gate the reveal
 at all, so a slow OPC-UA read never stalls a navigation.
 
 **Marking** is a data question, and it can only start once data has stopped

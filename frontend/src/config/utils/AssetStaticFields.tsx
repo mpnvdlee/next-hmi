@@ -1,16 +1,38 @@
 import type { IconValue, ImageValue, VideoValue } from '@shared/types/config';
 import PathInputField from '@config/components/ui/PathInputField';
+import CustomIconGlyph from '@config/components/ui/CustomIconGlyph';
+import { FieldRowBelow } from '@config/components/ui/FieldGroup';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { assetName } from '@config/components/editor/assetPickerUtils';
 import { BUILTIN_ICON_COMPONENTS } from '@shared/utils/phosphorIconComponents';
-import { withBase } from '@shared/utils/runtimeBase';
+import { isBuiltinIconId, isCustomIconAssetPath } from '@shared/utils/phosphorIcons';
 import { isAbsoluteUrl } from '@shared/utils/imageAsset';
 import { unwrapStatic } from '@config/components/editor/propertyValueUtils';
+import { evaluatePropertyValue } from '@hmi/utils/propertySourceEval';
 
 /** The panel's one word for "the selected widgets disagree". Held here rather
  *  than imported from `renderSchemaField`, which renders these fields — reading
  *  its constant back would close an import cycle. */
 const MIXED_LABEL = 'Mixed';
+
+const INVALID_ICON =
+  'Not a valid icon. The value must be an .svg file inside /assets/icons/, without “../” or a query.';
+
+/** A character no built-in name or text glyph holds: the value was meant as a
+ *  file. A bare word that is no built-in is a typo the empty glyph slot already
+ *  shows, or a Menu Toggle's text glyph (☰), so it is not called out. */
+const PATH_SHAPED = /[/\\.?#%:]/;
+
+/** Whether an icon value, resolved as the widget receives it, names a file the
+ *  widget will refuse to load and draw an empty box for instead. */
+function isInvalidIconLiteral(literal: unknown): boolean {
+  return (
+    typeof literal === 'string' &&
+    PATH_SHAPED.test(literal) &&
+    !isBuiltinIconId(literal) &&
+    !isCustomIconAssetPath(literal)
+  );
+}
 
 /** Read the `{ $static: T }` payload from a static value; a bare value carries
  *  no payload for these fields, so it reads as unset. */
@@ -49,10 +71,9 @@ function rootBareVideoPath(text: string): string {
  */
 function IconGlyph({ icon, name }: { icon: IconValue | null; name: string }) {
   if (icon?.type === 'custom' && icon.path && assetName(icon.path) === name) {
-    const relativePath = icon.path.replace(/^\/?assets\//, '');
     return (
       <span className="cfg-icon-field__glyph">
-        <img src={withBase(`/assets/${relativePath}`)} width={16} height={16} alt="" />
+        <CustomIconGlyph path={icon.path} size={16} />
       </span>
     );
   }
@@ -91,29 +112,39 @@ export function IconStaticField({
   const committed = iconName(icon);
   const fallback = mixed ? null : staticPayload<IconValue>(defaultValue);
   const fallbackName = iconName(fallback);
+  const invalid = !mixed && isInvalidIconLiteral(evaluatePropertyValue(value));
 
   return (
-    <PathInputField
-      value={committed}
-      placeholder={
-        mixed ? MIXED_LABEL : (defaultPlaceholder(fallbackName) ?? 'Icon name (e.g. gear)')
-      }
-      renderPrefix={(draft) =>
-        !draft && fallback ? (
-          <IconGlyph icon={fallback} name={fallbackName} />
-        ) : (
-          <IconGlyph icon={icon} name={draft} />
-        )
-      }
-      onCommit={(text) => {
-        const name = text.trim();
-        if (name === committed) return;
-        onChange(name ? { $static: { type: 'builtin', name } } : undefined);
-      }}
-      pickTitle="Pick icon"
-      onPick={() => openPicker('icon', (val) => onChange({ $static: val }), label)}
-      onClear={committed ? () => onChange(undefined) : undefined}
-    />
+    <>
+      <PathInputField
+        value={committed}
+        placeholder={
+          mixed ? MIXED_LABEL : (defaultPlaceholder(fallbackName) ?? 'Icon name (e.g. gear)')
+        }
+        renderPrefix={(draft) =>
+          !draft && fallback ? (
+            <IconGlyph icon={fallback} name={fallbackName} />
+          ) : (
+            <IconGlyph icon={icon} name={draft} />
+          )
+        }
+        onCommit={(text) => {
+          const name = text.trim();
+          if (name === committed) return;
+          onChange(name ? { $static: { type: 'builtin', name } } : undefined);
+        }}
+        pickTitle="Pick icon"
+        onPick={() => openPicker('icon', (val) => onChange({ $static: val }), label)}
+        onClear={committed ? () => onChange(undefined) : undefined}
+      />
+      {invalid && (
+        <FieldRowBelow>
+          <span className="cfg-ds-props__error" role="alert">
+            {INVALID_ICON}
+          </span>
+        </FieldRowBelow>
+      )}
+    </>
   );
 }
 
