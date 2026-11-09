@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -305,13 +306,16 @@ MANAGER_SESSION_REQUIRED = "manager_session_required"
 # dot segment is what let a crafted URL walk out of the allowlisted subtree and
 # into the datasource passwords.
 _ONE = "*"
+# A theme id as ``services.theme_manager`` accepts one. ``_ONE`` would also
+# pass ``D:foo``, which a Windows child reads as a file on another drive.
+_THEME_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
 # The live view is the product's public face: an operator panel must come up on
 # a wall-mounted browser with no device-admin password. The project child mounts
 # every router on one app and has no auth of its own (``backend/main.py``), so
 # this table *is* the boundary. Deny by default; each entry is exact, or exact
 # with one wildcard segment. Query strings never take part in the match.
-_RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str, ...], ...]] = {
+_RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str | re.Pattern[str], ...], ...]] = {
     "GET": (
         ("api", "config", "config"),
         ("api", "config", "pages", _ONE),
@@ -321,7 +325,7 @@ _RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str, ...], ...]] = {
         ("api", "config", "dictionaries"),
         ("api", "config", "translations"),
         ("api", "themes"),
-        ("api", "themes", _ONE),
+        ("api", "themes", _THEME_ID),
         ("api", "default-theme"),
         ("api", "components"),
         ("api", "components", "folders"),
@@ -570,7 +574,10 @@ def _runtime_public(sub_path: str, method: str) -> bool:
         return first_forms.isdisjoint(_RUNTIME_PRIVATE_DOCS)
     return any(
         len(pattern) == len(segments)
-        and all(p in (_ONE, s) for p, s in zip(pattern, segments, strict=True))
+        and all(
+            p.fullmatch(s) is not None if isinstance(p, re.Pattern) else p in (_ONE, s)
+            for p, s in zip(pattern, segments, strict=True)
+        )
         for pattern in _RUNTIME_PUBLIC_ROUTES.get(lookup, ())
     )
 

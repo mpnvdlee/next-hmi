@@ -1191,13 +1191,17 @@ async def delete_dialogs_document(page_id: str) -> Any:
 
 # ── Dictionary config ─────────────────────────────────────────────────────────
 
+# Every route that takes ``translation_transaction`` is a plain ``def``, so
+# FastAPI runs it in its thread pool: the lock is shared with the manager's MCP
+# writes in another process, and waiting for it must not stall the event loop.
+
 @router.get("/dictionaries")
 async def get_dictionaries() -> Any:
     return _list_dictionaries()
 
 
 @router.post("/dictionaries", dependencies=[broadcasts("translations")])
-async def create_dictionary(body: dict) -> Any:
+def create_dictionary(body: dict) -> Any:
     raw_name = body.get("name", "")
     if not isinstance(raw_name, str):
         raise ConfigValidationError("'name' must be a string")
@@ -1224,7 +1228,7 @@ async def create_dictionary(body: dict) -> Any:
 
 
 @router.delete("/dictionaries/{name}", dependencies=[broadcasts("translations")])
-async def delete_dictionary(name: str) -> Any:
+def delete_dictionary(name: str) -> Any:
     if name == "Default":
         raise ConfigValidationError("Cannot delete the Default dictionary")
     if not is_valid_dict_name(name):
@@ -1255,12 +1259,12 @@ def _parse_translations_csv(path=None) -> dict:
 
 
 @router.get("/translations")
-async def get_translations(dict_name: str = Query(default="Default", alias="dict")) -> Any:
+def get_translations(dict_name: str = Query(default="Default", alias="dict")) -> Any:
     return _parse_translations_csv(_dict_path(dict_name))
 
 
 @router.post("/translations", dependencies=[broadcasts("translations")])
-async def add_translation(body: dict, dict_name: str = Query(default="Default", alias="dict")) -> Any:
+def add_translation(body: dict, dict_name: str = Query(default="Default", alias="dict")) -> Any:
     path = _dict_path(dict_name)
     raw_key = body.get("key", "")
     if not isinstance(raw_key, str):
@@ -1283,7 +1287,7 @@ async def add_translation(body: dict, dict_name: str = Query(default="Default", 
 
 
 @router.put("/translations", dependencies=[broadcasts("translations")])
-async def put_translations(body: dict, dict_name: str = Query(default="Default", alias="dict")) -> Any:
+def put_translations(body: dict, dict_name: str = Query(default="Default", alias="dict")) -> Any:
     """Full save: languages + rows.
 
     Body: {
@@ -1329,7 +1333,7 @@ async def put_translations(body: dict, dict_name: str = Query(default="Default",
 
 
 @router.post("/translations/language", dependencies=[broadcasts("translations")])
-async def add_language(
+def add_language(
     body: dict, dict_name: str = Query(default="Default", alias="dict")
 ) -> Any:
     """Add a new language column to one dictionary. Body: {"code": "fr-FR"}"""
@@ -1359,7 +1363,7 @@ async def add_language(
 
 
 @router.delete("/translations/language/{code}", dependencies=[broadcasts("translations")])
-async def delete_language(
+def delete_language(
     code: str, dict_name: str = Query(default="Default", alias="dict")
 ) -> Any:
     """Remove a language column by code from one dictionary."""
@@ -1383,7 +1387,7 @@ async def delete_language(
 
 
 @router.delete("/translations/{key:path}", dependencies=[broadcasts("translations")])
-async def delete_translation(key: str, dict_name: str = Query(default="Default", alias="dict")) -> Any:
+def delete_translation(key: str, dict_name: str = Query(default="Default", alias="dict")) -> Any:
     """Remove a single translation row by its key (en-EN value)."""
     path = _dict_path(dict_name)
     with translation_transaction(path):

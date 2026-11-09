@@ -33,7 +33,7 @@ def _rest_add_worker(
 
         config_api.write_csv = delayed_write_csv
     try:
-        asyncio.run(config_api.add_translation({"key": key}, "Default"))
+        config_api.add_translation({"key": key}, "Default")
         results.put("applied")
     except ConfigConflictError:
         results.put("conflict")
@@ -77,7 +77,7 @@ def _rest_put_worker(
 
         config_api.write_csv = delayed_write_csv
     try:
-        asyncio.run(config_api.put_translations(body, "Default"))
+        config_api.put_translations(body, "Default")
         results.put("applied")
     except ConfigConflictError:
         results.put("conflict")
@@ -654,3 +654,94 @@ async def test_mcp_cell_mutation_uses_the_same_immutable_primary_rule(
         ["en-EN", "nl-NL"],
         ["Start", "Beginnen"],
     ]
+
+
+# ── the cross-process lock file ───────────────────────────────────────────────
+
+
+@pytest.fixture()
+def private_home(monkeypatch, tmp_path: Path, live_project_root: Path) -> Path:
+    from core import runtime_home
+
+    home = tmp_path / "runtime-home"
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home)
+    storage.ensure_active_project_dirs()
+    return home
+
+
+def test_translation_lock_is_private_to_the_runtime_home(private_home: Path) -> None:
+    """A name in the shared temp directory can be created first by any local
+    user, who then holds the lock or decides where it points."""
+    from core import translations
+
+    lock_path = translations._translation_lock_path(_default_path())
+    with translation_transaction(_default_path()):
+        pass
+
+    assert lock_path.parent == private_home / ".locks"
+    assert lock_path.is_file()
+    if os.name == "posix":
+        assert lock_path.parent.stat().st_mode & 0o777 == 0o700
+        assert lock_path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.skipif(os.name != "posix", reason="O_NOFOLLOW is POSIX")
+def test_translation_lock_never_follows_a_planted_symlink(
+    private_home: Path, tmp_path: Path, require_symlinks: None
+) -> None:
+    from core import translations
+
+    lock_path = translations._translation_lock_path(_default_path())
+    lock_path.unlink()
+    victim = tmp_path / "victim"
+    lock_path.symlink_to(victim)
+
+    with pytest.raises(OSError), translation_transaction(_default_path()):
+        pass
+    assert not victim.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="holds the lock with flock")
+def test_a_held_translation_lock_does_not_stall_other_requests(private_home: Path) -> None:
+    """The public ``GET /api/config/translations`` waits for the lock; doing
+    that on the event loop froze every other request of the instance."""
+    import fcntl
+    import threading
+
+    import httpx
+    from api.config_api import router
+    from core import translations
+    from core.exceptions import register_exception_handlers
+
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(router)
+
+    @app.get("/ping")
+    async def ping() -> dict:
+        return {}
+
+    lock_path = translations._translation_lock_path(_default_path())
+    holder = os.open(lock_path, os.O_RDWR)
+    fcntl.flock(holder, fcntl.LOCK_EX)
+
+    async def scenario() -> float:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1") as client:
+            blocked = asyncio.create_task(client.get("/api/config/translations"))
+            await asyncio.sleep(0.2)
+            assert not blocked.done()
+            started = time.monotonic()
+            assert (await client.get("/ping")).status_code == 200
+            elapsed = time.monotonic() - started
+            assert (await blocked).status_code == 200
+            return elapsed
+
+    # Released from another thread, so a stalled loop shows as a slow ping
+    # rather than a hang.
+    threading.Timer(2.0, fcntl.flock, (holder, fcntl.LOCK_UN)).start()
+    try:
+        assert asyncio.run(scenario()) < 0.5
+    finally:
+        fcntl.flock(holder, fcntl.LOCK_UN)
+        os.close(holder)

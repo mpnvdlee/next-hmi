@@ -78,6 +78,7 @@ import WidgetIcon from '../../ui/WidgetIcon';
 import ActionsInput from './ActionsInput';
 import VariableTriggersInput from './VariableTriggersInput';
 import PanelDiagnosticsBanner from './PanelDiagnosticsBanner';
+import { webFrameNotices } from './webFrameNotices';
 import MultiComponentPanel from './MultiComponentPanel';
 import { classifySelection } from '@config/store/domains/selectionScope';
 import ColorInput from '../ColorInput';
@@ -1066,12 +1067,15 @@ function ComponentPanel({
     updateComponent(comp.id, { name });
   }
 
+  const notices = comp.type === 'WebFrame' ? webFrameNotices(props, patchProp) : undefined;
+
   const renderSchemaRow = (key: string) => (
     <SchemaFieldRow
       key={key}
       propKey={key}
       schema={schema[key]}
       value={props[key]}
+      notice={notices?.[key]}
       onChange={(v) => patchProp(key, v)}
       onOpenPicker={
         bindsVariable(primaryType(schema[key].type))

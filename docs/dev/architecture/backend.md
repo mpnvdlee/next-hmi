@@ -30,7 +30,7 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
   - starts and stops background services
   - mounts `/widgets`, `/widget-js`, `/builtin-widgets-js`, `/external-libraries`, and `/assets`
 - `backend/core/runtime_home.py`
-  - per-installation home directory (manifest, `.logs/`, `.widget-build/`, restart sentinel)
+  - per-installation home directory (manifest, `.logs/`, `.widget-build/`, `.locks/`, restart sentinel)
   - resolves from `NEXTHMI_DATA_DIR` → bootstrap config → platform default
 - `backend/core/manifest.py`
   - `projects.json` model (`ManifestV1`, `ProjectEntry`, `PeerEntry`) with atomic load/save
@@ -357,6 +357,8 @@ Paths come from two sources, both in `backend/core/`:
 `ensure_active_project_dirs()` creates the project subdirectories at instance startup, before the format migration runs. The runtime-home subdirectories (`.logs/`, `.widget-build/`) are created on first write.
 
 `Default.csv` is seeded with an `en-EN` header on first run inside the live project's `translations/` folder. The backend uses atomic write helpers for both JSON and CSV files.
+
+Every dictionary read-modify-write holds `core.translations.translation_transaction`, a lock shared across processes because the manager's workspace MCP writes the same files as the child's REST routes. Its lock file is `<runtime_home>/.locks/translation-<sha256 of the CSV path>.lock`, in a directory created `0700`, opened `0600` and never through a symlink (`O_NOFOLLOW` where the platform has it) — not in the shared temp directory, where another local user could hold it or point it elsewhere. The REST routes that take it are plain `def`, so FastAPI runs them in its thread pool and a wait for the lock never stalls the instance's event loop.
 
 ## Datasource Manager
 

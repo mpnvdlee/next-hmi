@@ -57,6 +57,7 @@ Outside any project, the runtime keeps its own state:
   .logs/                  ← rotating application logs
   .widget-build/          ← compiled custom-widget JS (shared across all instances)
   .thumbnails/            ← per-project main-page screenshots (<projectId>.png), installation-local
+  .locks/                 ← lock files the manager and its project children share (translation-<sha256>.lock), 0700
   .restart-pending        ← sentinel written by /api/system/restart
   .peer-tokens.json       ← hashed manager peer tokens, each with the pairing device's claimed hostname/runtimeId, its address and last use (no bearer plaintext)
   .peer-trust.json        ← confirmed peer certificates: pins keyed by host:port, each with its runtimeId
@@ -516,7 +517,9 @@ picked. The backend walks every field through `ACTION_FIELDS`
 ## Theme Files
 
 A project holds multiple named themes under `<project>/themes/`, one
-`<themeId>.json` per theme (the id is the file stem). Each file stores a bare
+`<themeId>.json` per theme (the id is the file stem: 1–128 letters, digits, `-`
+or `_`, not a Windows device name — see the Theme API in
+[rest-api.md](../reference/rest-api.md#theme-api)). Each file stores a bare
 theme configuration managed by the Theme Editor. The author-chosen default theme
 id is recorded in `config.json`'s `project.defaultTheme`; runtime theme switching
 is a client-side concern. Defaults come from `frontend/src/shared/themeDefaults.json`,

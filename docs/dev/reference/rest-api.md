@@ -61,7 +61,7 @@ Access: **public** — no credential. **session** — the manager session cookie
 | `GET` | `/runtime/{slug}/api/config/dictionaries` | public | `$loc` texts. |
 | `GET` | `/runtime/{slug}/api/config/translations` | public | `$loc` texts per language. |
 | `GET` | `/runtime/{slug}/api/themes` | public | The theme list for the theme switcher. |
-| `GET` | `/runtime/{slug}/api/themes/{themeId}` | public | The tokens the screen renders with. |
+| `GET` | `/runtime/{slug}/api/themes/{themeId}` | public | The tokens the screen renders with. Only for a valid theme id (see [Theme API](#theme-api)); any other `{themeId}` needs a session. |
 | `GET` | `/runtime/{slug}/api/default-theme` | public | Which theme to start in. |
 | `GET` | `/runtime/{slug}/api/components` | public | Component definitions the pages instantiate. |
 | `GET` | `/runtime/{slug}/api/components/folders` | public | Read with the definitions. |
@@ -552,7 +552,7 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
 - `GET /api/device/info`
   - Best-effort identification of the HTTP client making the request.
   - Reads `request.client.host` only, never a header. Behind the manager that is the browser's address: the proxy drops any `X-Forwarded-For` / `X-Real-IP` the client sent and sets `X-Forwarded-For` to the peer it saw (`request.client`, which uvicorn already took from a trusted front proxy's header, see `NEXTHMI_FORWARDED_ALLOW_IPS`), and the instance's uvicorn, trusting loopback, turns that into `request.client`. Unwraps an IPv4-mapped IPv6 address; anything that does not parse as an IP address answers all `null` and is looked up nowhere. `arp` gets it after `--`.
-  - Hostname is resolved via reverse-DNS (`socket.gethostbyaddr`).
+  - Hostname is resolved via reverse-DNS (`socket.gethostbyaddr`), waited for at most 1 s. The lookups run on two threads of their own, never the default executor: one for an address with no PTR record holds its thread for the resolver's own timeout (~35 s), and in the default pool a burst of them stalled every `to_thread` caller. While both are busy, a new address gets `hostname: null` without a lookup. Each answer, a missing record included, is kept per address for 60 s.
   - MAC is resolved from `/proc/net/arp` on Linux, otherwise from `arp -n <ip>` (1 s timeout). Returns `null` for any value that can't be determined.
   - Response: `{ "ip": string | null, "hostname": string | null, "mac": string | null }`.
 
@@ -1174,7 +1174,12 @@ request requires a bounded `Content-Length` and has an overall deadline.
 
 A project holds **multiple named themes**, each persisted as
 `<project>/themes/<id>.json` (a bare `ThemeConfig`; the id is the file
-stem). The author-chosen *default* theme id is stored in `config.json`'s
+stem). A theme id is 1–128 letters, digits, `-` or `_`, and not a Windows
+device name (`con`, `nul`, `com1`…): anything wider names a file outside
+`themes/` on Windows (`D:foo`, `..\x`). An id outside that grammar names no
+theme — `404` wherever an existing theme is looked up, `422` on `PUT` — and
+the manager serves `/runtime/{slug}/api/themes/{id}` without a session only
+for an id inside it. The author-chosen *default* theme id is stored in `config.json`'s
 `project.defaultTheme`. Schema and defaults live in `backend/models/theme.py`;
 defaults are loaded from `frontend/src/shared/themeDefaults.json`. Runtime theme
 switching is a client-side concern — the backend only tracks the default.
@@ -1188,11 +1193,11 @@ switching is a client-side concern — the backend only tracks the default.
 
 ### Get / save / create / delete a theme
 
-- `GET /api/themes/{id}` → `ThemeConfig`. `404` (`ThemeNotFoundError`) if the id is unknown.
+- `GET /api/themes/{id}` → `ThemeConfig`. `404` (`ThemeNotFoundError`) if the id is unknown or invalid.
 - `PUT /api/themes/{id}`
-  - Body: a `ThemeConfig`; an omitted section, or field, takes its default. Extra fields are rejected (`extra="forbid"`). Per-field validators apply: colors must be `#RGB`, `#RRGGBB`, or `rgb()` / `rgba()`; font families non-empty and ≤ 256 chars; font weights between `100` and `900`; each `*_transform` one of `none`, `uppercase`, `lowercase`, `capitalize`. `422` on validation failure (`ThemeValidationError`); returns the saved theme. Creates or replaces the theme.
+  - Body: a `ThemeConfig`; an omitted section, or field, takes its default. Extra fields are rejected (`extra="forbid"`). Per-field validators apply: colors must be `#RGB`, `#RRGGBB`, or `rgb()` / `rgba()`; font families non-empty and ≤ 256 chars; font weights between `100` and `900`; each `*_transform` one of `none`, `uppercase`, `lowercase`, `capitalize`. `422` on validation failure or an invalid id (`ThemeValidationError`); returns the saved theme. Creates or replaces the theme.
 - `POST /api/themes`
-  - Body: `{ "name": "<display name>", "source"?: "<id>" }`. Creates a new theme (id slugged from `name`), duplicating `source` when given, otherwise built-in defaults. Returns `{ "id", "config" }`. `404` if `source` is unknown.
+  - Body: `{ "name": "<display name>", "source"?: "<id>" }`. Creates a new theme (id slugged from `name`, cut to 120 characters, and suffixed `-1`, `-2`… past a taken id or a Windows device name), duplicating `source` when given, otherwise built-in defaults. Returns `{ "id", "config" }`. `404` if `source` is unknown.
 - `DELETE /api/themes/{id}` → `{ "deleted": "<id>" }`. `404` if unknown; `409` (`ThemeConflictError`) when it is the only theme. If the deleted theme was the default, the first remaining theme becomes the effective default.
 
 ### Default-theme pointer

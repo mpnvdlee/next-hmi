@@ -388,7 +388,8 @@ export NEXTHMI_SSL_KEYFILE=/etc/nexthmi/tls/privkey.pem
 ```
 
 The banner then prints an `https://` URL. In Docker, bind-mount the cert
-directory read-only and set the same variables.
+directory read-only and set the same variables; the files must be readable by
+the [user the app runs as](#the-user-inside-the-container).
 
 Certificate renewal is not automated in either route — the process reads its
 certificate once at startup, so restart the manager after a renewal (for an
@@ -563,7 +564,33 @@ docker compose up -d
 `./project-data` to `/data`. That bind-mount carries both the runtime home
 (`projects.json`, `.logs/`, `.widget-build/`) AND any project folders the
 operator places under it. Projects with absolute paths outside `/data` need
-their own bind-mounts.
+their own bind-mounts, writable by the [user the app runs
+as](#the-user-inside-the-container).
+
+### The user inside the container
+
+The app runs as the unprivileged user `nexthmi`, uid and gid 10001, not as
+root. The container starts as root only to give `/data` to that user, then
+drops to it. The first start after an upgrade from a release that ran as root
+changes the owner of every file in the volume; later starts find nothing left
+to change. On the host, the files in `./project-data` therefore belong to uid
+10001.
+
+Anything else you bind-mount has to suit that user too, since the container
+leaves it alone: a project folder outside `/data` must be writable by uid
+10001, and a certificate pinned with `NEXTHMI_SSL_CERTFILE` /
+`NEXTHMI_SSL_KEYFILE` readable. Give it over on the host:
+
+```bash
+sudo chown -R 10001:10001 /path/on/the/host
+```
+
+To start the container without root at all, run it as that user yourself,
+`docker run --user 10001:10001 …`. Nothing is handed over then, so `/data`
+has to be writable by it already; a new named volume is.
+
+The enterprise build still runs as root: its license is bound to the host's
+hardware UUID, which only root can read.
 
 Discovery note: mDNS requires host networking. Without it (default bridge
 mode) the runtime won't appear on peer pickers — operators can still use
@@ -593,9 +620,11 @@ manual `host:port` entries.
   from the folder that holds your `project-data/`.
 - **Clone** — `git pull`, then `docker compose up -d --build`.
 
-The data volume is untouched. The backend checks each project's stamped
-format version on activation and refuses to open one written by a newer
-build.
+The data volume is untouched, apart from the owner of its files on the first
+start after an upgrade from a release that ran as root (see [The user inside
+the container](#the-user-inside-the-container)). The backend checks each
+project's stamped format version on activation and refuses to open one
+written by a newer build.
 
 ### Re-seeding
 

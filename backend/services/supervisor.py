@@ -301,6 +301,10 @@ class Supervisor:
             runtime_home.widget_build_dir() / instance.project_id
         )
         env["NEXTHMI_LOGS_DIR"] = str(log_dir)
+        # The launcher resolves the runtime home without the checkout fallback
+        # the manager has in dev; both must agree on it for the translation
+        # locks they share (``core.translations``).
+        env["NEXTHMI_DATA_DIR"] = str(runtime_home.runtime_home_path())
 
         logger.info(
             "supervisor: starting '%s' (%s) on 127.0.0.1:%d", instance.name, instance.project_id, port

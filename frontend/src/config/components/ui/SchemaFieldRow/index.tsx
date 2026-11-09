@@ -18,7 +18,7 @@ import {
 import { hasPropertySourceKey, isLocSource } from '@shared/types/propertyValueGuards';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
-import { useContext } from 'react';
+import { useContext, type ReactNode } from 'react';
 import PropertySourceEditor, { type OpenBindingPicker } from '../../editor/PropertySourceEditor';
 import { ParentPathContext } from '../../editor/PropertySourceEditor/parentPathContext';
 import { RepeatItemsScope } from '../../editor/PropertySourceEditor/RepeatEditorScopeProvider';
@@ -65,6 +65,8 @@ interface Props {
    *  an unset value, which shows its resolved default. `source` is null when the
    *  widgets disagree on the property source as well. */
   mixed?: { source: PropertySource | null };
+  /** A message the widget raises about this value — see FieldGroup's `notice`. */
+  notice?: ReactNode;
 }
 
 /**
@@ -95,6 +97,7 @@ export default function SchemaFieldRow({
   sourceless,
   tokenValues,
   mixed,
+  notice,
 }: Props) {
   // A mixed row has no value at all: falling back to the schema default would
   // present one widget's setting as if it were shared.
@@ -416,6 +419,7 @@ export default function SchemaFieldRow({
       sourceless={sourceless}
       defaultExpanded={defaultExpanded}
       diagnostic={diagnostic}
+      notice={notice}
       summary={summary}
       kindLabel={kindLabel}
       badge={badge}

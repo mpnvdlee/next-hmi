@@ -267,7 +267,7 @@ export const schema = {
     label: 'Allowed inbound origins',
     group: 'Data',
     description:
-      'Comma-separated origins, or * for any. Left empty, every inbound message is ignored.',
+      'Comma-separated origins, such as https://example.com. Left empty, every inbound message is ignored. In a sandbox, a page keeps its origin only with Allow same-origin on.',
   },
   inboundVariable: {
     type: 'string' as const,
@@ -280,7 +280,7 @@ export const schema = {
     type: 'string' as const,
     label: 'Outbound target origin',
     group: 'Data',
-    defaultValue: '*',
+    placeholder: 'Same as the URL (default)',
   },
 
   onLoad: { type: 'actions' as const, label: 'On Load', group: 'Actions', event: 'onLoad' },
@@ -292,6 +292,17 @@ export const schema = {
     event: 'onMessage',
   },
 };
+
+/** The origin a URL loads from, or null when it has none of its own to send
+ *  to: empty, relative, about:blank, data: and every other opaque URL. */
+function originOf(url: string): string | null {
+  try {
+    const origin = new URL(url).origin;
+    return origin === 'null' ? null : origin;
+  } catch {
+    return null;
+  }
+}
 
 export const displayName = 'Web Frame';
 export const description = 'Embeds an external web page in an iframe.';
@@ -356,7 +367,7 @@ export default function WebFrame({ properties, layout }: HmiWidgetProps) {
 
   const allowedOrigins = usePropString(properties, 'allowedOrigins', '');
   const outboundValue = usePropVar(properties, 'outboundVariable');
-  const outboundOrigin = usePropString(properties, 'outboundOrigin', '*');
+  const outboundOrigin = usePropString(properties, 'outboundOrigin', '');
   const writeInbound = useWriteVariable(properties, 'inboundVariable');
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -386,7 +397,10 @@ export default function WebFrame({ properties, layout }: HmiWidgetProps) {
       .filter(Boolean);
     const handler = (ev: MessageEvent) => {
       if (ev.source !== iframeRef.current?.contentWindow) return;
-      if (!allow.includes('*') && !allow.includes(ev.origin)) return;
+      // A `*` entry matches no origin: it would let whatever site the frame
+      // shows run On Message and write the variable. So does `null`, the
+      // origin of any page in a sandbox without allow-same-origin.
+      if (ev.origin === 'null' || !allow.includes(ev.origin)) return;
 
       const actions = properties?.onMessage as ActionsConfig | undefined;
       executeWidgetActions(actions?.onMessage, { scope, evalCtx });
@@ -397,13 +411,17 @@ export default function WebFrame({ properties, layout }: HmiWidgetProps) {
     return () => window.removeEventListener('message', handler);
   }, [allowedOrigins, properties, scope, evalCtx, writeInbound]);
 
+  // `*` would hand the value to whatever site the frame shows by then, so it
+  // means the URL's origin too; a URL without one gets nothing.
+  const explicitTarget = outboundOrigin.trim();
+  const outboundTarget = explicitTarget && explicitTarget !== '*' ? explicitTarget : originOf(url);
   const lastOutbound = useRef<unknown>(undefined);
   useEffect(() => {
-    if (outboundValue === undefined) return;
+    if (outboundValue === undefined || !outboundTarget) return;
     if (lastOutbound.current === outboundValue) return;
     lastOutbound.current = outboundValue;
-    iframeRef.current?.contentWindow?.postMessage(outboundValue, outboundOrigin || '*');
-  }, [outboundValue, outboundOrigin]);
+    iframeRef.current?.contentWindow?.postMessage(outboundValue, outboundTarget);
+  }, [outboundValue, outboundTarget]);
 
   useEffect(() => {
     setLoaded(false);

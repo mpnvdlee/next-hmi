@@ -1,6 +1,7 @@
 """Tests for the /api/device/info endpoint."""
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 
@@ -8,6 +9,16 @@ import api.device_api as device_api
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.requests import Request
+
+
+@pytest.fixture(autouse=True)
+def _fresh_hostname_cache(monkeypatch) -> None:
+    """Each test starts with no cached answer and every lookup thread free."""
+    monkeypatch.setattr(device_api, "_hostnames", {})
+    monkeypatch.setattr(
+        device_api, "_lookup_slots", threading.BoundedSemaphore(device_api._LOOKUP_THREADS)
+    )
 
 
 def _app() -> FastAPI:
@@ -145,3 +156,100 @@ def test_slow_reverse_dns_times_out_without_blocking_the_response(monkeypatch):
     # The MAC still resolves: a stalled hostname lookup must not take the rest
     # of the payload down with it.
     assert resp.json() == {"ip": "203.0.113.7", "hostname": None, "mac": "aa:bb:cc:dd:ee:ff"}
+
+
+def _request_from(ip: str) -> Request:
+    return Request({"type": "http", "method": "GET", "path": "/", "headers": [], "client": (ip, 50000)})
+
+
+def test_a_burst_from_unresolvable_addresses_leaves_the_default_pool_free(monkeypatch):
+    """Every lookup for a PTR-less address holds its thread for the resolver's
+    whole timeout (~35s), long after the request stopped waiting. A burst from
+    more addresses than the default executor has threads used to fill it, and
+    every ``to_thread`` caller — sign-in, alarm ack, historian flush — waited
+    behind them."""
+    release = threading.Event()
+    started: list[str] = []
+
+    def _hangs(ip: str) -> str | None:
+        started.append(ip)
+        release.wait(30)
+        return None
+
+    monkeypatch.setattr(device_api, "_resolve_hostname", _hangs)
+    monkeypatch.setattr(device_api, "_lookup_mac", lambda ip: None)
+    monkeypatch.setattr(device_api, "_HOSTNAME_TIMEOUT_SECONDS", 0.05)
+
+    async def scenario() -> float:
+        burst = [
+            asyncio.create_task(device_api.get_device_info(_request_from(f"203.0.113.{n}")))
+            for n in range(1, 81)
+        ]
+        # Long enough for every request to stop waiting for its host name,
+        # while the lookups themselves still hang.
+        await asyncio.sleep(0.3)
+        elapsed = time.monotonic()
+        await asyncio.wait_for(asyncio.to_thread(lambda: None), timeout=10)
+        elapsed = time.monotonic() - elapsed
+        answers = await asyncio.gather(*burst)
+        assert all(answer["hostname"] is None for answer in answers)
+        return elapsed
+
+    # The abandoned lookups end after this, so a stalled pool shows as a wait
+    # of seconds rather than a hang.
+    threading.Timer(3.0, release.set).start()
+    try:
+        unrelated = asyncio.run(scenario())
+    finally:
+        release.set()
+
+    assert unrelated < 0.5
+    assert len(started) <= device_api._LOOKUP_THREADS
+
+
+def test_hostname_answers_are_cached_per_address(lookups):
+    assert _info("10.0.4.12")["hostname"] == "host-10.0.4.12"
+    assert _info("10.0.4.12")["hostname"] == "host-10.0.4.12"
+    assert lookups == ["10.0.4.12"]
+
+
+def test_a_missing_ptr_record_is_cached_too(monkeypatch):
+    asked: list[str] = []
+
+    def _none(ip: str) -> None:
+        asked.append(ip)
+
+    monkeypatch.setattr(device_api, "_resolve_hostname", _none)
+    monkeypatch.setattr(device_api, "_lookup_mac", lambda ip: None)
+    assert _info("203.0.113.7")["hostname"] is None
+    assert _info("203.0.113.7")["hostname"] is None
+    assert asked == ["203.0.113.7"]
+
+
+def test_a_cached_answer_expires(lookups, monkeypatch):
+    monkeypatch.setattr(device_api, "_HOSTNAME_TTL_SECONDS", 0.0)
+    _info("10.0.4.12")
+    _info("10.0.4.12")
+    assert lookups == ["10.0.4.12", "10.0.4.12"]
+
+
+def test_no_lookup_starts_while_every_lookup_thread_is_busy(monkeypatch):
+    release = threading.Event()
+    asked: list[str] = []
+
+    def _hangs(ip: str) -> str:
+        asked.append(ip)
+        release.wait(30)
+        return f"host-{ip}"
+
+    monkeypatch.setattr(device_api, "_resolve_hostname", _hangs)
+    monkeypatch.setattr(device_api, "_lookup_mac", lambda ip: None)
+    monkeypatch.setattr(device_api, "_HOSTNAME_TIMEOUT_SECONDS", 0.05)
+    try:
+        busy = [f"203.0.113.{n}" for n in range(1, device_api._LOOKUP_THREADS + 1)]
+        for ip in busy:
+            assert _info(ip)["hostname"] is None
+        assert _info("10.0.4.12")["hostname"] is None
+        assert asked == busy
+    finally:
+        release.set()
