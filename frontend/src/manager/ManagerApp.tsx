@@ -35,6 +35,7 @@ import ProjectThumbnail from './ProjectThumbnail';
 import SecuritySection from '@config/components/admin/SecuritySection';
 import TokensSection from '@config/components/admin/TokensSection';
 import HttpsSection from '@config/components/admin/HttpsSection';
+import EmbeddingSection from '@config/components/admin/EmbeddingSection';
 import InsecureConnectionNotice from '@config/components/admin/InsecureConnectionNotice';
 import ContactPrompt from '@config/components/admin/ContactPrompt';
 import TelemetrySection from '@config/components/admin/TelemetrySection';
@@ -759,6 +760,7 @@ function SettingsPage() {
           onUploadCustom={uploadTlsCertificate}
           onRestart={restartForTls}
         />
+        <EmbeddingSection />
         <TelemetrySection status={telemetry} onLoad={loadTelemetry} onApply={applyTelemetry} />
         {enterpriseSettingsPanels.map((Panel, i) => (
           <Panel key={i} />

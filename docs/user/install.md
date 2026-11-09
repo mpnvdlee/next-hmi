@@ -52,6 +52,7 @@ origin root; an individual project's HMI is at
   .telemetry.json         usage-reporting on/off (absent means on), contact prompt dismissed
   .telemetry-session.json whether the last run stopped cleanly, and its version
   .telemetry-milestones/  a dated file per first time: connected, pageSaved, mcpUsed
+  .embedding.json         sites that may show NEXT HMI in a frame (absent means none)
   tls/                    HTTPS setting + generated and uploaded certificates
   .peer-transfer-sender.json    outgoing push transfer phases/progress (no bearer plaintext)
   .peer-transfer-receipts.json  incoming push claims, recovery phases, and receipts
@@ -395,8 +396,12 @@ manager answers the proxy alone and nothing reaches it directly, leave
 the browser's `Host` header through unchanged. Caddy and Traefik do that by
 default; nginx needs `proxy_set_header Host $http_host;` (`$host` drops the port, so a proxy on `:8443` would no longer match). Without it the manager
 cannot tell the browser's own address from another website's and refuses
-every change and every live connection. A proxy on the same host is trusted
-out of the box; one on another host needs its address allow-listed:
+every change and every live connection. Leave the `Content-Security-Policy` and
+`X-Frame-Options` response headers as the manager sends them; to show NEXT HMI
+inside another site, list that site instead (see [Showing NEXT HMI inside
+another site](network-access.md#showing-next-hmi-inside-another-site)). A
+proxy on the same host is trusted out of the box; one on another host needs
+its address allow-listed:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

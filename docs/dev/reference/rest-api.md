@@ -70,7 +70,7 @@ Access: **public** — no credential. **session** — the manager session cookie
 | `POST` | `/runtime/{slug}/api/recipes/datasets/{id}/download` | public | The SDK's `recipeDownload`; audited as `recipe.load`. |
 | `POST` | `/runtime/{slug}/api/recipes/datasets/{id}/upload` | public | The SDK's `recipeUpload`; optional Basic credentials only set `updatedBy`. |
 | `POST` | `/runtime/{slug}/api/http-request` | public | `$http`, limited to the project's own origins (see [HTTP source proxy](#http-source-proxy)). |
-| `GET` | `/runtime/{slug}/{path}` outside `api/`: the SPA document, `_app/*`, `assets/*`, `widgets/*`, `widget-js/*`, `builtin-widgets-js/*`, `external-libraries/*` | public | The live view's document and every file it loads. The static mounts serve any file in their directory. |
+| `GET` | `/runtime/{slug}/{path}` outside `api/`: the SPA document, `_app/*`, `assets/*`, `widgets/*`, `widget-js/*`, `builtin-widgets-js/*`, `external-libraries/*` | public | The live view's document and every file it loads. The static mounts serve any file in their directory, `nosniff`, and `assets/*` and `widgets/*` with a `sandbox` CSP (see [Project files served on the origin](../operations/deploy.md#project-files-served-on-the-origin)). |
 | WS | `/runtime/{slug}/ws` | public | The variable pipeline: snapshots, writes, recipe load and save, alarm ack, sign-in. See [websocket.md](../architecture/websocket.md). |
 | any | every other `/runtime/{slug}/*`: every other verb and route, including `api/datasources`, `api/users`, `api/system/*`, `api/internal/*`, `api/health`, `openapi.json`, `docs`, `redoc` | session | |
 | WS | `/editor/{slug}/ws` | session | Writes on it are recorded as `engineer`. |
@@ -730,6 +730,19 @@ All three endpoints return `{ "enabled": bool, "envOverride": bool | null, "inst
 - `DELETE /api/system/telemetry/contact-prompt` → dismisses the dashboard's contact prompt for good (`contactPromptDismissed` in `.telemetry.json`). Allowed under the environment pin: it is not the reporting switch.
 
 The receiving end is a PHP handler on next-hmi.com (private repo): it validates the whitelisted fields, appends one JSON line per report to a monthly file above the web root, stores no IP or user agent, and always answers `204`.
+
+---
+
+## Embedding API
+
+**(manager)** Base prefix: `/api/system/embedding`. The sites allowed to show NEXT HMI in a frame — the `frame-ancestors` sources beside `'self'` on every HTML document, see [No framing by other sites](../operations/deploy.md#no-framing-by-other-sites). Device-level like TLS, so it sits on the manager behind the device-admin session. Implementation is `core/embed_settings.py`; stored in `<runtime_home>/.embedding.json`, read on every HTML response by the manager and every instance, so a change needs no restart.
+
+Both endpoints return `{ "origins": ["https://portal.example.com", "http://10.0.0.5:8080"] }`.
+
+- `GET /api/system/embedding` → the stored sites, in order.
+- `PUT /api/system/embedding`
+  - Body: `{ "origins": [string] }`, replacing the list. Each entry is stored as its canonical origin: scheme and host lower-cased, a trailing `/` and a default port dropped, duplicates removed.
+  - `422` when an entry is not a bare `http`/`https` origin — a path, query, fragment, credentials, a wildcard, an IPv6 literal (browsers do not match one in `frame-ancestors`), or a host outside letters, digits, `-` and `.` — and nothing is stored.
 
 ---
 

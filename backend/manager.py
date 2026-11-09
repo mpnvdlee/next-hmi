@@ -29,6 +29,7 @@ from urllib.parse import quote, unquote
 import httpx
 from api.docs_api import bundled_docs_dir
 from api.docs_api import router as help_router
+from api.embedding_api import router as embedding_router
 from api.manager_auth_api import router as manager_auth_router
 from api.manager_peers_api import manager_router as manager_peers_router
 from api.manager_peers_api import public_router as public_manager_peers_router
@@ -62,6 +63,7 @@ from core.manifest import (
 from core.origin_check import OriginCheckMiddleware
 from core.peer_discovery import peer_discovery
 from core.project_packer import max_zip_bytes
+from core.security_headers import FrameAncestorsMiddleware
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import (
     FileResponse,
@@ -236,6 +238,7 @@ app.include_router(thumbnail_manager_router)
 app.include_router(system_router)
 app.include_router(tls_router)
 app.include_router(telemetry_router)
+app.include_router(embedding_router)
 # Excluded from ``_auth_gate`` (see ``_is_gated``): every v1 route checks its own
 # device-admin Basic or API-token credential, and a session cookie opens none.
 app.include_router(api_v1_router)
@@ -653,6 +656,8 @@ async def _auth_gate(request: Request, call_next):
 
 
 app.add_middleware(OriginCheckMiddleware)
+# Outermost, so the gate's and the proxy's documents are covered too.
+app.add_middleware(FrameAncestorsMiddleware)
 
 
 @app.get("/api/health", include_in_schema=False)

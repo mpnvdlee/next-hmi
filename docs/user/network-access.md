@@ -97,7 +97,11 @@ The manager is the device's front door, at the address without
 - **Other websites cannot use it.** A web page from another site, open in a
   browser on the panel or on a laptop on the same network, cannot connect to
   the live screens or send them changes: the device refuses a browser request
-  whose page did not come from the device itself.
+  whose page did not come from the device itself. Nor can it show the screens
+  inside a frame of its own, where a disguised button could trick someone into
+  a click that writes a setpoint: only the device itself and the sites you list
+  may do that (see [Showing NEXT HMI inside another
+  site](#showing-next-hmi-inside-another-site)).
 - **That check stops websites, not scripts.** A program on the network (curl,
   a Python script, a PLC tool) sends no page address, and gets the same reach
   as a panel.
@@ -106,8 +110,39 @@ The manager is the device's front door, at the address without
   still reaches only the open part: the browser does not send the dashboard
   sign-in to that name, and the projects running behind the device answer
   only the device itself, never a name.
+- **Files in the project folders run no script.** An HTML or SVG file in
+  `assets` or `custom-widgets`, opened at its own address, shows as a plain
+  document, so a file someone put there cannot act with your dashboard
+  sign-in. Custom widgets and external libraries are code the screens run on
+  purpose and are not limited this way.
 - **Sign-ins are throttled**, per username on the screens, and for the
   device-admin password everywhere.
+
+## Showing NEXT HMI inside another site
+
+By default only the device itself can show its pages in a frame; another site
+that tries gets an empty frame. When a plant portal or another web page must
+show NEXT HMI inside its own page, add it under **Settings › Sites that may
+embed NEXT HMI** on the dashboard, as the address the portal is opened at:
+scheme, host and, when it is not the default, port, such as
+`https://portal.example.com` or `http://10.0.0.20:8080`. A path, a wildcard or
+anything else is refused. The change applies the next time the page loads; no
+restart.
+
+Up to **32 sites** can be listed. Every page of the device carries the list,
+and one long enough would make browsers refuse to load any page, so saving a
+longer list is refused with a message saying how many it has; in a file edited
+by hand, the sites past the 32nd are ignored.
+
+Embedding is meant for the runtime screens, at `/runtime/<project>/`. The
+dashboard and the editor do not work inside another site's frame: the browser
+does not send their sign-in cookie to a page framed by a different site, so
+they cannot stay signed in there. Open them directly, at the device's own
+address.
+
+A listed site can frame every page of the device, the screens of every project
+included, so list only sites you control: whoever controls one can lay a
+disguised page over your screens.
 
 ## Network advice
 

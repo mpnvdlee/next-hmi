@@ -24,6 +24,7 @@ from core.exceptions import register_exception_handlers
 from core.logging_setup import configure_logging
 from core.origin_check import OriginCheckMiddleware
 from core.project_migrations import run_baseline_migration
+from core.security_headers import FrameAncestorsMiddleware, UserContentFiles
 from core.storage import (
     WIDGET_BUILD_DIR,
     active_assets_dir,
@@ -268,6 +269,7 @@ register_exception_handlers(app)
 # panel's browser can find that port, or rebind a name to it; see
 # ``core.origin_check``.
 app.add_middleware(OriginCheckMiddleware, loopback_only=True)
+app.add_middleware(FrameAncestorsMiddleware)
 
 
 # NOTE: every top-level route lives under one of /api/, /ws, /mcp, or a
@@ -313,11 +315,11 @@ if not _INSTANCE_MODE and not os.environ.get("NEXTHMI_ACTIVE_PROJECT_PATH"):
     os.environ["NEXTHMI_ACTIVE_PROJECT_PATH"] = _default_entry.path
 _widgets_dir = active_custom_widgets_dir()
 _widgets_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/widgets", StaticFiles(directory=str(_widgets_dir), follow_symlink=False), name="widgets")
+app.mount("/widgets", UserContentFiles(directory=str(_widgets_dir), follow_symlink=False, sandbox=True), name="widgets")
 
 _widget_build_dir = WIDGET_BUILD_DIR
 _widget_build_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/widget-js", StaticFiles(directory=str(_widget_build_dir), follow_symlink=False), name="widget-js")
+app.mount("/widget-js", UserContentFiles(directory=str(_widget_build_dir), follow_symlink=False, sandbox=False), name="widget-js")
 
 # Product built-in widgets: compiled at build time and shipped with the
 # frontend, unlike /widget-js which is project content compiled on load. Served
@@ -345,11 +347,11 @@ app.mount(
 
 _external_libraries_dir = active_external_libraries_dir()
 _external_libraries_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/external-libraries", StaticFiles(directory=str(_external_libraries_dir), follow_symlink=False), name="external-libraries")
+app.mount("/external-libraries", UserContentFiles(directory=str(_external_libraries_dir), follow_symlink=False, sandbox=False), name="external-libraries")
 
 _assets_dir = active_assets_dir()
 _assets_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/assets", StaticFiles(directory=str(_assets_dir), follow_symlink=False), name="assets")
+app.mount("/assets", UserContentFiles(directory=str(_assets_dir), follow_symlink=False, sandbox=True), name="assets")
 
 
 @app.get("/api/health")
