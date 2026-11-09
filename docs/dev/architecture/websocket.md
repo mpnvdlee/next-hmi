@@ -213,6 +213,10 @@ integer digits keeps them too — and writes it back as a string.
   - `var_update` frames are per client: a client receives the keys its last
     `set_context` resolved to, the elements of any struct array it binds
     whole, and every recipe parameter — nothing else.
+  - Only enabled variables are answered or subscribed. A key naming a variable
+    that is not enabled in its datasource (or that a re-browse found gone from
+    the server) gets no value, cached or freshly read, and no fast
+    subscription; a struct folder's key subscribes only its enabled leaves.
 
   Current producers: `HmiView` (active page + open overlays), `PreviewView`
   (preview page/overlay context), `DatasourceVariableTable` (explicit
@@ -253,12 +257,13 @@ integer digits keeps them too — and writes it back as a string.
     a type with no bits, or of an array element is `bad_path`; a value that is
     not a Boolean is `invalid_value`.
   - The server does not check who is writing: any connection may write any
-    writable variable. A variable entry may still carry the retired
+    enabled, writable variable. A variable entry may still carry the retired
     `interactableByGroups` key from an older project; it is ignored.
-  - Values are coerced per the
-    [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix), then
-    refused as `read_only` unless the variable written is marked `writable: true`,
-    then checked against its `min`/`max`.
+  - The variable written is refused as `disabled` unless it is enabled in its
+    datasource, then as `read_only` unless it is marked `writable: true`; then
+    the value is coerced per the
+    [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix) and
+    checked against its `min`/`max`.
   - `static` datasources are updated in-process; OPC-UA datasources route through
     the pool engine.
   - `requestId` is optional. When supplied the backend replies with
@@ -281,8 +286,8 @@ integer digits keeps them too — and writes it back as a string.
     `toggleDataVariable` action's `target` is resolved the same way. The backend reads
     the current value itself (a fresh node read for OPC-UA, the cache for a
     static datasource) and writes its inverse through `write_service.write_value`,
-    so the read-only check, range check, audit record and reply are the same
-    as a `write_field`. The client never sends the value: its copy may be stale.
+    so the enabled and read-only checks, range check, audit record and reply
+    are the same as a `write_field`. The client never sends the value: its copy may be stale.
   - A `.N` bit path toggles that bit of its word.
   - A variable whose `data_type` is not Boolean fails with `invalid_value`; one
     whose current value is not a boolean (never read, read failed) fails with
@@ -414,6 +419,7 @@ stable contract the frontend `$switch`es on:
 | `invalid_value`       | Write: value cannot be coerced to the variable's data type |
 | `value_out_of_range`  | Write: the numeric value, as entered (before any Float32 rounding), falls outside the variable's persisted `min`/`max` |
 | `read_only`           | Write / toggle: the variable written — for an element, its array; for a struct field, that member — does not have `writable: true`. Nothing is written |
+| `disabled`            | Write / toggle: the variable written is not enabled in its datasource — a browsed tag left unticked — or a re-browse found it gone from the server. Nothing is read or written |
 | `opcua_unreachable`   | Write: no engine for the datasource (not yet connected, or static-only) |
 | `write_failed`        | Write: the OPC-UA `write_node` call raised |
 | `array_index_out_of_bounds` | Write: an indexed write exceeds a fixed array's declared length |
@@ -423,7 +429,7 @@ stable contract the frontend `$switch`es on:
 
 `invalid_value` follows the documented [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix). The REST variable-write endpoint uses project-user HTTP Basic credentials, then calls the same request parser, coercer, and dispatcher.
 
-`read_only` is checked in `write_service.write_value` (and in `toggle_value`, before the Boolean check and the read), so the WebSocket, REST and recipe-download writes refuse it alike; a recipe download reports it per parameter in `failures`. It comes after `bad_path` and `bad_field` and before everything about the index or the value — `array_index_out_of_bounds`, `invalid_value`, `value_out_of_range` — since no other value could make the write succeed. A whole-struct payload names a folder with no access of its own and stays `invalid_value`. `useWriteVariable` pre-flights it in the same order: a variable whose metadata says `writable: false` is reported `read_only` before its value is coerced. A variable that states no access at all is read-only, the same reading the editor and the runtime overlay give it.
+`disabled` is checked just before `read_only`, in the same places and on the same variable (for a bit, its word), and before any read: a tag nobody enabled is still in the datasource's registry, and any connection can name it. `read_only` is checked in `write_service.write_value` (and in `toggle_value`, before the Boolean check and the read), so the WebSocket, REST and recipe-download writes refuse it alike; a recipe download reports it per parameter in `failures`. It comes after `bad_path` and `bad_field` and before everything about the index or the value — `array_index_out_of_bounds`, `invalid_value`, `value_out_of_range` — since no other value could make the write succeed. A whole-struct payload names a folder with no access of its own and stays `invalid_value`. `useWriteVariable` pre-flights it in the same order: a variable whose metadata says `writable: false` is reported `read_only` before its value is coerced. A variable that states no access at all is read-only, the same reading the editor and the runtime overlay give it.
 
 `value_out_of_range` is checked only after coercion succeeds, against the variable's own (or, for a struct field, that field's own) persisted `min`/`max` — a hard operator-write constraint enforced identically for REST, WebSocket, and recipe writes since all three share `write_service.write_value`. It judges the value as entered: a `Float` (float32) write is rounded to the nearest float32 only after the check, so 19.9 against a minimum of 19.9 is accepted although it is stored as 19.89999962. A whole-array write is rejected if any element is out of range; an indexed element write is checked the same way. A persisted `min > max` is a contract violation, not a range: it is left unenforced (the write proceeds as if no range were configured) and logged once as a warning when the datasource loads.
 

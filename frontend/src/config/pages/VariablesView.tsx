@@ -69,6 +69,7 @@ export default function VariablesView() {
   const selectedDs = datasources.find((d) => d.name === selectedName);
   const isConnected = selectedDs?.connected ?? false;
   const statusError = selectedDs?.error ?? null;
+  const certificateStatus = selectedDs?.server_certificate_status ?? null;
 
   // ── Render ────────────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ export default function VariablesView() {
           config={selectedConfig}
           connected={isConnected}
           statusError={statusError}
+          certificateStatus={certificateStatus}
           onSave={saveSettings}
           onStatusChange={loadList}
         />

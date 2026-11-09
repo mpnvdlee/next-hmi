@@ -4,10 +4,10 @@
  * Renders a property editor form based on the selected datasource's type.
  * - OPC-UA Client: server URL, credentials, security, reconnect interval
  * - Static Variables: no connection settings
- * - OPC-UA Test Server: port, endpoint path, start/stop
+ * - OPC-UA Test Server: port, endpoint path, network reach, start/stop
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Fragment, useState, useEffect, useCallback, useRef } from 'react';
 import { useProjectStore } from '@shared/store/projectStore';
 import { useVariablesDomainStore } from '@config/store/domains/variablesDomainStore';
 import Button from '@config/components/ui/Button';
@@ -16,10 +16,13 @@ import PropertiesEmpty from '@config/components/ui/PropertiesEmpty';
 import PropRow from '@config/components/ui/PropRow';
 import BoolButtonGroup from '@config/components/ui/BoolButtonGroup';
 import Select from '@config/components/ui/Select';
+import ReadOnlyValue from '@config/components/ui/ReadOnlyValue';
 import CertificateControls from '../CertificateControls';
+import ServerCertificateCard from '../CertificateControls/ServerCertificateCard';
 import type {
   DatasourceConfig,
   OpcuaClientSettings,
+  ServerCertificateStatus,
   TestServerSettings,
 } from '@shared/types/datasource';
 import { isOpcuaClientSettings, isTestServerSettings } from '@shared/types/datasource';
@@ -29,6 +32,8 @@ interface Props {
   config: DatasourceConfig | null;
   connected: boolean;
   statusError?: string | null;
+  /** Whether the secured endpoint's certificate is the pinned one. */
+  certificateStatus?: ServerCertificateStatus | null;
   onSave: (config: DatasourceConfig) => void | Promise<void>;
   onStatusChange?: () => void;
 }
@@ -51,11 +56,13 @@ export default function DatasourcePropertiesPanel({
   config,
   connected,
   statusError,
+  certificateStatus = null,
   onSave,
   onStatusChange,
 }: Props) {
   const setPropsDraft = useVariablesDomainStore((s) => s.setPropsDraft);
   const clearPropsDraft = useVariablesDomainStore((s) => s.clearPropsDraft);
+  const pinServerCertificate = useVariablesDomainStore((s) => s.pinServerCertificate);
 
   const [settingsDraft, setSettingsDraft] = useState<Record<string, unknown> | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -124,6 +131,12 @@ export default function DatasourcePropertiesPanel({
 
   const settings = draft.settings;
   const effectiveError = connBusy ? null : statusError;
+  const signsIn = isOpcuaClientSettings(config.settings) && !!config.settings.username;
+  // The trust card below is where a connection held for its certificate says
+  // so; the engine's refusal in the header would repeat it.
+  const heldForCertificate =
+    config.type === 'opcua-client' &&
+    (certificateStatus === 'changed' || (certificateStatus === 'untrusted' && signsIn));
 
   return (
     <div className="cfg-ds-props">
@@ -156,7 +169,7 @@ export default function DatasourcePropertiesPanel({
                     ? 'Connected'
                     : 'Disconnected'}
             </span>
-            {!connected && effectiveError && (
+            {!connected && effectiveError && !heldForCertificate && (
               <span className="cfg-ds-props__error" role="alert">
                 {effectiveError}
               </span>
@@ -189,6 +202,18 @@ export default function DatasourcePropertiesPanel({
         </div>
       )}
 
+      {config.type === 'opcua-client' && (
+        <ServerCertificateCard
+          dsName={config.name}
+          status={certificateStatus}
+          signsIn={signsIn}
+          onTrusted={(path) => {
+            pinServerCertificate(config.name, path);
+            onStatusChange?.();
+          }}
+        />
+      )}
+
       {/* Settings — only for OPC-UA types */}
       {config.type !== 'static' && (
         <div className="cfg-section">
@@ -199,7 +224,15 @@ export default function DatasourcePropertiesPanel({
           )}
 
           {config.type === 'opcua-test-server' && isTestServerSettings(settings) && (
-            <TestServerFields settings={settings} onChange={updateSetting} />
+            <TestServerFields
+              settings={settings}
+              listeningOn={
+                connected && isTestServerSettings(config.settings)
+                  ? testServerEndpoint(config.settings)
+                  : null
+              }
+              onChange={updateSetting}
+            />
           )}
         </div>
       )}
@@ -432,14 +465,47 @@ const TEST_SERVER_SECURE_ENDPOINTS = [
   'Aes256Sha256RsaPss/SignAndEncrypt',
 ];
 
+const LOOPBACK_HOST = /^(localhost|127(\.\d+){3}|\[::1\])$/i;
+
+/** Where a client reaches a running test server: loopback unless the
+ *  datasource is reachable from the network. Then the backend binds every
+ *  interface, `0.0.0.0`, which no client can dial — so name the address this
+ *  page was opened at instead, the device's own on that network, or a
+ *  placeholder when the page came over loopback and says nothing about it. */
+function testServerEndpoint(settings: TestServerSettings): string {
+  const pageHost = window.location.hostname;
+  const host =
+    settings.reachable_from_network !== true
+      ? '127.0.0.1'
+      : LOOPBACK_HOST.test(pageHost)
+        ? '<this device’s address>'
+        : pageHost;
+  return `opc.tcp://${host}:${settings.port ?? 4855}${settings.endpoint_path ?? '/nexthmi/test/'}`;
+}
+
+/** A URL that wraps after a path slash rather than inside a word: browsers
+ *  offer no break there on their own. */
+function wrappableUrl(url: string) {
+  return url.split(/(?<=\/)(?!\/)/).map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ));
+}
+
 function TestServerFields({
   settings,
+  listeningOn,
   onChange,
 }: {
   settings: TestServerSettings;
+  /** The saved settings' endpoint while the server runs, else null. */
+  listeningOn: string | null;
   onChange: (key: string, value: unknown) => void;
 }) {
   const securityPolicies = settings.security_policies ?? [];
+  const reachable = settings.reachable_from_network === true;
 
   function toggleEndpoint(entry: string, enabled: boolean) {
     const next = enabled
@@ -450,6 +516,11 @@ function TestServerFields({
 
   return (
     <>
+      {listeningOn && (
+        <PropRow label="Listening on">
+          <ReadOnlyValue mono>{wrappableUrl(listeningOn)}</ReadOnlyValue>
+        </PropRow>
+      )}
       <PropRow label="Port">
         <input
           className="cfg-prop-input"
@@ -485,6 +556,22 @@ function TestServerFields({
             </label>
           ))}
         </div>
+      </PropRow>
+      <PropRow label="Reachable from the network">
+        <BoolButtonGroup
+          value={reachable}
+          onChange={(v) => onChange('reachable_from_network', v)}
+          labels={['On', 'Off']}
+        />
+      </PropRow>
+      {reachable && (
+        <p className="cfg-ds-props__warning">
+          Every device on the network can connect to this test server and change its writable
+          values. Use it only on an isolated network.
+        </p>
+      )}
+      <PropRow label="Sign-in">
+        <ReadOnlyValue>Anonymous only. Writes follow each node&rsquo;s access level.</ReadOnlyValue>
       </PropRow>
     </>
   );

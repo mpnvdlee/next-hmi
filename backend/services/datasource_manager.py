@@ -707,8 +707,9 @@ class DatasourceManager:
         keys: set[str],
         result: dict[str, Any],
     ) -> None:
+        valid_keys = entry._enabled_cache_keys
         for key in keys:
-            if key in entry.cache:
+            if key in entry.cache and key in valid_keys:
                 result[key] = self._snapshot_copy(entry.cache[key])
 
     # -- Load / save ---------------------------------------------------------
@@ -1319,9 +1320,9 @@ class DatasourceManager:
     def get_cached_values(self, keys: set[str]) -> dict[str, Any]:
         """Return cached values for a specific set of composite keys.
 
-        Unlike snapshot(), this does not filter by enabled status - the caller
-        has explicitly requested these keys (e.g. priority subscription browse),
-        so we return any cached value we have regardless of enabled state.
+        Filtered like snapshot(): a disabled variable's value is never handed
+        out, whoever names its key — `set_context` passes keys straight from
+        the client.
         """
         result: dict[str, Any] = {}
         with self._lock:

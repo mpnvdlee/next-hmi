@@ -179,7 +179,7 @@ def test_struct_folder_priority_is_demoted_through_its_leaf_handles():
 
 
 def test_concurrent_recomputes_do_not_double_subscribe_the_same_path():
-    entry = _FakeDsEntry(registry={"A": {"node_id": "ns=2;s=A", "enabled": False}})
+    entry = _FakeDsEntry(registry={"A": {"node_id": "ns=2;s=A", "enabled": True}})
     priority_sub = _FakePrioritySub([501])
     engine = _make_engine(entry, priority_sub=priority_sub, background_sub=None)
 
@@ -192,6 +192,45 @@ def test_concurrent_recomputes_do_not_double_subscribe_the_same_path():
     asyncio.run(run_both())
     assert len(priority_sub.subscribe_calls) == 1
     assert engine._priority_path_handles == {"A": [501]}
+
+
+# ── Only enabled variables are promoted ──────────────────────────────────────
+# Any client's set_context names priority keys, and a promoted value is
+# broadcast to every client: a disabled tag must never get a monitored item.
+
+
+def test_a_disabled_variable_is_never_promoted():
+    entry = _FakeDsEntry(registry={"Line/SafetyLimit": {"node_id": "ns=2;s=Limit", "enabled": False}})
+    priority_sub = _FakePrioritySub([501])
+    engine = _make_engine(entry, priority_sub=priority_sub, background_sub=None)
+
+    asyncio.run(engine.set_priority_paths({"Line/SafetyLimit"}))
+
+    assert priority_sub.subscribe_calls == []
+    assert engine._priority_path_handles == {}
+
+
+def test_a_struct_folder_promotes_only_its_enabled_leaves():
+    entry = _FakeDsEntry(
+        registry={
+            "Line/Speed": {"node_id": "ns=2;s=Speed", "enabled": True},
+            "Line/SafetyLimit": {"node_id": "ns=2;s=Limit", "enabled": False},
+        },
+        folder_registry={
+            "Line": {
+                "_child_paths": {"Line/Speed": "Speed", "Line/SafetyLimit": "SafetyLimit"},
+                "_nested_fields": {},
+                "_element_paths": [],
+            },
+        },
+    )
+    priority_sub = _FakePrioritySub([501])
+    engine = _make_engine(entry, priority_sub=priority_sub, background_sub=_FakeBgSub())
+
+    asyncio.run(engine.set_priority_paths({"Line"}))
+
+    assert [[node.nodeid for node in call] for call in priority_sub.subscribe_calls] == [["ns=2;s=Speed"]]
+    assert set(engine._priority_path_handles) == {"Line/Speed"}
 
 
 # ── _subscribe_path dedupe guard ───────────────────────────────────────────────

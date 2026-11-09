@@ -38,8 +38,8 @@ Everything under `/runtime/<project>/`, while that project runs:
 |---|---|
 | Pages, dialogs, components, themes, texts and translations | Read the complete screen design, including which variable each widget shows or writes. |
 | The project's `assets`, `custom-widgets` and `external-libraries` folders | Download any file in them, the source of your custom widgets included. Keep nothing secret there. |
-| The live connection | See the list of the project's variables, their live values, the active alarms and the recipes with their saved values. |
-| Variables | Write every variable marked writable in its datasource, and switch a Boolean. A read-only variable is refused for everyone. See [What the server enforces](users.md#what-the-server-enforces). |
+| The live connection | See the list of the project's enabled variables, their live values, the active alarms and the recipes with their saved values. A tag browsed but not enabled is never read. |
+| Variables | Write every enabled variable marked writable in its datasource, and switch a Boolean. A read-only or disabled variable is refused for everyone. See [What the server enforces](users.md#what-the-server-enforces). |
 | Recipes | Load a saved recipe to the PLC, or save the live values over a recipe. |
 | Alarms | Acknowledge active alarms, and read the alarm history, including who acknowledged each alarm. |
 | Historian | Read the recorded history of every variable the historian logs. |

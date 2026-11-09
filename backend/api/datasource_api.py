@@ -9,11 +9,16 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 from core import audit
-from core.cert_info import describe_certificate
-from core.exceptions import DatasourceNotFoundError, DatasourceValidationError
+from core.cert_info import describe_certificate, describe_x509
+from core.exceptions import (
+    DatasourceConflictError,
+    DatasourceNotFoundError,
+    DatasourceValidationError,
+)
 from core.project_packer import safe_filename
 from core.storage import active_certs_dir, write_bytes_atomic
 from core.value_types import simplify_variable_tree
+from cryptography import x509
 from fastapi import (
     APIRouter,
     Body,
@@ -34,11 +39,14 @@ from models.datasource import (
     DatasourceUpsertBody,
     DiscoverBody,
     DiscoveryResult,
+    ServerCertificateInfo,
     TestConnectionBody,
     TestConnectionResult,
+    TrustCertificateBody,
+    TrustCertificateResult,
 )
 from opcua.discovery import discover_endpoints, probe_connection
-from opcua.security import generate_self_signed_client_certificate
+from opcua.security import ServerCertificate, generate_self_signed_client_certificate
 from services import users_manager, write_service
 from services.datasource_manager import (
     DatasourceEntry,
@@ -83,6 +91,7 @@ class DatasourceSummary(TypedDict):
     variable_count: int
     enabled_count: int
     error: str | None
+    server_certificate_status: str | None
 
 
 def _require_opcua_pool() -> Any:
@@ -179,6 +188,7 @@ def _apply_connection_status(items: list[DatasourceSummary]) -> list[DatasourceS
     pool = _opcua_pool
     ts_pool = _test_server_pool
     for item in items:
+        item["server_certificate_status"] = None
         if item.get("type") == "opcua-test-server" and ts_pool:
             instance = ts_pool.get(item["name"])
             item["connected"] = instance.running if instance else False
@@ -188,6 +198,8 @@ def _apply_connection_status(items: list[DatasourceSummary]) -> list[DatasourceS
             if engine is not None:
                 item["connected"] = engine.connected
                 item["error"] = engine.error
+                certificate = engine.server_certificate
+                item["server_certificate_status"] = certificate.status if certificate else None
     return items
 
 
@@ -536,6 +548,62 @@ async def browse_datasource_stream(name: str) -> StreamingResponse:
         # Proxies that buffer would hold every progress line until the end.
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── Server certificate trust ─────────────────────────────────────────────────
+
+
+def _presented_server_certificate(name: str) -> ServerCertificate | None:
+    engine = _opcua_pool.get(name) if _opcua_pool else None
+    return engine.server_certificate if engine is not None else None
+
+
+@router.get("/{name}/server-certificate")
+async def get_server_certificate(name: str) -> ServerCertificateInfo | None:
+    """The certificate the secured endpoint presented on the last connect
+    attempt, for the editor's trust card — ``null`` before there was one."""
+    _require_datasource(name)
+    certificate = _presented_server_certificate(name)
+    if certificate is None:
+        return None
+    described = describe_x509(certificate.der)
+    return ServerCertificateInfo(
+        status=certificate.status,
+        subject=described["subject"],
+        issuer=x509.load_der_x509_certificate(certificate.der).issuer.rfc4514_string(),
+        expiresAt=described["expiresAt"],
+        fingerprint=certificate.fingerprint,
+    )
+
+
+@router.post("/{name}/server-certificate/trust", dependencies=[broadcasts("datasource")])
+async def trust_server_certificate(name: str, body: TrustCertificateBody) -> TrustCertificateResult:
+    """Pin the certificate the server presented, after an engineer compared it.
+
+    The pin is the ``server_certificate`` setting an uploaded server
+    certificate also fills, so trusting here and uploading by hand end in the
+    same place; the engine then restarts on it.
+    """
+    entry = _require_datasource(name)
+    certificate = _presented_server_certificate(name)
+    if certificate is None:
+        raise DatasourceConflictError(
+            f"'{name}' has no server certificate to trust. Connect it first."
+        )
+    if certificate.fingerprint != body.fingerprint:
+        raise DatasourceConflictError(
+            "The server presents a different certificate now. Review it again before trusting it."
+        )
+    filename = f"{_sanitize_cert_filename(name)}-server.der"
+    write_bytes_atomic(active_certs_dir() / filename, certificate.der)
+    path = f"certs/{filename}"
+    settings = {**entry.config.get("settings", {}), "server_certificate": path}
+    # Stopped before the entry is replaced, as a PUT does, so no callback from
+    # the old engine lands in the new entry's cache.
+    await _stop_datasource_runtime(name, entry.ds_type)
+    datasource_manager.save(name, {**entry.config, "settings": settings})
+    await _require_opcua_pool().start(name, settings)
+    return TrustCertificateResult(server_certificate=path)
 
 
 # ── Test server lifecycle ─────────────────────────────────────────────────────

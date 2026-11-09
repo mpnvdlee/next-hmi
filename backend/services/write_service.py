@@ -33,7 +33,7 @@ from core.value_types import (
     array_index_out_of_bounds,
     json_ready,
 )
-from models.datasource import build_var_key
+from models.datasource import build_var_key, is_subscribable
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,7 @@ REASON_ARRAY_STATE_UNAVAILABLE = "array_state_unavailable"
 REASON_VALUE_OUT_OF_RANGE = "value_out_of_range"
 REASON_VALUE_UNAVAILABLE = "value_unavailable"
 REASON_READ_ONLY = "read_only"
+REASON_DISABLED = "disabled"
 
 
 @dataclass
@@ -705,11 +706,12 @@ async def write_value(
     """Coerce and write *value* to ``ds_name:path``.
 
     The variable actually written — the element's array, the struct member —
-    must be writable; one that is not is refused as ``read_only``, before its
-    index or the value is judged: nothing written to it could succeed. Static
-    datasources are updated in memory; OPC-UA datasources are written via
-    the pool engine. When *verify* is set, the value is read back and compared
-    for exact equality (per-element for arrays).
+    must be enabled in its datasource and writable; one that is not is refused
+    as ``disabled`` or ``read_only``, before its index or the value is judged:
+    nothing written to it could succeed. Static datasources are updated in
+    memory; OPC-UA datasources are written via the pool engine. When *verify*
+    is set, the value is read back and compared for exact equality
+    (per-element for arrays).
     """
     if datasource_manager is None:
         return WriteOutcome(False, REASON_OPCUA_UNREACHABLE)
@@ -731,10 +733,13 @@ async def write_value(
     if coercion_entry is None:
         return WriteOutcome(False, REASON_BAD_FIELD)
     data_type = coercion_entry.get("data_type")
-    # A struct folder has no access of its own: writing one whole is a shape
-    # the write path cannot take, reported as invalid_value.
-    if not _is_struct_folder(coercion_entry) and not is_writable(coercion_entry):
-        return WriteOutcome(False, REASON_READ_ONLY)
+    # A struct folder has no state or access of its own: writing one whole is
+    # a shape the write path cannot take, reported as invalid_value.
+    if not _is_struct_folder(coercion_entry):
+        if not is_subscribable(coercion_entry):
+            return WriteOutcome(False, REASON_DISABLED)
+        if not is_writable(coercion_entry):
+            return WriteOutcome(False, REASON_READ_ONLY)
 
     index_match = _ARRAY_INDEX_RE.search(path)
     if index_match is not None:
@@ -859,6 +864,9 @@ async def _write_bit(
     entry_data = datasource_manager.get_entry(ds_name, word_path)
     if entry_data is None or _ARRAY_INDEX_RE.search(word_path):
         return WriteOutcome(False, REASON_BAD_PATH)
+    # Before the word is read: a disabled variable is never read.
+    if not is_subscribable(entry_data):
+        return WriteOutcome(False, REASON_DISABLED)
     if not is_writable(entry_data):
         return WriteOutcome(False, REASON_READ_ONLY)
     data_type = str(entry_data.get("data_type") or "").strip().lower()
@@ -914,8 +922,12 @@ async def toggle_value(
     if entry_data is None:
         return WriteOutcome(False, REASON_BAD_PATH), None
     data_type = entry_data.get("data_type")
-    if not _is_struct_folder(entry_data) and not is_writable(entry_data):
-        return WriteOutcome(False, REASON_READ_ONLY), None
+    if not _is_struct_folder(entry_data):
+        # Before the read below: a disabled variable is never read.
+        if not is_subscribable(entry_data):
+            return WriteOutcome(False, REASON_DISABLED), None
+        if not is_writable(entry_data):
+            return WriteOutcome(False, REASON_READ_ONLY), None
     if bit is None and (
         not isinstance(data_type, str)
         or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) != "boolean"

@@ -5,6 +5,7 @@ import sys
 import time
 from contextlib import suppress
 from pathlib import Path
+from types import SimpleNamespace
 
 import api.datasource_api as datasource_api_module
 import core.storage as storage
@@ -906,6 +907,7 @@ def test_list_datasources_surfaces_opcua_client_connect_error(ds_client, monkeyp
     class _FakeEngine:
         connected = False
         error = "Connection timed out"
+        server_certificate = None
 
     class _FakePool:
         def get(self, name):
@@ -918,6 +920,126 @@ def test_list_datasources_surfaces_opcua_client_connect_error(ds_client, monkeyp
     item = resp.json()[0]
     assert item["connected"] is False
     assert item["error"] == "Connection timed out"
+    assert item["server_certificate_status"] is None
+
+
+# ── Server certificate trust ──────────────────────────────────────────────────
+
+
+def _presented(tmp_path: Path, status: str):
+    from cryptography import x509
+    from cryptography.hazmat.primitives.serialization import Encoding
+    from opcua.security import (
+        ServerCertificate,
+        generate_self_signed_client_certificate,
+    )
+
+    cert, key = tmp_path / "plc-cert.pem", tmp_path / "plc-key.pem"
+    generate_self_signed_client_certificate(str(cert), str(key), common_name="plc-1500")
+    der = x509.load_pem_x509_certificate(cert.read_bytes()).public_bytes(Encoding.DER)
+    return ServerCertificate(der, status)
+
+
+class _CertificatePool:
+    def __init__(self, certificate) -> None:
+        self.engine = SimpleNamespace(connected=False, error=None, server_certificate=certificate)
+        self.calls: list[tuple[str, str, dict | None]] = []
+
+    def get(self, name):
+        return self.engine if name == "plc1" else None
+
+    async def stop(self, name):
+        self.calls.append(("stop", name, None))
+
+    async def start(self, name, settings):
+        self.calls.append(("start", name, settings))
+
+
+def _save_secured_client(manager) -> dict:
+    settings = {
+        "server_url": "opc.tcp://plc:4840",
+        "username": "operator",
+        "security_policy": "Basic256Sha256",
+        "server_certificate": "",
+    }
+    manager.save("plc1", {"name": "plc1", "type": "opcua-client", "settings": settings, "variables": []})
+    return settings
+
+
+def test_list_reports_a_certificate_waiting_for_trust(ds_client, monkeypatch, tmp_path):
+    client, manager = ds_client
+    _save_secured_client(manager)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", _CertificatePool(_presented(tmp_path, "untrusted")))
+
+    [item] = client.get("/api/datasources").json()
+
+    assert item["server_certificate_status"] == "untrusted"
+
+
+def test_server_certificate_describes_what_the_server_presented(ds_client, monkeypatch, tmp_path):
+    client, manager = ds_client
+    _save_secured_client(manager)
+    certificate = _presented(tmp_path, "changed")
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", _CertificatePool(certificate))
+
+    body = client.get("/api/datasources/plc1/server-certificate").json()
+
+    assert body["status"] == "changed"
+    assert "CN=plc-1500" in body["subject"]
+    assert "CN=plc-1500" in body["issuer"]
+    assert body["expiresAt"]
+    assert body["fingerprint"] == certificate.fingerprint
+
+
+def test_server_certificate_is_null_before_a_secured_connect(ds_client, monkeypatch):
+    client, manager = ds_client
+    _save_secured_client(manager)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", _CertificatePool(None))
+
+    resp = client.get("/api/datasources/plc1/server-certificate")
+
+    assert resp.status_code == 200
+    assert resp.json() is None
+
+
+def test_trust_pins_the_presented_certificate_and_reconnects(
+    ds_client, monkeypatch, tmp_path, live_project_root: Path
+):
+    client, manager = ds_client
+    settings = _save_secured_client(manager)
+    certificate = _presented(tmp_path, "untrusted")
+    pool = _CertificatePool(certificate)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", pool)
+
+    resp = client.post(
+        "/api/datasources/plc1/server-certificate/trust",
+        json={"fingerprint": certificate.fingerprint},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"server_certificate": "certs/plc1-server.der"}
+    assert (live_project_root / "certs" / "plc1-server.der").read_bytes() == certificate.der
+    pinned = {**settings, "server_certificate": "certs/plc1-server.der"}
+    assert manager.get("plc1").config["settings"] == pinned
+    assert pool.calls == [("stop", "plc1", None), ("start", "plc1", pinned)]
+
+
+def test_trust_refuses_a_certificate_other_than_the_one_reviewed(
+    ds_client, monkeypatch, tmp_path, live_project_root: Path
+):
+    client, manager = ds_client
+    settings = _save_secured_client(manager)
+    pool = _CertificatePool(_presented(tmp_path, "untrusted"))
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", pool)
+
+    resp = client.post(
+        "/api/datasources/plc1/server-certificate/trust", json={"fingerprint": "0" * 64},
+    )
+
+    assert resp.status_code == 409
+    assert not (live_project_root / "certs" / "plc1-server.der").exists()
+    assert manager.get("plc1").config["settings"] == settings
+    assert pool.calls == []
 
 
 # ── POST /discover ────────────────────────────────────────────────────────────

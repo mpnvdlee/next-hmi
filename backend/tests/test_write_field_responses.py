@@ -60,7 +60,7 @@ def _make_manager(
 
 def test_static_write_emits_write_response() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "enabled": True, "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
 
     _run_write(manager, _msg())
@@ -74,7 +74,7 @@ def test_opcua_write_success_emits_write_response() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(
         ds_type="opcua-client",
-        registry={"Tag": {"data_type": "int32", "writable": True, "node_id": "ns=2;s=Tag"}},
+        registry={"Tag": {"data_type": "int32", "enabled": True, "writable": True, "node_id": "ns=2;s=Tag"}},
     )
     engine = FakeEngine()
     manager = _make_manager(ws, ds_entry=ds_entry, engine=engine)
@@ -128,7 +128,7 @@ def test_bad_path_when_entry_unknown() -> None:
 
 def test_invalid_value_when_coercion_fails() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "enabled": True, "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
 
     _run_write(manager, _msg(value="not-a-number"))
@@ -146,7 +146,7 @@ def test_invalid_value_when_coercion_fails() -> None:
 
 def test_present_null_is_invalid_value_not_bad_request() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "enabled": True, "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
     _run_write(manager, _msg(value=None))
     assert ws.messages[0]["reason"] == "invalid_value"
@@ -157,7 +157,7 @@ def test_bad_field_when_node_id_unresolvable() -> None:
     # OPC-UA path but no node_id and no matching field → _resolve_node_id returns None
     ds_entry = FakeDatasourceEntry(
         ds_type="opcua-client",
-        registry={"Tag": {"data_type": "int32", "writable": True, "fields": {}}},
+        registry={"Tag": {"data_type": "int32", "enabled": True, "writable": True, "fields": {}}},
     )
     manager = _make_manager(ws, ds_entry=ds_entry, engine=FakeEngine())
 
@@ -178,7 +178,7 @@ def test_opcua_unreachable_when_engine_missing() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(
         ds_type="opcua-client",
-        registry={"Tag": {"data_type": "int32", "writable": True, "node_id": "ns=2;s=Tag"}},
+        registry={"Tag": {"data_type": "int32", "enabled": True, "writable": True, "node_id": "ns=2;s=Tag"}},
     )
     # pool returns no engine
     manager = _make_manager(ws, ds_entry=ds_entry, engine=None)
@@ -200,7 +200,7 @@ def test_write_failed_when_engine_raises() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(
         ds_type="opcua-client",
-        registry={"Tag": {"data_type": "int32", "writable": True, "node_id": "ns=2;s=Tag"}},
+        registry={"Tag": {"data_type": "int32", "enabled": True, "writable": True, "node_id": "ns=2;s=Tag"}},
     )
     manager = _make_manager(ws, ds_entry=ds_entry, engine=FakeEngine(raises=True))
 
@@ -222,7 +222,7 @@ def test_write_failed_when_engine_raises() -> None:
 
 def test_no_request_id_means_silent_success() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "enabled": True, "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
 
     msg = _msg()
@@ -260,7 +260,7 @@ def _toggle(**extra: Any) -> dict[str, Any]:
 
 def test_toggle_writes_the_inverse_of_the_cached_static_value() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean", "writable": True}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean", "enabled": True, "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
     manager._datasource_manager.cached = {"DS:Run": True}  # type: ignore[union-attr]
 
@@ -283,7 +283,7 @@ def test_toggle_without_path_is_a_bad_request() -> None:
 
 def test_toggle_of_unknown_value_reports_value_unavailable() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean", "writable": True}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean", "enabled": True, "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
     manager._datasource_manager.cached = {}  # type: ignore[union-attr]
 
@@ -299,7 +299,7 @@ def test_write_to_a_read_only_variable_reports_read_only() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(
         ds_type="opcua-client",
-        registry={"Tag": {"data_type": "int32", "writable": False, "node_id": "ns=2;s=Tag"}},
+        registry={"Tag": {"data_type": "int32", "enabled": True, "writable": False, "node_id": "ns=2;s=Tag"}},
     )
     engine = FakeEngine()
     manager = _make_manager(ws, ds_entry=ds_entry, engine=engine)
@@ -318,9 +318,32 @@ def test_write_to_a_read_only_variable_reports_read_only() -> None:
     ]
 
 
+def test_write_to_a_browsed_tag_nobody_enabled_reports_disabled() -> None:
+    ws = FakeWebSocket()
+    ds_entry = FakeDatasourceEntry(
+        ds_type="opcua-client",
+        registry={"Tag": {"data_type": "int32", "enabled": False, "writable": True, "node_id": "ns=2;s=Tag"}},
+    )
+    engine = FakeEngine()
+    manager = _make_manager(ws, ds_entry=ds_entry, engine=engine)
+
+    _run_write(manager, _msg(field=None, value=999))
+
+    assert engine.write_calls == []
+    assert ws.messages == [
+        {
+            "type": "write_error",
+            "requestId": "req-1",
+            "datasource": "DS",
+            "path": "Tag",
+            "reason": "disabled",
+        },
+    ]
+
+
 def test_toggle_of_a_variable_that_states_no_access_reports_read_only() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean"}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean", "enabled": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
     manager._datasource_manager.cached = {"DS:Run": True}  # type: ignore[union-attr]
 
@@ -337,7 +360,7 @@ def _audited_write(*, editor: bool) -> list:
     from core import audit
 
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "enabled": True, "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
     if editor:
         manager._editor_clients.add("c1")  # type: ignore[attr-defined]

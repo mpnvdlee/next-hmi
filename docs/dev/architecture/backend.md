@@ -199,7 +199,7 @@ current value and before its Boolean check, with the same folder exception. Ever
   - `values.py` — `normalize_value()`: an OPC-UA value in its cache form (LocalizedText → text, NodeId/QualifiedName → canonical string, then `core.value_types.json_ready_scalar`). Applied in `_DsSubHandler` and `read_current_values`, so nothing downstream sees an asyncua type. See [Value forms](websocket.md#value-forms)
   - `limits.py` — `OperationLimits`, `read_operation_limits()` and the `DEFAULT_MAX_*` fallbacks. The engine owns the result, since reads and monitored-item creation are batched too, and hands it to the browser
   - `routing.py` — maps struct and array-of-struct leaves to the `(folder, field)` pair `DatasourceManager.update_struct_field()` patches in O(1)
-  - `security.py` — secure-channel settings, certificate-path containment and self-signed certificate generation, shared by connect, the probe and the test server
+  - `security.py` — secure-channel settings, certificate-path containment, self-signed certificate generation and the server-certificate trust check, shared by connect, the probe and the test server
   - `discovery.py` — `discover_endpoints()` / `probe_connection()` for the connection wizard, on throwaway clients
   - `client_pool.py` — compatibility facade re-exporting every name the module used to define, for existing imports. Patch a global where the code that reads it lives (`opcua.security.active_project_root`, `opcua.engine.Client`): the facade does not carry those names, so a patch aimed at it fails instead of silently patching nothing
   - a struct tag is a `Variable` whose DataType is a structured type and whose members are its `HasComponent` children — how CODESYS and S7-1500 both publish one — so the BFS walker queues a Variable for another Browse exactly when its DataType resolved to `struct`, and follows only `HasComponent` from it. `HasProperty` children (`EURange`, `EngineeringUnits`, …) describe the tag rather than being tags, so they stay out of the tree. Scalars are never re-browsed: that would cost one Browse operation per tag and return only those properties. A server-defined DataType is named by the builtin its `HasSubtype` chain ends in (`AddressSpaceBrowser._custom_data_type_name`, cached per browse) — or by `Decimal` (i=50) when the chain passes it, since a Decimal travels as an ExtensionObject and the `Number` above it would read as Double: CODESYS ENUMs and S7 UDTs share one namespace, so the namespace alone cannot tell an enum (Int32) from a struct. The frontend turns a `struct` browse node into a folder (`buildFromBrowse`) — the shape [data-formats](data-formats.md) already defines for a struct — but only when it has members; one without stays a variable, so nothing bindable is ever lost to an empty folder
@@ -375,7 +375,7 @@ Important behaviors:
 - a folder composite is only put on the wire when something actually reads it: a client's active page binds the key (`set_client_page`) or a server-side consumer registered it (`set_interest_keys` — the alarm manager's trigger keys). The test is one lookup against a union kept in step by those two writers, not a scan per reader, since it runs once per ancestor per datachange. A composite nobody reads is still kept correct in the cache whenever it is already there — on both write paths, patched or rebuilt — because `snapshot()` and `set_context` serve cache entries verbatim; array elements are cached and emitted under their own composite keys either way, so `{path, index}` bindings are unaffected
 - `_wire_ancestor_map()` rewrites `_var_to_folder` so every leaf variable — including those inside nested sub-folders — maps to the topmost ancestor struct; this ensures a single datachange triggers a full re-snapshot of the entire aggregate
 - snapshot recursion follows the configured structure without a fixed depth limit
-- `snapshot()` returns enabled scalar values plus folder structs
+- `snapshot()` returns enabled scalar values plus folder structs; `get_cached_values(keys)` filters the same way, since `set_context` passes it keys straight from the client
 - `get_priority_keys()` returns the union of all client priority sets
 
 ## WebSocket Flow
@@ -387,6 +387,9 @@ The full handshake order, every message shape, and the async-action result corre
 ## Priority Subscriptions
 
 Priority keys are grouped by datasource and forwarded to the matching OPC-UA engine.
+The engine promotes only enabled variables still present on the server
+(`is_subscribable`), a struct folder's key expanding to its enabled leaves: any
+client may name any key, and a promoted value reaches every client.
 
 Current frontend producers:
 

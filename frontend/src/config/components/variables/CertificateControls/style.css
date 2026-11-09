@@ -51,7 +51,8 @@
   word-break: break-all;
 }
 
-.cert-info-modal__list {
+.cert-info-modal__list,
+.cfg-server-cert__list {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: var(--cfg-space-2) var(--cfg-space-4);
@@ -59,17 +60,62 @@
   font-size: var(--cfg-text-sm);
 }
 
-.cert-info-modal__list dt {
+.cert-info-modal__list dt,
+.cfg-server-cert__list dt {
   color: var(--cfg-text-muted);
 }
 
-.cert-info-modal__list dd {
+.cert-info-modal__list dd,
+.cfg-server-cert__list dd {
   margin: 0;
   color: var(--cfg-text);
   word-break: break-word;
 }
 
-.cert-info-modal__fingerprint {
+.cert-info-modal__fingerprint,
+.cfg-server-cert__fingerprint {
   font-family: var(--cfg-font-mono, monospace);
   font-size: var(--cfg-text-xs);
+  /* Eight groups to a line where there is room, as on every other fingerprint. */
+  max-width: 40ch;
+}
+
+/* Under its label, as in the peer-pairing dialog: beside it, the panel's
+   value column is too narrow for eight groups. */
+.cfg-server-cert__list .cfg-server-cert__fingerprint {
+  grid-column: 1 / -1;
+}
+
+/* The trust card stacks a banner, the certificate, the advice and its buttons;
+   a section body spaces none of them on its own. */
+.cfg-server-cert {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-server-cert .cfg-section__title {
+  padding-bottom: 0;
+}
+
+.cfg-server-cert .cfg-error-banner {
+  margin: 0;
+}
+
+/* After "Not now": the state and the way back to the full card, on one line. */
+.cfg-server-cert__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+}
+
+.cfg-server-cert__state--changed {
+  color: var(--cfg-danger-fg);
+}
+
+.cfg-server-cert__state--untrusted {
+  color: var(--cfg-warning-fg);
 }

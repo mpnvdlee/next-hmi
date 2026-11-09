@@ -255,9 +255,10 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
 
 - `GET /api/datasources`
   - Returns summary items shaped as
-    `{ name, type, connected, variable_count, enabled_count, error }`.
+    `{ name, type, connected, variable_count, enabled_count, error, server_certificate_status }`.
   - `connected` is filled from the OPC-UA pool for `opcua-client` entries and from the test-server pool for `opcua-test-server` entries.
   - `error` is a user-facing reason the datasource is not running (or `null`). For an `opcua-test-server` it carries the start failure — e.g. a port already in use — captured when the server can't bind. For an `opcua-client` it carries the reason the last connect attempt failed (`DatasourceOpcuaEngine.error`), cleared on the next successful connect. Either way the editor shows it as an error status dot + message instead of the backend aborting startup.
+  - `server_certificate_status` is `trusted`, `untrusted` or `changed` once a secured `opcua-client` endpoint has presented a certificate, else `null` — see [Server certificate](#server-certificate).
 - `GET /api/datasources/{name}`
   - Returns the full datasource config (settings + variables).
   - Query: `include_variables=true|false` (default `true`). When `false`, the `variables` key is stripped from the response.
@@ -303,7 +304,7 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
   - Requires HTTP Basic credentials for a user in the active project's `users.json`; manager-session authentication is not accepted as a substitute for an HMI identity.
   - Body uses the WebSocket write envelope: `{ "datasource": "PLC", "path": "Motor/Speed", "value": 42, "field"?: "name" }`.
   - Returns `{ "ok": true, "reason": null }` or `{ "ok": false, "reason": "<stable reason>" }`; invalid credentials return HTTP `401`. An account with no password set is invalid credentials like any other — it can never be signed in as. Repeated failures are throttled (`core/user_auth_throttle.py`): five in a row for one username, or a flood across many, answer HTTP `429` until the lockout expires.
-  - Uses the same envelope parser, coercion matrix, and write service as WebSocket `write_field`, and answers with the same `reason` vocabulary ([websocket.md](../architecture/websocket.md#action-result-correlation)). Present `null` reaches coercion and returns `invalid_value`; missing or malformed envelope fields return `bad_request`; an unknown variable is `bad_path`. Any authenticated user may write any writable variable; there is no per-variable group check.
+  - Uses the same envelope parser, coercion matrix, and write service as WebSocket `write_field`, and answers with the same `reason` vocabulary ([websocket.md](../architecture/websocket.md#action-result-correlation)). Present `null` reaches coercion and returns `invalid_value`; missing or malformed envelope fields return `bad_request`; an unknown variable is `bad_path`. Any authenticated user may write any enabled, writable variable (`disabled` / `read_only` otherwise); there is no per-variable group check.
   - A write that lands emits the same `variable.write` audit event as WebSocket `write_field`, with the authenticated user as actor (`actor_source: "session"`), or `engineer` (`actor_source: "device_admin"`) when the request came through the editor prefix.
   - A variable not marked `writable: true` — for an element, its array; for a struct field, that member — is refused as `read_only` and nothing is written. The check runs after coercion, so an uncoercible value to a read-only variable still reports `invalid_value`.
 
@@ -318,6 +319,7 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 - `POST /api/datasources/test-connection`
   - Body: `{ server_url, username?, password?, security_policy?, security_mode?, ...extra }`. Extra fields (certificate paths, key password) are forwarded to the probe unchanged.
   - Opens a throwaway session. Returns `{ ok, error, server_name, namespace_count }`.
+  - On a secured policy it applies the connect path's [server-certificate check](#server-certificate): with a `username` and no `server_certificate` pinned it sends nothing past GetEndpoints and answers `ok: false`.
 - `POST /api/datasources/certs`
   - Multipart: `file`. Called once per file in the secure-connection step (client certificate, private key, server certificate) — never for the key password, which stays a plain settings field.
   - Stores the upload under `<live-project>/certs/` with a sanitized filename and returns `{ "path": "certs/<filename>" }`, the value the caller stores in `client_certificate` / `client_private_key` / `server_certificate`. A filename that would escape the certs folder is `422`.
@@ -344,6 +346,23 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
     - then exactly one of `{ "type": "result", "tree" }` (the `/browse` body) or `{ "type": "error", "error" }` for a failure during the walk.
   - The checks above run before the stream opens, so `422`/`503` arrive as HTTP statuses, never as an error line.
   - Closing the connection cancels the walk on the server.
+
+### Server certificate
+
+Trust on first use for a secured `opcua-client`. Before every secured connect the engine reads the certificate the endpoint advertises (GetEndpoints, unsecured) and compares it with the one pinned in `settings.server_certificate`:
+
+- the same → `trusted`; the channel is opened to that certificate, so a server holding another key cannot complete the handshake;
+- none pinned (or the pinned file is missing) → `untrusted`; the connect stops before the session when the datasource has a `username`, and goes ahead anonymously otherwise;
+- a different one → `changed`; the connect stops before the session, anonymous or not.
+
+A stopped connect leaves its reason in the list's `error` and the certificate on the engine for the routes below.
+
+- `GET /api/datasources/{name}/server-certificate`
+  - What the endpoint presented on the last connect attempt: `{ status, subject, issuer, expiresAt, fingerprint }` (`fingerprint`: SHA-256 of the DER, lowercase hex). `null` while the engine has not checked one — not secured, not started, or unreachable so far.
+- `POST /api/datasources/{name}/server-certificate/trust`
+  - Body: `{ "fingerprint": "<sha-256 hex>" }`, the fingerprint the engineer compared. `409` when no certificate was presented or the engine now holds a different one — nothing is trusted then.
+  - Writes the certificate to `<live-project>/certs/<name>-server.der`, sets `settings.server_certificate` to it, and restarts the engine. Returns `{ "server_certificate": "certs/<name>-server.der" }`.
+  - Broadcasts `config_changed` like any datasource write. Session-gated on both prefixes ([Route access](#route-access)).
 
 ### Lifecycle
 

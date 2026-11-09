@@ -9,6 +9,9 @@
   font-size: var(--cfg-font-size-base);
   color: var(--cfg-text-muted);
   cursor: default;
+  /* A long run with no break in it — a URL, an id — wraps rather than
+     pushing the panel wider. */
+  overflow-wrap: anywhere;
 }
 
 .cfg-readonly-value--mono {

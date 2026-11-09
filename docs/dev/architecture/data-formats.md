@@ -757,6 +757,18 @@ Example shape:
 }
 ```
 
+Settings worth a note:
+
+- `server_certificate` pins the server's certificate: a secured connection goes
+  ahead only while the server presents exactly that one, and sends `username` /
+  `password` only once one is pinned. **Trust certificate** in the editor writes
+  `certs/<name>-server.der` and sets it here
+  ([REST](../reference/rest-api.md#server-certificate))
+- an `opcua-test-server`'s `settings` hold `port` (default `4855`),
+  `endpoint_path`, `security_policies` (`"<Policy>/<Mode>"` entries) and
+  `reachable_from_network`: absent or `false` binds `127.0.0.1` only, `true`
+  every interface. Either way it accepts anonymous sessions only
+
 Filename behavior:
 
 - the REST route key is the datasource name

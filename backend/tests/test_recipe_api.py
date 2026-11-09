@@ -57,7 +57,7 @@ def _config() -> dict:
 def recipe_client(monkeypatch, live_project_root: Path):
     storage.ensure_active_project_dirs()
     fresh = RecipeManager()
-    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, "writable": True}})
     fresh.set_datasource_manager(dm)
     monkeypatch.setattr(recipe_manager_module, "recipe_manager", fresh)
     monkeypatch.setattr(recipe_api_module, "recipe_manager", fresh)

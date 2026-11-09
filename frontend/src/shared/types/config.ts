@@ -596,6 +596,7 @@ export type ActionResultReason =
   | 'array_state_unavailable'
   | 'value_unavailable'
   | 'read_only'
+  | 'disabled'
   | 'timeout'
   | 'disconnected';
 

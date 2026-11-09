@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Button from '../../ui/Button';
 import ModalShell from '../../ui/ModalShell';
 import { apiJson, errorMessage } from '@shared/utils/api';
+import { formatFingerprint } from '@shared/utils/formatFingerprint';
 import type { CertificateInfo } from '@shared/types/datasource';
 
 function formatDate(iso: string): string {
@@ -76,7 +77,7 @@ export default function CertificateInfoModal({
           <dt>Subject alt names</dt>
           <dd>{info.names.length > 0 ? info.names.join(', ') : '—'}</dd>
           <dt>Fingerprint (SHA-256)</dt>
-          <dd className="cert-info-modal__fingerprint">{info.fingerprint}</dd>
+          <dd className="cert-info-modal__fingerprint">{formatFingerprint(info.fingerprint)}</dd>
         </dl>
       )}
 

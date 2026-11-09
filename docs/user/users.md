@@ -110,7 +110,7 @@ Two more sources read the identity directly, for labels and lists rather than ga
 
 ## What the server enforces
 
-The server does not restrict who may write a writable variable. Groups decide what the panel shows and lets an operator press; once a write reaches the server, the only check is whether the variable is marked **writable** in its datasource — a read-only variable is refused with `read_only` for everyone.
+The server does not restrict who may write a writable variable. Groups decide what the panel shows and lets an operator press; once a write reaches the server, the only checks are whether the variable is enabled and marked **writable** in its datasource — a disabled variable is refused with `disabled`, a read-only one with `read_only`, for everyone.
 
 So hiding or blocking the button — **Visible** / **Interactable** on the widget — is how a project stops operators changing a value. A setpoint no button writes cannot be changed from the panel.
 

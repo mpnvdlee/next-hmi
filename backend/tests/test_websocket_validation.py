@@ -15,6 +15,7 @@ from conftest import (
     FakePool,
     FakeWebSocket,
 )
+from services.datasource_manager import DatasourceManager
 from services.websocket_manager import (
     MAX_EXTRACT_BINDING_DEPTH,
     WebSocketManager,
@@ -124,6 +125,49 @@ def test_handle_set_context_sends_ready_immediately_when_fully_cached(monkeypatc
         {"type": "var_metadata", "meta": {}},
         {"type": "var_update", "values": {"DS:Cached": 1}},
         {"type": "context_ready", "currentPageIds": ["main"]},
+    ]
+
+
+def test_set_context_never_hands_out_a_disabled_variable() -> None:
+    # Any client may name any key in priorityKeys, a browsed tag nobody enabled
+    # included; even a cached value of one must not come back.
+    datasource_manager = DatasourceManager()
+    datasource_manager.apply_config("PLC", {
+        "name": "PLC",
+        "type": "opcua-client",
+        "variables": [{"kind": "folder", "name": "Line", "children": [
+            {"kind": "variable", "display_name": "Speed", "data_type": "Float",
+             "node_id": "ns=2;s=Speed", "enabled": True},
+            {"kind": "variable", "display_name": "SafetyLimit", "data_type": "Float",
+             "node_id": "ns=2;s=Limit", "enabled": False},
+        ]}],
+    })
+    datasource_manager.seed_cached_values({"PLC:Line/Speed": 5.0, "PLC:Line/SafetyLimit": 999.0})
+    manager = WebSocketManager()
+    manager.set_datasource_manager(datasource_manager)
+    manager.set_opcua_pool(FakePool(FakeEngine()))
+    ws = FakeWebSocket()
+    manager._connections["c1"] = ws  # type: ignore[attr-defined]
+
+    async def _run() -> None:
+        await manager.handle_message("c1", json.dumps({
+            "type": "set_context",
+            "currentPageIds": [],
+            "priorityKeys": ["PLC:Line/Speed", "PLC:Line/SafetyLimit"],
+        }))
+        for _ in range(10):
+            if any(m["type"] == "context_ready" for m in ws.messages):
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(_run())
+
+    metadata, *rest = ws.messages
+    assert metadata["type"] == "var_metadata"
+    assert "PLC:Line/SafetyLimit" not in metadata["meta"]
+    assert rest == [
+        {"type": "var_update", "values": {"PLC:Line/Speed": 5.0}},
+        {"type": "context_ready", "currentPageIds": []},
     ]
 
 
