@@ -567,13 +567,17 @@ export function UserFieldEditor({
 
   if (listOnly) {
     return (
-      <PropRow label="List" description="Fills the options from the project's users or groups.">
+      <PropRow
+        label="List"
+        description="Fills the options from the project's users or groups. Accounts lists every account with its groups, language and locks, only while a user admin is signed in."
+      >
         <Select
-          value={userObj.field === 'groups' ? 'groups' : 'userList'}
+          value={userObj.field === 'groups' || userObj.field === 'accounts' ? userObj.field : 'userList'}
           onChange={(v) => onChange({ $user: { field: v } })}
         >
           <option value="userList">All users</option>
           <option value="groups">All user groups</option>
+          <option value="accounts">Accounts (user admins)</option>
         </Select>
       </PropRow>
     );

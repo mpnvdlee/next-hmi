@@ -235,6 +235,7 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
   if (key === '$user') {
     const u = obj.$user as { field?: string } | undefined;
     if (u?.field === 'userList') return 'User list';
+    if (u?.field === 'accounts') return 'Accounts';
     return u?.field ? `user.${u.field}` : 'user(…)';
   }
   if (key === '$userGroups') {

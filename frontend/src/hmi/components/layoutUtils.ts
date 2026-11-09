@@ -21,6 +21,7 @@ import { useBindingValue, useVariableMeta } from '../hooks/useVariable';
 import { useUsersDocument } from '../hooks/useUsersDocument';
 import { useLanguagesData } from '../hooks/useLanguagesData';
 import { useHttpSourceStore } from '../store/httpSourceStore';
+import { accountRows } from '../store/hmiStore';
 import { useStructVariable } from '../hooks/useStructVariable';
 import { useThemeRuntimeStore } from '../store/themeRuntimeStore';
 
@@ -723,15 +724,18 @@ function resolveRecordListSource(raw: unknown, evalCtx: EvaluationContext): unkn
     const value = evalCtx.resolveComponentProp?.(String(componentId ?? ''), String(property ?? ''));
     return Array.isArray(value) ? value : [];
   }
-  // `option-list` fields accept `$user` (see propertySourceRules), whose only
-  // array-valued field is `userList`. Emitted as `{ label, value }` pairs to
+  // `option-list` fields accept `$user` (see propertySourceRules), whose
+  // username lists are `userList` and `accounts`. Emitted as `{ label, value }` pairs to
   // match `ItemEntry`, the shape every option-list consumer expects.
   if (isRecord(raw.$user)) {
-    if ((raw.$user as { field?: string }).field !== 'userList') return [];
-    return (evalCtx.resolveUserList?.() ?? []).map((username) => ({
-      label: username,
-      value: username,
-    }));
+    const field = (raw.$user as { field?: string }).field;
+    const names =
+      field === 'accounts'
+        ? (evalCtx.resolveUserAccounts?.() ?? []).map((a) => a.username)
+        : field === 'userList'
+          ? (evalCtx.resolveUserList?.() ?? [])
+          : [];
+    return names.map((username) => ({ label: username, value: username }));
   }
   return [];
 }
@@ -805,12 +809,16 @@ export function useItemListProp(
 
   // Only a record-list source reads the context; the rest must not re-run on it.
   const recordListCtx = binding || userField !== null || isHttp || isLanguages ? null : evalCtx;
+  const accounts = userField === 'accounts' ? evalCtx.resolveUserAccounts?.() : undefined;
 
   const items = useMemo((): unknown[] => {
     if (binding) return Array.isArray(varValue) ? varValue : NO_ITEMS;
     if (userField === 'groups') return groups.map((g) => ({ label: g.label, value: g.id }));
     if (userField === 'userList') {
       return users.map((u) => ({ label: u.username, value: u.username }));
+    }
+    if (userField === 'accounts' && accounts?.length) {
+      return accountRows(accounts, Object.fromEntries(groups.map((g) => [g.id, g.label])));
     }
     if (userField !== null) return NO_ITEMS;
     if (isLanguages) return languages.map((l) => ({ label: l.code, value: l.code }));
@@ -830,6 +838,7 @@ export function useItemListProp(
     userField,
     users,
     groups,
+    accounts,
     isLanguages,
     languages,
     isHttp,

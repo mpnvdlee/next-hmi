@@ -139,6 +139,8 @@ export const SOURCE_FIELD_PRODUCES = {
     username: 'string',
     userList: ['string[]', 'string'],
     groups: ['string', 'string[]'],
+    // Every account with its groups, for a user admin's Repeater.
+    accounts: 'record-list',
   },
   $device: { hostname: 'string', ipAddress: 'string', macAddress: 'string' },
 } as const satisfies Partial<

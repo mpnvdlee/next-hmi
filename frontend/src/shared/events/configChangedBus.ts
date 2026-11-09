@@ -26,7 +26,7 @@ export type ArtifactType =
 export interface ConfigChangedEvent {
   artifact_type: ArtifactType;
   artifact_ids: string[];
-  source: 'mcp' | 'rest' | 'api';
+  source: 'mcp' | 'rest' | 'api' | 'runtime';
   agent_label?: string;
   /** The browser tab whose REST write this was (`TAB_ID` in `utils/api`). */
   tab_id?: string;

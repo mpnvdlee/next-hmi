@@ -122,7 +122,8 @@
     "description": "Information about the logged-in user or user list.",
     "produces": [
       "string",
-      "string[]"
+      "string[]",
+      "record-list"
     ]
   },
   {

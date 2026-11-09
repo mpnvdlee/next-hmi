@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { apiJson } from '@shared/utils/api';
+import { subscribeConfigChanged } from '@shared/events/configChangedBus';
 
 export interface UserEntry {
   id: string;
@@ -19,9 +20,9 @@ interface UsersDocument {
 const EMPTY_DOCUMENT: UsersDocument = { users: [], groups: [] };
 let cachedDocument: UsersDocument | null = null;
 let pendingLoad: Promise<UsersDocument> | null = null;
+const listeners = new Set<() => void>();
 
 function loadUsersDocument(): Promise<UsersDocument> {
-  if (cachedDocument) return Promise.resolve(cachedDocument);
   // `Promise.resolve(...)` rather than `.then(...)` straight off the call: this
   // runs from an effect with no error boundary above it, so a transport helper
   // that returns a non-promise would otherwise unmount the whole HMI tree
@@ -34,6 +35,7 @@ function loadUsersDocument(): Promise<UsersDocument> {
         users: Array.isArray(document?.users) ? document.users : [],
         groups: Array.isArray(document?.groups) ? document.groups : [],
       };
+      listeners.forEach((listener) => listener());
       return cachedDocument;
     })
     .finally(() => {
@@ -42,24 +44,26 @@ function loadUsersDocument(): Promise<UsersDocument> {
   return pendingLoad;
 }
 
+// A users write anywhere refetches the roster once, for every reader at once.
+subscribeConfigChanged((event) => {
+  if (event.artifact_type === 'users' && cachedDocument) void loadUsersDocument().catch(() => {});
+});
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+const snapshot = () => cachedDocument ?? EMPTY_DOCUMENT;
+
 /** Share the session-cached `/api/users/roster` between the public SDK hooks. */
 export function useUsersDocument(): UsersDocument {
-  const [document, setDocument] = useState(cachedDocument ?? EMPTY_DOCUMENT);
+  const document = useSyncExternalStore(subscribe, snapshot);
 
   useEffect(() => {
-    if (cachedDocument) return;
-    let cancelled = false;
-    void loadUsersDocument().then(
-      (loaded) => {
-        if (!cancelled) setDocument(loaded);
-      },
-      () => {
-        if (!cancelled) setDocument(EMPTY_DOCUMENT);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
+    if (!cachedDocument) void loadUsersDocument().catch(() => {});
   }, []);
 
   return document;

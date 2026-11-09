@@ -232,6 +232,36 @@ export interface MapSource {
   $map: { id: string; value: unknown };
 }
 
+/** The runtime user-management actions: the WebSocket message each sends,
+ *  and its String fields with their editor labels. */
+export const USER_ACTIONS = {
+  userUpdate: {
+    message: 'user_update',
+    fields: [
+      ['username', 'Username'],
+      ['groups', 'Groups'],
+      ['password', 'Password'],
+      ['language', 'Language'],
+    ],
+  },
+  userDelete: { message: 'user_delete', fields: [['username', 'Username']] },
+  userChangePassword: {
+    message: 'user_change_password',
+    fields: [
+      ['currentPassword', 'Current password'],
+      ['newPassword', 'New password'],
+    ],
+  },
+} as const;
+
+export type UserActionType = keyof typeof USER_ACTIONS;
+
+export function isUserAction(
+  action: ButtonAction,
+): action is Extract<ButtonAction, { type: UserActionType }> {
+  return action.type in USER_ACTIONS;
+}
+
 export const VALUE_MAP_TYPES = ['Color', 'String', 'Boolean', 'Integer', 'Float'] as const;
 
 /**
@@ -246,10 +276,11 @@ export interface ValueMap {
   default?: unknown;
 }
 
-/** $user: current logged-in user data (username, groups, or full user list for items fields) */
+/** $user: current logged-in user data (username, groups, or full user list for items fields).
+ *  `accounts` lists every account with its groups, only for a user admin. */
 export interface UserSource {
   $user: {
-    field: 'username' | 'groups' | 'userList';
+    field: 'username' | 'groups' | 'userList' | 'accounts';
   };
 }
 
@@ -596,6 +627,12 @@ export type ActionResultReason =
   | 'array_state_unavailable'
   | 'value_unavailable'
   | 'read_only'
+  | 'forbidden'
+  | 'locked'
+  | 'invalid'
+  | 'not_found'
+  | 'wrong_password'
+  | 'unavailable'
   | 'timeout'
   | 'disconnected';
 
@@ -713,6 +750,35 @@ export type ButtonAction =
     }
   | {
       type: 'logoutUser';
+      onSuccess?: ButtonAction[];
+      onFailed?: ButtonAction[];
+      onSettled?: ButtonAction[];
+    }
+  | {
+      /** Creates the account when `username` is new, else updates it. An empty
+       *  field leaves that part as it is; `groups` is comma-separated group ids.
+       *  Only a user admin may; the backend enforces it and the account locks. */
+      type: 'userUpdate';
+      username: unknown;
+      groups: unknown;
+      password: unknown;
+      language: unknown;
+      onSuccess?: ButtonAction[];
+      onFailed?: ButtonAction[];
+      onSettled?: ButtonAction[];
+    }
+  | {
+      type: 'userDelete';
+      username: unknown;
+      onSuccess?: ButtonAction[];
+      onFailed?: ButtonAction[];
+      onSettled?: ButtonAction[];
+    }
+  | {
+      /** The signed-in user's own password, proven with the current one. */
+      type: 'userChangePassword';
+      currentPassword: unknown;
+      newPassword: unknown;
       onSuccess?: ButtonAction[];
       onFailed?: ButtonAction[];
       onSettled?: ButtonAction[];

@@ -62,3 +62,57 @@ describe('recipeLoad / recipeSave dispatch', () => {
     });
   });
 });
+
+describe('user management dispatch', () => {
+  it('userUpdate sends user_update with every field as text', () => {
+    executeWidgetActions(
+      [
+        {
+          type: 'userUpdate',
+          username: { $static: 'jan' },
+          groups: { $static: 'operator,engineer' },
+          password: { $static: 'pw' },
+          language: { $static: '' },
+          onFailed: [],
+        },
+      ],
+      { scope: 'runtime' },
+    );
+    expect(sendWsMessage).toHaveBeenCalledWith({
+      type: 'user_update',
+      username: 'jan',
+      groups: 'operator,engineer',
+      password: 'pw',
+      language: '',
+      requestId: 'req-1',
+      scope: 'runtime',
+    });
+  });
+
+  it('userDelete and userChangePassword send their own messages', () => {
+    executeWidgetActions(
+      [
+        { type: 'userDelete', username: { $static: 'jan' } },
+        {
+          type: 'userChangePassword',
+          currentPassword: { $static: 'old' },
+          newPassword: { $static: 'new' },
+        },
+      ],
+      { scope: 'runtime' },
+    );
+    expect(sendWsMessage).toHaveBeenNthCalledWith(1, {
+      type: 'user_delete',
+      username: 'jan',
+      requestId: 'req-1',
+      scope: 'runtime',
+    });
+    expect(sendWsMessage).toHaveBeenNthCalledWith(2, {
+      type: 'user_change_password',
+      currentPassword: 'old',
+      newPassword: 'new',
+      requestId: 'req-1',
+      scope: 'runtime',
+    });
+  });
+});

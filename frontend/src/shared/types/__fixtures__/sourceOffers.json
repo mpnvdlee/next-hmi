@@ -14,7 +14,7 @@
     "$random": ["integer", "float"],
     "$switch": ["any"],
     "$map": ["string", "boolean", "integer", "float"],
-    "$user": ["string", "string[]"],
+    "$user": ["string", "string[]", "record-list"],
     "$userGroups": ["boolean"],
     "$device": ["string"],
     "$time": ["datetime", "string", "date", "time"],

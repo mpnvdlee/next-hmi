@@ -33,7 +33,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from core import audit
-from core.exceptions import RateLimitError
+from core.exceptions import RateLimitError, UserConflictError, UserValidationError
 from core.number_utils import get_config_float
 from core.page_index import INDEX_ROOTS, page_document_dir, root_nodes
 from core.storage import (
@@ -85,7 +85,7 @@ REASON_BAD_REQUEST = "bad_request"
 class ConfigChangedEvent:
     """Payload for ``broadcast_config_changed``.
 
-    ``source`` is ``"mcp"``, ``"rest"`` or ``"api"``. ``agent_label`` is
+    ``source`` is ``"mcp"``, ``"rest"``, ``"api"`` or ``"runtime"``. ``agent_label`` is
     included on the wire only when ``source == "mcp"``; ``tab_id`` names the
     browser tab whose REST write this was, when it named itself.
     """
@@ -500,6 +500,8 @@ class WebSocketManager:
             await self._handle_logout(client_id, cast(LogoutMessage, msg))
         elif msg_type == "request_identity":
             await self._handle_request_identity(client_id, cast(RequestIdentityMessage, msg))
+        elif msg_type in ("user_update", "user_delete", "user_change_password"):
+            await self._handle_user_admin(client_id, msg)
         else:
             logger.debug("Unknown WS message type '%s' from %s", msg_type, client_id[:8])
 
@@ -687,27 +689,27 @@ class WebSocketManager:
         """
         request_id = msg.get("requestId")
         if self._recipe_manager is None:
-            await self._send_recipe_result(client_id, request_id, None, "recipes_unavailable")
+            await self._send_result(client_id, "recipe", request_id, None, "recipes_unavailable")
             return
         dataset_id = msg.get("datasetId")
         if not isinstance(dataset_id, str) or not dataset_id:
-            await self._send_recipe_result(client_id, request_id, None, REASON_BAD_REQUEST)
+            await self._send_result(client_id, "recipe", request_id, None, REASON_BAD_REQUEST)
             return
         verify = bool(msg.get("verify", False))
         try:
             result = await self._recipe_manager.download(dataset_id, verify=verify)
         except Exception:
             logger.exception("recipe_load failed for dataset %s", dataset_id)
-            await self._send_recipe_result(client_id, request_id, None, "download_failed")
+            await self._send_result(client_id, "recipe", request_id, None, "download_failed")
             return
         if result is None:
-            await self._send_recipe_result(client_id, request_id, None, "not_found")
+            await self._send_result(client_id, "recipe", request_id, None, "not_found")
             return
         await recipe_manager_module.audit_load(
             result, *self._attributed(client_id, self._session_actor(client_id, msg.get("scope", ""))),
         )
-        await self._send_recipe_result(
-            client_id, request_id, result.model_dump(by_alias=True), None,
+        await self._send_result(
+            client_id, "recipe", request_id, result.model_dump(by_alias=True), None,
         )
 
     async def _handle_recipe_save(self, client_id: str, msg: dict) -> None:
@@ -718,7 +720,7 @@ class WebSocketManager:
         """
         request_id = msg.get("requestId")
         if self._recipe_manager is None:
-            await self._send_recipe_result(client_id, request_id, None, "recipes_unavailable")
+            await self._send_result(client_id, "recipe", request_id, None, "recipes_unavailable")
             return
         dataset_id = msg.get("datasetId")
         if not isinstance(dataset_id, str) or not dataset_id:
@@ -729,7 +731,7 @@ class WebSocketManager:
                 # No datasetId given and no single loaded dataset to fall back
                 # on — tell the client which case so it can prompt for a target.
                 reason = "ambiguous_target" if loaded else "no_loaded_dataset"
-                await self._send_recipe_result(client_id, request_id, None, reason)
+                await self._send_result(client_id, "recipe", request_id, None, reason)
                 return
         scope = msg.get("scope", "")
         identity = self._client_users.get(client_id, {}).get(scope) if scope else None
@@ -740,13 +742,13 @@ class WebSocketManager:
             config = await self._recipe_manager.upload_into(dataset_id, username=username)
         except Exception:
             logger.exception("recipe_save failed for dataset %s", dataset_id)
-            await self._send_recipe_result(client_id, request_id, None, "upload_failed")
+            await self._send_result(client_id, "recipe", request_id, None, "upload_failed")
             return
         if config is None:
-            await self._send_recipe_result(client_id, request_id, None, "not_found")
+            await self._send_result(client_id, "recipe", request_id, None, "not_found")
             return
-        await self._send_recipe_result(
-            client_id, request_id, {"datasetId": dataset_id}, None,
+        await self._send_result(
+            client_id, "recipe", request_id, {"datasetId": dataset_id}, None,
         )
 
     async def _handle_alarm_ack(self, client_id: str, msg: dict) -> None:
@@ -790,20 +792,21 @@ class WebSocketManager:
         )
         await self._safe_send_json(client_id, payload)
 
-    async def _send_recipe_result(
+    async def _send_result(
         self,
         client_id: str,
+        kind: str,
         request_id: str | None,
         result: dict[str, Any] | None,
         reason: str | None,
     ) -> None:
-        """Emit recipe_response (reason=None) or recipe_error. No-op without requestId."""
+        """Emit ``<kind>_response`` (reason=None) or ``<kind>_error``. No-op without requestId."""
         if not request_id:
             return
         if reason:
-            payload: dict[str, Any] = {"type": "recipe_error", "requestId": request_id, "reason": reason}
+            payload: dict[str, Any] = {"type": f"{kind}_error", "requestId": request_id, "reason": reason}
         else:
-            payload = {"type": "recipe_response", "requestId": request_id, "result": result}
+            payload = {"type": f"{kind}_response", "requestId": request_id, "result": result}
         await self._safe_send_json(client_id, payload)
 
     async def _safe_send_json(self, client_id: str, payload: dict[str, Any]) -> None:
@@ -900,7 +903,9 @@ class WebSocketManager:
     ) -> None:
         if client_id not in self._connections:
             return
+        from services import users_manager
         group_labels = self._build_group_labels(doc, identity["groups"])
+        user = _user(doc, identity["username"]) or {}
         await self._safe_send_json(
             client_id,
             build_user_identity(
@@ -910,6 +915,12 @@ class WebSocketManager:
                 group_labels,
                 request_id=request_id,
                 session_token=identity.get("session"),
+                language=str(user.get("language", "")),
+                accounts=(
+                    users_manager.account_list(doc)
+                    if users_manager.is_user_admin(doc, identity["groups"])
+                    else None
+                ),
             ),
         )
 
@@ -1047,6 +1058,87 @@ class WebSocketManager:
                 )
             )
 
+    # -- Runtime user management -----------------------------------------------
+
+    async def _handle_user_admin(self, client_id: str, msg: dict) -> None:
+        """``user_update`` / ``user_delete`` / ``user_change_password``.
+
+        Authorised by the identity this socket holds for ``scope`` — every check
+        is in ``users_manager``. Replies ``user_response`` / ``user_error`` when
+        the client supplied a ``requestId``.
+        """
+        from services import users_manager
+
+        request_id = msg.get("requestId")
+        msg_type = msg["type"]
+        scope = msg.get("scope", "")
+        identity = self._client_users.get(client_id, {}).get(scope) if isinstance(scope, str) and scope else None
+        if not isinstance(identity, dict):
+            await self._send_result(client_id, "user", request_id, None, "forbidden")
+            return
+        try:
+            if msg_type == "user_update":
+                result = await asyncio.to_thread(
+                    users_manager.update_user,
+                    identity,
+                    msg.get("username"),
+                    msg.get("groups"),
+                    msg.get("password"),
+                    msg.get("language"),
+                )
+            elif msg_type == "user_delete":
+                result = await asyncio.to_thread(users_manager.delete_user, identity, msg.get("username"))
+            else:
+                result = await users_manager.change_own_password(
+                    identity, msg.get("currentPassword"), msg.get("newPassword"),
+                )
+        except users_manager.UserActionRefused as exc:
+            await self._send_result(client_id, "user", request_id, None, exc.reason)
+            return
+        except RateLimitError:
+            await self._send_result(client_id, "user", request_id, None, REASON_RATE_LIMITED)
+            return
+        except (UserValidationError, UserConflictError):
+            await self._send_result(client_id, "user", request_id, None, "invalid")
+            return
+
+        await self._send_result(client_id, "user", request_id, result, None)
+        actor_name, actor_source = self._attributed(client_id, identity["username"])
+        await audit.emit_async(
+            audit.AuditEvent(
+                actor=actor_name,
+                actor_source=actor_source,
+                action={
+                    "user_update": "user.save",
+                    "user_delete": "user.delete",
+                    "user_change_password": "user.password",
+                }[msg_type],
+                subject=result["username"],
+                # Whether, never what: no password goes into the record.
+                detail={
+                    key: value
+                    for key, value in {
+                        "created": result.get("created"),
+                        "groups": msg.get("groups") or None,
+                        "language": msg.get("language") or None,
+                        "passwordChanged": bool(msg.get("password")) or msg_type == "user_change_password",
+                    }.items()
+                    if value is not None
+                },
+            )
+        )
+        # The actor's own login survives its own password change; its other
+        # logins, and every login of a user an admin reset, end here.
+        await self.refresh_identities(keep_session=identity.get("session"))
+        await self.broadcast_config_changed(
+            ConfigChangedEvent(
+                artifact_type="users",
+                artifact_ids=[result["username"]],
+                source="runtime",
+                summary=f"User '{result['username']}' changed from the runtime",
+            )
+        )
+
     # -- Named panels (API v1 sign-in, via api/internal) ----------------------
 
     def panels(self) -> list[dict[str, Any]]:
@@ -1130,19 +1222,26 @@ class WebSocketManager:
                 await self._set_in_place(client_id, scope, fallback, doc)
         return sorted(previous)
 
-    async def refresh_identities(self) -> None:
+    async def refresh_identities(self, keep_session: str | None = None) -> None:
         """Re-check every held identity against users.json after a user write:
         a deleted or renamed user, and every login of one whose password
         changed, falls back to the auto-login user; a regrouped one gets its
-        new groups. Updated in place, so scope order is kept."""
+        new groups. Updated in place, so scope order is kept. A user admin is
+        always re-sent, since its account list may have changed.
+        ``keep_session`` survives a credential change of its own user: the
+        login that just changed that password."""
         from services import users_manager
         doc = users_manager.load()
         users = {u.get("username"): u for u in doc.get("users", []) if isinstance(u, dict)}
         stale = {
             token
             for token, (username, _expires, mark) in self._sessions.items()
-            if username not in users or _credential_mark(users[username]) != mark
+            if username not in users
+            or (_credential_mark(users[username]) != mark and token != keep_session)
         }
+        if keep_session in self._sessions and keep_session not in stale:
+            username, expires, _mark = self._sessions[keep_session]
+            self._sessions[keep_session] = (username, expires, _credential_mark(users[username]))
         await self._reset_sessions(stale, _auto_login_identity(doc), doc)
         for client_id, scopes in list(self._client_users.items()):
             for scope, identity in list(scopes.items()):
@@ -1153,6 +1252,7 @@ class WebSocketManager:
                     updated = {**identity, "groups": _groups(user)}
                 if updated != identity:
                     scopes[scope] = updated
+                if updated != identity or users_manager.is_user_admin(doc, updated["groups"]):
                     await self._send_identity(client_id, scope, updated, doc)
 
     async def _send_cached_values(self, client_id: str, composite_keys: set[str]) -> set[str]:

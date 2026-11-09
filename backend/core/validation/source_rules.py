@@ -42,6 +42,7 @@ SOURCE_FIELD_PRODUCES: dict[str, dict[str, str | list[str]]] = {
         "username": "string",
         "userList": ["string[]", "string"],
         "groups": ["string", "string[]"],
+        "accounts": "record-list",
     },
     "$device": {"hostname": "string", "ipAddress": "string", "macAddress": "string"},
 }

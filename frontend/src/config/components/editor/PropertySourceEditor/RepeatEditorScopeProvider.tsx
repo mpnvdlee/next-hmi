@@ -1,6 +1,7 @@
 import { useMemo, useRef, type ReactNode } from 'react';
 import { getVarBinding, isRecord } from '@shared/types/propertyValueGuards';
 import { useVariableStore } from '@hmi/store/variableStore';
+import { ACCOUNT_MEMBER_TYPES } from '@hmi/store/hmiStore';
 import { structShapeElementPath } from '@hmi/utils/repeatItemResolution';
 import { listItemTypes, type StructMember } from '@shared/types/varType';
 import { repeatItemsKey } from '@shared/utils/parentFlow';
@@ -111,6 +112,14 @@ function useItemsScope(items: unknown): RepeatEditorScope {
     }
     if (Array.isArray(items)) return literalListScope(items);
     if (isRecord(items) && Array.isArray(items.$static)) return literalListScope(items.$static);
+    if (isRecord(items) && isRecord(items.$user) && items.$user.field === 'accounts') {
+      return {
+        members: Object.keys(ACCOUNT_MEMBER_TYPES),
+        writable: false,
+        elementType: 'Struct',
+        memberTypes: { ...ACCOUNT_MEMBER_TYPES },
+      };
+    }
     return isRecord(items) && '$user' in items
       ? {
           members: RECORD_MEMBERS,

@@ -551,7 +551,8 @@ Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z
   `$user` → All users (the sign-in dropdown) and `$user` → Groups from it with no
   session. It carries no group membership, settings or credential state — the
   signed-in user's own groups arrive with the WebSocket identity, and
-  auto-login runs on the server.
+  auto-login runs on the server. A user admin's identity also carries every
+  account's groups (`accounts`, see [websocket.md](../architecture/websocket.md)).
 - `PUT /api/users`
   - Body: the complete `{ settings, groups, users }` document returned by `GET /api/users`.
   - Validates all sections and their group references before atomically replacing `users.json`; validation failure leaves the stored document unchanged.

@@ -23,7 +23,13 @@ import type {
   VariableBinding,
   WriteTarget,
 } from '@shared/types/config';
-import { bindingParts, isBoundIndex, writeTargetAddress } from '@shared/types/config';
+import {
+  USER_ACTIONS,
+  bindingParts,
+  isBoundIndex,
+  writeTargetAddress,
+  type UserActionType,
+} from '@shared/types/config';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import { getWriteCoercionKind, type VariableWriteDescriptor } from '@config/utils/variableType';
 import {
@@ -221,7 +227,10 @@ type AsyncActionType =
   | 'toggleDataVariable'
   | 'editValue'
   | 'recipeLoad'
-  | 'recipeSave';
+  | 'recipeSave'
+  | 'userUpdate'
+  | 'userDelete'
+  | 'userChangePassword';
 
 /**
  * Field names the backend populates on the result payload, per (action type, slot).
@@ -264,6 +273,21 @@ const RESULT_FIELDS_BY_ACTION_SLOT: Record<AsyncActionType, Record<ResultEventKe
     onSuccess: ['datasetId'],
     onFailed: ['reason'],
     onSettled: ['datasetId', 'reason'],
+  },
+  userUpdate: {
+    onSuccess: ['username', 'created'],
+    onFailed: ['reason'],
+    onSettled: ['username', 'created', 'reason'],
+  },
+  userDelete: {
+    onSuccess: ['username'],
+    onFailed: ['reason'],
+    onSettled: ['username', 'reason'],
+  },
+  userChangePassword: {
+    onSuccess: ['username'],
+    onFailed: ['reason'],
+    onSettled: ['username', 'reason'],
   },
 };
 
@@ -1297,40 +1321,58 @@ const EditValueEditor: EditorFor<'editValue'> = ({ action, ctx }) => {
 
 const LoginUserEditor: EditorFor<'loginUser'> = ({ action, ctx }) => (
   <>
-    <LoginFieldEditor
-      ctx={ctx}
-      fieldKey="username"
-      label="Username"
-      value={action.username}
-      onChange={(v) => ctx.update({ username: v })}
-      onOpenBindingPicker={stringSlotPicker(
-        ctx,
-        'loginUser-username',
-        'Username',
-        action.username,
-        (v) => ctx.update({ username: v }),
-      )}
-    />
-    <LoginFieldEditor
-      ctx={ctx}
-      fieldKey="password"
-      label="Password"
-      value={action.password}
-      onChange={(v) => ctx.update({ password: v })}
-      onOpenBindingPicker={stringSlotPicker(
-        ctx,
-        'loginUser-password',
-        'Password',
-        action.password,
-        (v) => ctx.update({ password: v }),
-      )}
-    />
+    <StringFieldCards action={action} ctx={ctx} fields={LOGIN_FIELDS} />
     <ResultHandlersSubrows action={action} actionType="loginUser" ctx={ctx} />
   </>
 );
 
 const LogoutUserEditor: EditorFor<'logoutUser'> = ({ action, ctx }) => (
   <ResultHandlersSubrows action={action} actionType="logoutUser" ctx={ctx} />
+);
+
+const LOGIN_FIELDS = [
+  ['username', 'Username'],
+  ['password', 'Password'],
+] as const;
+
+/** One String card per field, each with its own variable picker. */
+function StringFieldCards({
+  action,
+  ctx,
+  fields,
+}: {
+  action: ButtonAction;
+  ctx: ActionEditorCtx;
+  fields: readonly (readonly [key: string, label: string])[];
+}) {
+  const values = action as unknown as Record<string, unknown>;
+  return fields.map(([key, label]) => {
+    const set = (v: unknown) => ctx.update({ [key]: v } as Partial<ButtonAction>);
+    return (
+      <LoginFieldEditor
+        key={key}
+        ctx={ctx}
+        fieldKey={key}
+        label={label}
+        value={values[key]}
+        onChange={set}
+        onOpenBindingPicker={stringSlotPicker(ctx, `${action.type}-${key}`, label, values[key], set)}
+      />
+    );
+  });
+}
+
+const UserActionEditor = ({
+  action,
+  ctx,
+}: {
+  action: Extract<ButtonAction, { type: UserActionType }>;
+  ctx: ActionEditorCtx;
+}) => (
+  <>
+    <StringFieldCards action={action} ctx={ctx} fields={USER_ACTIONS[action.type].fields} />
+    <ResultHandlersSubrows action={action} actionType={action.type} ctx={ctx} />
+  </>
 );
 
 const SetLanguageEditor: EditorFor<'setLanguage'> = ({ action, ctx }) => (
@@ -1593,6 +1635,9 @@ export const ACTION_EDITORS: ActionEditors = {
   recipeSave: RecipeSaveEditor,
   loginUser: LoginUserEditor,
   logoutUser: LogoutUserEditor,
+  userUpdate: UserActionEditor,
+  userDelete: UserActionEditor,
+  userChangePassword: UserActionEditor,
   acknowledgeAllAlarms: () => null,
   reloadHmi: () => null,
   delay: DelayEditor,

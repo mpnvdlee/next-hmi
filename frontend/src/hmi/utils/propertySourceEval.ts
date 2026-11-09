@@ -9,6 +9,7 @@ import {
 } from '@shared/types/config';
 import type { HttpEntry, HttpRequestSpec } from '../store/httpSourceStore';
 import type { PageGroupStackEntry } from '../components/PageGroupStackContext';
+import type { UserAccount } from '../store/hmiStore';
 import { imageBodyToUrl } from '@shared/utils/imageAsset';
 import { readBit } from '@shared/utils/valueTypes';
 import { withBase } from '@shared/utils/runtimeBase';
@@ -41,6 +42,9 @@ export interface EvaluationContext {
   /** Every username in the project, for `$user` with `field: 'userList'`. Read
    *  on the record-list path only — the scalar path cannot carry an array. */
   resolveUserList?: () => string[];
+  /** Every account with its groups, for `$user` with `field: 'accounts'` —
+   *  empty unless the signed-in user is a user admin. Record-list path only. */
+  resolveUserAccounts?: () => UserAccount[];
   resolveDevice?: (field: 'hostname' | 'ipAddress' | 'macAddress') => string | null;
   resolveTime?: (format?: string, timezone?: string) => string | null;
   resolveComponentProp?: (componentId: string, property: string) => ResolvedValue;
@@ -562,7 +566,7 @@ function evaluateUser(userObj: unknown, context: EvaluationContext): ResolvedVal
   }
 
   const u = userObj as Record<string, unknown>;
-  const field = u.field as 'username' | 'groups' | 'userList' | undefined;
+  const field = u.field as 'username' | 'groups' | 'userList' | 'accounts' | undefined;
 
   // `userList` is an array source and `ResolvedValue` is scalar-only, so it is
   // resolved on the record-list path (`resolveRecordListSource`) instead. Join

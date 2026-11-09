@@ -52,12 +52,52 @@ function overlayMatches(entry: PageOverlayEntry, id: string): boolean {
   return entry.pageId === id || entry.activePageId === id;
 }
 
+/** One account as a user admin's `user_identity` carries it. */
+export interface UserAccount {
+  username: string;
+  groups: string[];
+  language: string;
+  locked: { delete: boolean; password: boolean; groups: boolean };
+}
+
 interface UserIdentity {
   username: string;
   groups: string[];
   groupLabels: Record<string, string>;
   /** A real sign-in (the identity carried a sessionToken), not the auto-login user. */
   signedIn?: boolean;
+  /** Every account — only while this user is a user admin. */
+  accounts?: UserAccount[];
+}
+
+/** The members a Repeater copy over `$user` → Accounts reads. `groupIds` has
+ *  the shape the User update action's `groups` field takes. */
+export const ACCOUNT_MEMBER_TYPES = {
+  label: 'String',
+  value: 'String',
+  groups: 'String',
+  groupIds: 'String',
+  language: 'String',
+  lockedDelete: 'Boolean',
+  lockedPassword: 'Boolean',
+  lockedGroups: 'Boolean',
+} as const;
+
+/** `accounts` as Repeater items; `groupLabels` names every group by id. */
+export function accountRows(
+  accounts: UserAccount[],
+  groupLabels: Record<string, string>,
+): Record<keyof typeof ACCOUNT_MEMBER_TYPES, string | boolean>[] {
+  return accounts.map((a) => ({
+    label: a.username,
+    value: a.username,
+    groups: a.groups.map((id) => groupLabels[id] ?? id).join(', '),
+    groupIds: a.groups.join(','),
+    language: a.language,
+    lockedDelete: a.locked.delete,
+    lockedPassword: a.locked.password,
+    lockedGroups: a.locked.groups,
+  }));
 }
 
 /** What `$user` reads for a scope's signed-in user. */

@@ -4,7 +4,7 @@ import type {
   ButtonAction,
   OverlayPlacement,
 } from '@shared/types/config';
-import { writeTargetAddress } from '@shared/types/config';
+import { USER_ACTIONS, isUserAction, writeTargetAddress } from '@shared/types/config';
 import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { evaluatePropertyValue, resolveBoundIndex } from '@hmi/utils/propertySourceEval';
@@ -369,6 +369,25 @@ export function executeWidgetActions(
     if (action.type === 'logoutUser') {
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({ type: 'logout', ...(requestId && { requestId }), scope });
+      continue;
+    }
+
+    if (isUserAction(action)) {
+      const { message, fields } = USER_ACTIONS[action.type];
+      const values = action as unknown as Record<string, unknown>;
+      const requestId = beginAsyncAction(action, scope, inputScopeProps);
+      sendWsMessage({
+        type: message,
+        ...Object.fromEntries(
+          fields.map(([key]) => {
+            const v = evaluatePropertyValue(values[key], evalCtx);
+            // A list (a multi-pick) reaches the backend as the comma-separated ids it takes.
+            return [key, Array.isArray(v) ? v.join(',') : String(v ?? '')];
+          }),
+        ),
+        ...(requestId && { requestId }),
+        scope,
+      });
       continue;
     }
 

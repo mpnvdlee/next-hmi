@@ -11,6 +11,7 @@ import asyncio
 import copy
 import logging
 import shutil
+import threading
 from datetime import UTC, datetime
 from typing import Any
 
@@ -323,6 +324,151 @@ def save_users(doc: dict[str, Any], items: list) -> None:
 def unchanged_user(user: dict[str, Any]) -> dict[str, Any]:
     # An empty password and omitted profile keys keep what is stored.
     return {"id": user.get("id"), "username": user.get("username"), "groups": user.get("groups"), "password": ""}
+
+
+# --- Runtime user management --------------------------------------------------
+#
+# What a signed-in HMI user may do over the WebSocket. Every check runs here,
+# against the identity the server holds for the socket, never a claim the
+# message makes: the runtime socket is on the public prefix.
+
+
+class UserActionRefused(Exception):
+    """A runtime user action the server refuses; ``reason`` goes to ``$result``."""
+
+    def __init__(self, reason: str, message: str = "") -> None:
+        super().__init__(message or reason)
+        self.reason = reason
+
+
+# Load-modify-save of users.json from concurrent sockets.
+_runtime_lock = threading.Lock()
+
+
+def account_list(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every account as the runtime's ``$user`` → Accounts shows it — admins only."""
+    return [
+        {
+            "username": user["username"],
+            "groups": list(user.get("groups", [])),
+            "language": user.get("language", ""),
+            "locked": {key: bool(user.get("locked", {}).get(key)) for key in LOCK_KEYS},
+        }
+        for user in doc.get("users", [])
+        if isinstance(user, dict) and isinstance(user.get("username"), str)
+    ]
+
+
+def _load_for_write() -> dict[str, Any]:
+    # Not load(): it falls back to defaults on a broken file, and saving that
+    # would replace whatever the operator still has to repair.
+    try:
+        doc = read_json(users_path())
+    except (OSError, ValueError) as exc:
+        raise UserActionRefused("unavailable", "users.json is unreadable") from exc
+    state = users_document.document_state(doc)
+    if not state.valid:
+        raise UserActionRefused("unavailable", state.error or "users.json is invalid")
+    return doc
+
+
+def _require_admin(doc: dict[str, Any], actor: dict[str, Any]) -> None:
+    if not is_user_admin(doc, list(actor.get("groups", []))):
+        raise UserActionRefused("forbidden", "Not in a user-admin group")
+
+
+def update_user(
+    actor: dict[str, Any], username: Any, groups: Any, password: Any, language: Any
+) -> dict[str, Any]:
+    """Create or update one account. An empty field leaves that part unchanged;
+    a new account needs groups and a password. Blocking: hashes a password."""
+    if not isinstance(username, str) or not valid_id(username):
+        raise UserActionRefused("invalid", "Invalid username")
+    group_list = [g.strip() for g in groups.split(",") if g.strip()] if isinstance(groups, str) else []
+    password = password if isinstance(password, str) else ""
+    language = language if isinstance(language, str) else ""
+    with _runtime_lock:
+        doc = _load_for_write()
+        _require_admin(doc, actor)
+        target = find_user(doc, username)
+        locked = target.get("locked", {}) if target else {}
+        if target is None and (not group_list or not password):
+            raise UserActionRefused("invalid", "A new user needs groups and a password")
+        if (
+            target is not None
+            and group_list
+            and set(group_list) != set(target.get("groups", []))
+            and locked.get("groups")
+        ):
+            raise UserActionRefused("locked", "This user's groups are locked")
+        if password and locked.get("password"):
+            raise UserActionRefused("locked", "This user's password is locked")
+        if (
+            username == actor.get("username")
+            and group_list
+            and not is_user_admin(doc, group_list)
+        ):
+            raise UserActionRefused("forbidden", "You cannot remove your own user-admin rights")
+        submitted: dict[str, Any] = {
+            "id": target.get("id") if target else username,
+            "username": username,
+            "groups": group_list or (target or {}).get("groups"),
+            "password": password,
+        }
+        if language:
+            submitted["language"] = language
+        items = [submitted if u is target else unchanged_user(u) for u in doc.get("users", [])]
+        if target is None:
+            items.append(submitted)
+        save_users(doc, items)
+    return {"username": username, "created": target is None}
+
+
+def delete_user(actor: dict[str, Any], username: Any) -> dict[str, Any]:
+    with _runtime_lock:
+        doc = _load_for_write()
+        _require_admin(doc, actor)
+        target = find_user(doc, username)
+        if target is None:
+            raise UserActionRefused("not_found", "No such user")
+        if username == "guest":
+            raise UserActionRefused("invalid", "The guest user cannot be deleted")
+        if username == actor.get("username"):
+            raise UserActionRefused("forbidden", "You cannot delete yourself")
+        if target.get("locked", {}).get("delete"):
+            raise UserActionRefused("locked", "This user cannot be deleted")
+        save_users(doc, [unchanged_user(u) for u in doc["users"] if u is not target])
+    return {"username": username}
+
+
+async def change_own_password(
+    actor: dict[str, Any], current_password: Any, new_password: Any
+) -> dict[str, Any]:
+    """The signed-in user's own password, proven with the current one."""
+    username = actor.get("username")
+    if not isinstance(username, str) or username == "guest":
+        raise UserActionRefused("forbidden", "Sign in first")
+    if not isinstance(new_password, str) or not new_password:
+        raise UserActionRefused("invalid", "The new password is empty")
+    # The sign-in funnel: same throttle, same constant-cost miss.
+    if await authenticate(username, current_password) is None:
+        raise UserActionRefused("wrong_password", "The current password is wrong")
+
+    def write() -> None:
+        with _runtime_lock:
+            doc = _load_for_write()
+            user = find_user(doc, username)
+            if user is None:
+                raise UserActionRefused("not_found", "No such user")
+            if user.get("locked", {}).get("password"):
+                raise UserActionRefused("locked", "This user's password is locked")
+            save_users(
+                doc,
+                [{**unchanged_user(u), "password": new_password} if u is user else unchanged_user(u) for u in doc["users"]],
+            )
+
+    await asyncio.to_thread(write)
+    return {"username": username}
 
 
 # --- Internal helpers -------------------------------------------------------

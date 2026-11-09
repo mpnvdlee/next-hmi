@@ -146,6 +146,14 @@ interface VariableBinding {
 type WriteTarget =
   { $var: VariableBinding } | { $repeatItem: { member?: string } } | { $componentProp: string };
 
+/** One account as a user admin's `user_identity` carries it. */
+interface UserAccount {
+  username: string;
+  groups: string[];
+  language: string;
+  locked: { delete: boolean; password: boolean; groups: boolean };
+}
+
 /** Mirrors `EvaluationContext` in `hmi/utils/propertySourceEval.ts` — one resolver
  *  per property source. Everything is optional: a context that omits a resolver
  *  makes the matching source evaluate to absent. */
@@ -161,6 +169,9 @@ interface EvaluationContext {
   resolveUserGroups?: () => string[];
   /** Every username in the project, for `$user` with `field: 'userList'`. */
   resolveUserList?: () => string[];
+  /** Every account with its groups, for `$user` with `field: 'accounts'`;
+   *  empty unless the signed-in user is a user admin. */
+  resolveUserAccounts?: () => UserAccount[];
   resolveDevice?: (field: 'hostname' | 'ipAddress' | 'macAddress') => string | null;
   resolveTime?: (format?: string, timezone?: string) => string | null;
   resolveComponentProp?: (componentId: string, property: string) => unknown;
@@ -372,6 +383,31 @@ type ComponentAction =
     }
   | {
       type: 'logoutUser';
+      onSuccess?: ComponentAction[];
+      onFailed?: ComponentAction[];
+      onSettled?: ComponentAction[];
+    }
+  | {
+      type: 'userUpdate';
+      username: unknown;
+      groups: unknown;
+      password: unknown;
+      language: unknown;
+      onSuccess?: ComponentAction[];
+      onFailed?: ComponentAction[];
+      onSettled?: ComponentAction[];
+    }
+  | {
+      type: 'userDelete';
+      username: unknown;
+      onSuccess?: ComponentAction[];
+      onFailed?: ComponentAction[];
+      onSettled?: ComponentAction[];
+    }
+  | {
+      type: 'userChangePassword';
+      currentPassword: unknown;
+      newPassword: unknown;
       onSuccess?: ComponentAction[];
       onFailed?: ComponentAction[];
       onSettled?: ComponentAction[];

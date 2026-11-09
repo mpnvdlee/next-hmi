@@ -30,7 +30,8 @@
   "$user": {
     "username": "string",
     "userList": ["string[]", "string"],
-    "groups": ["string", "string[]"]
+    "groups": ["string", "string[]"],
+    "accounts": "record-list"
   },
   "$device": {
     "hostname": "string",

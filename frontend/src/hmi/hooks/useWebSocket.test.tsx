@@ -3,6 +3,7 @@ import { act, render } from '@testing-library/react';
 import { ackAlarm, ackAllAlarms } from '../components/alarmUtils';
 import { useHmiStore } from '../store/hmiStore';
 import { useVariableStore } from '../store/variableStore';
+import { useTranslationStore } from '@shared/store/translationStore';
 import { identityRequest, loadSessionToken } from '../utils/runtimeSession';
 import { setBackendRestartHandler, useWebSocket } from './useWebSocket';
 
@@ -95,6 +96,28 @@ describe('useWebSocket', () => {
     act(() => socket.receive({ ...identity, scope: 'runtime:live', username: 'guest' }));
     expect(loadSessionToken()).toBeUndefined();
     expect(useHmiStore.getState().currentUsersByScope['runtime:live'].signedIn).toBe(false);
+  });
+
+  it("switches to a user's language when that user arrives, not on a refresh", () => {
+    sessionStorage.clear();
+    render(<Probe />);
+    const socket = FakeSocket.instances[0];
+    act(() => socket.open());
+    identityRequest('runtime:lang');
+    useTranslationStore.getState().setActiveLanguage('en');
+    const identity = { type: 'user_identity', scope: 'runtime:lang', groups: [], groupLabels: {} };
+    const accounts = [
+      { username: 'ann', groups: ['admin'], language: 'de', locked: { delete: false, password: false, groups: false } },
+    ];
+    act(() => socket.receive({ ...identity, username: 'ann', language: 'de', accounts }));
+    expect(useTranslationStore.getState().activeLanguage).toBe('de');
+    expect(useHmiStore.getState().currentUsersByScope['runtime:lang'].accounts).toEqual(accounts);
+    // A language picked during the session survives the same user's refresh.
+    useTranslationStore.getState().setActiveLanguage('en');
+    act(() => socket.receive({ ...identity, username: 'ann', language: 'de' }));
+    expect(useTranslationStore.getState().activeLanguage).toBe('en');
+    // No accounts on the wire: no longer a user admin.
+    expect(useHmiStore.getState().currentUsersByScope['runtime:lang'].accounts).toBeUndefined();
   });
 
   it('drops the socket a StrictMode remount discarded, and keeps the live one', () => {

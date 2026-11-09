@@ -43,7 +43,7 @@ Everything under `/runtime/<project>/`, while that project runs:
 | Recipes | Load a saved recipe to the PLC, or save the live values over a recipe. |
 | Alarms | Acknowledge active alarms, and read the alarm history, including who acknowledged each alarm. |
 | Historian | Read the recorded history of every variable the historian logs. |
-| Users | Read the usernames and the group names, not who is in which group, and not whether an account has a password. Sign in with a username and its password; five wrong passwords lock that username for a minute. |
+| Users | Read the usernames and the group names, not who is in which group, and not whether an account has a password. Sign in with a username and its password; five wrong passwords lock that username for a minute. Once signed in as a user admin, also see every account's groups and add, change and delete accounts ([Manage users from the runtime](users.md#manage-users-from-the-runtime)); once signed in as anyone, change your own password. |
 | HTTP sources (`$http`) | Have the device send any `GET` or `POST` request, with any path, headers and body, to a server that the project's HTTP sources name or that is on the project's list under **Admin › HTTP sources**. Whatever such a server lets you change, anyone who reaches the panel can change through the device, so list only servers whose every endpoint you would open to the panel. See [Which servers a URL can reach](properties.md#which-servers-a-url-can-reach). |
 | Device info | Learn the address the device sees them connect from, and that address's host name and network-card address when the device can look them up. It only ever looks up the caller's own address. |
 

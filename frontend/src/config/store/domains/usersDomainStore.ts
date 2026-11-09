@@ -12,10 +12,22 @@ export interface UserRecord {
   password: string;
   passwordSet?: boolean;
   groups: string[];
+  /** Language code applied when this user signs in; absent for none. */
+  language?: string;
+  /** What runtime user management may not touch; the editor always may. */
+  locked?: UserLocks;
+}
+
+export interface UserLocks {
+  delete?: boolean;
+  password?: boolean;
+  groups?: boolean;
 }
 
 export interface UsersSettings {
   autoLoginName: string;
+  /** Groups whose members manage users from the runtime; absent = ['admin']. */
+  userAdminGroups?: string[];
 }
 
 export interface UsersDocument {
