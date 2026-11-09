@@ -11,6 +11,13 @@ heading.
 
 ## [Unreleased]
 
+### Added
+
+- **A Dropdown writes to a variable.** A Dropdown gains **Value**: bound to a
+  variable, the choice is written there and read back, as on a Button Row, so
+  a PLC enum parameter becomes a dropdown. It keeps showing what the variable
+  holds until the PLC confirms the new choice.
+
 ## [1.2.0] - 2026-11-08
 
 Opens the HMI to the systems around it and shuts out the ones that should not
