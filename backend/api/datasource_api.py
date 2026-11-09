@@ -334,7 +334,11 @@ async def write_datasource_variable(
     marked the request as coming through the editor (the WebSocket rule).
     """
     authenticated = (
-        await users_manager.authenticate(credentials.username, credentials.password)
+        await users_manager.authenticate(
+            credentials.username,
+            credentials.password,
+            request.client.host if request.client else None,
+        )
         if credentials is not None
         else None
     )

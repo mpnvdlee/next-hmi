@@ -398,6 +398,18 @@ def test_rest_write_throttles_repeated_credential_failures(ds_client, live_proje
     assert locked.status_code == 429
 
 
+def test_rest_write_is_throttled_by_the_caller_s_address(ds_client):
+    """A caller rotating usernames is metered by its address: TestClient's own."""
+    from core import user_auth_throttle
+
+    client, manager = ds_client
+    for attempt in range(60):
+        user_auth_throttle.begin_attempt(f"ghost{attempt}", "testclient")
+
+    locked = client.post("/api/datasources/write", json=_setpoint(manager), auth=("anyone", "guess"))
+    assert locked.status_code == 429
+
+
 def test_rest_write_shares_envelope_and_coercion(ds_client, monkeypatch):
     client, manager = ds_client
     manager.save(
@@ -425,7 +437,7 @@ def test_rest_write_shares_envelope_and_coercion(ds_client, monkeypatch):
         },
     )
 
-    async def authenticate(username, password):
+    async def authenticate(username, password, address):
         if (username, password) == ("operator", "secret"):
             return {"username": username, "groups": ["operator"]}, {}
         if (username, password) == ("guest", "guest"):
@@ -475,7 +487,7 @@ def test_rest_write_is_audited_as_the_user_or_the_engineer(ds_client, monkeypatc
         },
     )
 
-    async def authenticate(username, password):
+    async def authenticate(username, password, address):
         return {"username": username, "groups": ["operator"]}, {}
 
     monkeypatch.setattr(datasource_api_module.users_manager, "authenticate", authenticate)

@@ -54,7 +54,8 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
   - every credential check costs exactly one derivation, whatever it decides: a right or wrong password, a legacy plaintext compare, an unusable stored hash, an account with no credential (`verify_password`), and a username that matched nothing at all (`verify_absent_user`). Answering a miss early would be a ~50x timing oracle over the roster
 - `backend/core/user_auth_throttle.py`
   - in-memory online-guessing throttle for the project-user credential path, consulted by `services/users_manager.authenticate` so the WebSocket `login` message and both REST Basic routes are covered at once
-  - two tiers: five consecutive failures lock that username for 60 s; 60 failures inside one 60 s window (a flood that rotates usernames, which never meets the per-name counter) trip a 30 s cooldown across every name, bounding the PBKDF2 work an anonymous caller can buy on a panel PC
+  - three tiers: five consecutive failures lock that username for 60 s; 60 failures inside one 60 s window from one client address (a flood that rotates usernames, which never meets the per-name counter) refuse that address for 30 s, bounding the PBKDF2 work one caller can buy on a panel PC without locking anyone else out; 300 inside one window from all addresses together trip a 30 s cooldown for every caller. Each caller passes `request.client.host` / `websocket.client.host` (the manager's proxy forwards the browser's address on both hops); both tables are capped at 1024 entries and a presented username is cut to 65 characters
+  - an attempt counts as a failure when it is admitted (`begin_attempt`) and a success takes it back, and `authenticate` serialises the checks of one username (a lock per name, dropped when idle): counted after the awaited PBKDF2, every parallel guess had passed the lockout before the first failure counted
   - a lockout is reported by raising `RateLimitError` → HTTP `429` on REST, `auth_error` with `reason: "rate_limited"` on the socket
 - `backend/core/audit.py`
   - generic event-emission seam (`emit()` / `emit_async()` fan out to `register_listener()`-ed callbacks); the public build registers no listeners, so it is a no-op here — audit trail is an enterprise feature
@@ -381,7 +382,7 @@ Important behaviors:
 
 ## WebSocket Flow
 
-`backend/services/websocket_manager.py` batches pending variable updates into 50 ms windows. On connect it accepts the socket, sends an empty `var_snapshot`, then streams cached values in `var_update` chunks. On disconnect the client is removed from the connection map, its priority keys are cleared, and datasource subscription priority is recomputed.
+`backend/services/websocket_manager.py` batches pending variable updates into 50 ms windows. On connect it accepts the socket, sends an empty `var_snapshot`, then streams cached values in `var_update` chunks. On disconnect the client is removed from the connection map, its waiting `set_context` and prefetch are cancelled, its priority keys are cleared, and a priority recompute is scheduled. `set_context` pacing, the shared recompute interval and the 500-socket runtime cap are in [websocket.md](websocket.md).
 
 The full handshake order, every message shape, and the async-action result correlation (`requestId` → `write_response` / `write_error`, reason-code vocabulary, client-synthesised `timeout` / `disconnected`) are specified in [websocket.md](websocket.md).
 

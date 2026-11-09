@@ -223,7 +223,8 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
 
   const [series, setSeries] = useState<Series[]>([]);
   const [loading, setLoading] = useState(true);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // The historian refuses a query past its size limits with a 422.
+  const [refused, setRefused] = useState(false);
   const mountedRef = useRef(true);
 
   const [liveBuffers, setLiveBuffers] = useState<Record<string, SeriesPoint[]>>({});
@@ -282,11 +283,12 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
     [variables, liveBuffers, now],
   );
 
-  const fetchData = useCallback(async () => {
+  /** Resolves true when the historian refused the query for its size. */
+  const fetchData = useCallback(async (): Promise<boolean> => {
     if (!variables.length) {
       setSeries([]);
       setLoading(false);
-      return;
+      return false;
     }
     try {
       const rangeMs = TIME_RANGES[timeRange]?.ms || 3600000;
@@ -298,26 +300,40 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
         maxPoints: '500',
       });
       const resp = await fetch(withBase(`/api/historian/query?${params}`));
+      if (resp.status === 422) {
+        if (mountedRef.current) setRefused(true);
+        return true;
+      }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
-      if (mountedRef.current) setSeries(data.series || []);
+      if (mountedRef.current) {
+        setRefused(false);
+        setSeries(data.series || []);
+      }
     } catch (err) {
       console.error('[Historian] TrendChart fetch error:', err);
     } finally {
       if (mountedRef.current) setLoading(false);
     }
+    return false;
   }, [variables, timeRange]);
 
   useEffect(() => {
     if (isLive) return;
     mountedRef.current = true;
-    fetchData();
-    if (refreshInterval > 0) {
-      intervalRef.current = setInterval(fetchData, refreshInterval * 1000);
-    }
+    let timer: ReturnType<typeof setInterval> | undefined;
+    // A refused query fails the same way on every poll, and the browser logs
+    // each 422. Stop asking: a change of variables or range builds a new
+    // fetchData and runs this effect again.
+    const poll = () =>
+      void fetchData().then((refusedNow) => {
+        if (refusedNow) clearInterval(timer);
+      });
+    poll();
+    if (refreshInterval > 0) timer = setInterval(poll, refreshInterval * 1000);
     return () => {
       mountedRef.current = false;
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      clearInterval(timer);
     };
   }, [fetchData, refreshInterval, isLive]);
 
@@ -397,6 +413,18 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
       <div className={ROOT_CLASS} style={wrapStyle}>
         <div className="hmi-trend-chart__placeholder">
           Configure variables to display trend data
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLive && refused) {
+    return (
+      <div className={ROOT_CLASS} style={wrapStyle}>
+        <div className="hmi-trend-chart__placeholder">
+          <p className="hmi-trend-chart__refused">
+            This chart asks for too much data. It shows at most 32 variables.
+          </p>
         </div>
       </div>
     );

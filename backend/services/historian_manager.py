@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
+import functools
 import logging
+import math
 import sqlite3
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -16,6 +20,14 @@ logger = logging.getLogger(__name__)
 _BATCH_INTERVAL = 1.5
 _CLEANUP_INTERVAL = 3600
 _DEFAULT_RETENTION = 30 * 24 * 3600
+# The query endpoint is public; these bound what one request can make the
+# server hold. 32 lines is past what a trend can show legibly.
+MAX_QUERY_VARIABLES = 32
+MAX_QUERY_POINTS = 100_000  # variables x maxPoints
+# Queries run here, never on asyncio's default pool: a burst of them there
+# delays everything else that pool runs, the password check of a sign-in
+# among it. Two workers serve trends; further queries wait their turn.
+_QUERY_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="nexthmi-historian-query")
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS samples (
@@ -237,6 +249,21 @@ class HistorianManager:
             except Exception:
                 logger.exception("Retention cleanup commit failed")
 
+    async def query_async(
+        self,
+        variables: list[str],
+        start: str,
+        end: str,
+        max_points: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Run :meth:`query` on the historian's own threads."""
+        # copy_context() as asyncio.to_thread does, so a scoped active project
+        # follows the call onto the worker.
+        call = functools.partial(
+            contextvars.copy_context().run, self.query, variables, start, end, max_points,
+        )
+        return await asyncio.get_running_loop().run_in_executor(_QUERY_EXECUTOR, call)
+
     def query(
         self,
         variables: list[str],
@@ -244,6 +271,22 @@ class HistorianManager:
         end: str,
         max_points: int = 500,
     ) -> list[dict[str, Any]]:
+        """One series per distinct variable, each at most *max_points* points.
+
+        Raises ``ValueError`` for an unparseable time or a request past
+        ``MAX_QUERY_VARIABLES`` / ``MAX_QUERY_POINTS``.
+        """
+        keys = list(dict.fromkeys(v.strip() for v in variables if v.strip()))
+        if len(keys) > MAX_QUERY_VARIABLES:
+            raise ValueError(
+                f"Too many variables: a query reads at most {MAX_QUERY_VARIABLES}, "
+                f"this one names {len(keys)}."
+            )
+        if len(keys) * max_points > MAX_QUERY_POINTS:
+            raise ValueError(
+                f"Too many points: variables x maxPoints may be at most {MAX_QUERY_POINTS}, "
+                f"this query asks for {len(keys) * max_points}."
+            )
         start_ts = _parse_time(start)
         end_ts = _parse_time(end)
         db_path = self._db_path()
@@ -254,20 +297,10 @@ class HistorianManager:
         read_conn = sqlite3.connect(str(db_path), check_same_thread=False)
         try:
             read_conn.execute("PRAGMA query_only=ON;")
-            result = []
-            for var in variables:
-                var = var.strip()
-                if not var:
-                    continue
-                rows = read_conn.execute(
-                    "SELECT timestamp, value FROM samples "
-                    "WHERE variable = ? AND timestamp >= ? AND timestamp <= ? "
-                    "ORDER BY timestamp",
-                    (var, start_ts, end_ts),
-                ).fetchall()
-                data = _downsample(rows, max_points)
-                result.append({"variable": var, "data": data})
-            return result
+            return [
+                {"variable": var, "data": _sample(read_conn, var, start_ts, end_ts, max_points)}
+                for var in keys
+            ]
         finally:
             read_conn.close()
 
@@ -381,16 +414,53 @@ def _ts_to_iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, tz=UTC).isoformat()
 
 
-def _downsample(rows: list[tuple[float, float | None]], max_points: int) -> list[dict[str, Any]]:
-    if len(rows) <= max_points:
-        return [{"t": r[0], "v": r[1]} for r in rows]
-    step = len(rows) / max_points
-    result = []
-    for i in range(max_points):
-        idx = int(i * step)
-        r = rows[idx]
-        result.append({"t": r[0], "v": r[1]})
-    return result
+_IN_RANGE = "FROM samples WHERE variable = ? AND timestamp >= ? AND timestamp <= ? "
+# The first sample of each of :n equal time buckets from :first, in bucket
+# order. One statement, so the per-bucket index seeks run inside SQLite rather
+# than as a Python round trip each. Bucket i is [first + i*width,
+# first + (i+1)*width), computed exactly as the float arithmetic in Python
+# would; the last bucket ends at :stop instead, just past the last sample.
+_FIRST_OF_EACH_BUCKET = """
+WITH RECURSIVE bucket(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM bucket WHERE i + 1 < :n)
+SELECT s.timestamp, s.value FROM bucket JOIN samples AS s ON s.id = (
+    SELECT id FROM samples
+    WHERE variable = :variable AND timestamp >= :first + i * :width
+      AND timestamp < CASE WHEN i + 1 = :n THEN :stop ELSE :first + (i + 1) * :width END
+    ORDER BY timestamp LIMIT 1
+)
+ORDER BY i
+"""
+
+
+def _sample(
+    conn: sqlite3.Connection, variable: str, start_ts: float, end_ts: float, max_points: int,
+) -> list[dict[str, Any]]:
+    """*variable*'s samples in the range, downsampled to at most *max_points*.
+
+    A range holding no more than *max_points* samples comes back whole.
+    Otherwise the span from its first to its last sample is cut into
+    *max_points* equal time buckets and each non-empty bucket gives its first
+    sample. Every read is an index seek, so neither memory nor time grows with
+    the number of samples in the range.
+    """
+    rows = conn.execute(
+        f"SELECT timestamp, value {_IN_RANGE}ORDER BY timestamp LIMIT ?",
+        (variable, start_ts, end_ts, max_points + 1),
+    ).fetchall()
+    if len(rows) > max_points:
+        first = rows[0][0]
+        last = conn.execute(
+            f"SELECT timestamp {_IN_RANGE}ORDER BY timestamp DESC LIMIT 1",
+            (variable, start_ts, end_ts),
+        ).fetchone()[0]
+        rows = conn.execute(_FIRST_OF_EACH_BUCKET, {
+            "n": max_points,
+            "variable": variable,
+            "first": first,
+            "width": (last - first) / max_points,
+            "stop": math.nextafter(last, math.inf),  # the last bucket holds the last sample
+        }).fetchall()
+    return [{"t": t, "v": v} for t, v in rows]
 
 
 historian_manager = HistorianManager()

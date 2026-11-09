@@ -31,7 +31,9 @@ limits (reverse-proxy `Host`, dev proxy, DNS rebinding) are in
 [rest-api.md](../reference/rest-api.md#authentication).
 
 The manager opens a fresh upstream connection per browser socket and forwards
-none of the browser's headers. On the editor prefix only, it sets
+none of the browser's headers. It sets `X-Forwarded-For` to the address it saw,
+which the child's uvicorn (trusting loopback) turns into the socket's client
+address for the sign-in throttle. On the editor prefix only, it sets
 `x-nexthmi-editor: 1` (`core.audit.EDITOR_HEADER`) on that upstream
 upgrade; the child marks such a connection as an editor socket
 (`websocket_manager.connect(editor=True)`). A browser cannot forge the mark on
@@ -55,6 +57,14 @@ when it came through the editor.
 Inbound frames are capped at **64 KiB**; oversized or non-JSON frames are logged
 and dropped. Unknown client `type` values are ignored. Composite keys use the
 form `"<datasource>:<path>"` (`models/datasource.py:build_var_key`).
+
+A child serves at most **500** runtime sockets at once
+(`_MAX_RUNTIME_CONNECTIONS`); one more is accepted and closed at once with
+`1013` (Try Again Later) and the reason "Too many open connections to this
+project", before any message. Editor sockets do not count and are never
+refused. The runtime client resets its reconnect backoff on the first
+`var_snapshot`, not on `open` — through the manager the socket opens before
+the child answers — so a refused tab backs off to one try every 10 s.
 
 ## Handshake
 
@@ -140,7 +150,7 @@ leaving a half-initialised socket registered.
 | `alarm_ack_response` | `{ type, requestId }` | A correlated `alarm_ack` / `alarm_ack_all` succeeded. |
 | `alarm_ack_error` | `{ type, requestId, reason }` | A correlated `alarm_ack` / `alarm_ack_all` failed: `not_found` (no active instance with that id), `bad_request` (no `instanceId`), `alarms_unavailable`. |
 | `user_identity` | `{ type, scope, username, groups, groupLabels, sessionToken? }` | After `login`, `logout`, or `request_identity`. Also unprompted, with no `requestId`: for every scope on a named panel's connections when [API v1](../reference/rest-api.md#panel-sessions) signs that panel in or out, and for a scope whose user a `users` reload deleted, regrouped or gave a new password (see [Internal API](../reference/rest-api.md#internal-api)). `sessionToken` is present while the identity is a resumable login (see `request_identity`). |
-| `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username off. |
+| `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username or this connection's address off. |
 | `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` or `toggle_field` succeeded — see [Action result correlation](#action-result-correlation). |
 | `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` or `toggle_field` failed. |
 | `restarting` | `{ type, reason }` | Right before the backend SIGTERMs itself for `POST /api/system/restart`. Clients disconnect and poll `/api/system/info` for the new process. |
@@ -217,6 +227,30 @@ integer digits keeps them too — and writes it back as a string.
     that is not enabled in its datasource (or that a re-browse found gone from
     the server) gets no value, cached or freshly read, and no fast
     subscription; a struct folder's key subscribes only its enabled leaves.
+  - Before anything is stored, every key — explicit or resolved from a page —
+    that names no enabled variable or folder of a loaded datasource is
+    dropped, so a connection holds at most the keys it can be answered for.
+    A page bound to a variable added later gets its fast subscription on its
+    next `set_context`.
+  - The fast-subscription set is the union of every connection's keys, kept
+    as a count per key. A `set_context` (or a disconnect) that adds no key to
+    the union and removes none costs only that connection's own keys and
+    changes no subscription. One that moves it schedules a recompute; those
+    run one at a time, at least 250 ms apart however many connections move
+    the union (`schedule_priority_recompute`), so the PLC sees at most a few
+    resubscriptions a second.
+  - Paced per connection: one `set_context` is applied at once, and any that
+    arrive within 250 ms of the last applied one wait, only the latest being
+    applied when the interval is up. Superseded contexts get no
+    `context_ready`.
+  - Values not cached are read from the PLC in the background, one read per
+    connection at a time: a context applied while its read runs waits for it,
+    the latest winning. At most four such reads run at once across all
+    connections, and each reads only what is still not cached when its turn
+    comes, so connections opening one page together share its reads.
+  - The page tree is resolved per page id once per config version (dropped by
+    `invalidate_runtime_pages_config_cache`); an id that no page or group
+    carries costs nothing.
 
   Current producers: `HmiView` (active page + open overlays), `PreviewView`
   (preview page/overlay context), `DatasourceVariableTable` (explicit
@@ -385,8 +419,11 @@ integer digits keeps them too — and writes it back as a string.
     12 hours; the user's groups are re-read. Tokens live in backend memory, so a
     backend restart ends every login.
 
-All `scope` values must be non-empty strings; empty / missing scopes cause the
-message to be ignored silently.
+All `scope` values must be non-empty strings of at most 64 characters; an
+empty, missing or longer scope causes the message to be ignored silently. A
+connection keeps the identity of at most 16 scopes: storing a 17th (a
+`login`, `logout` or `request_identity` naming a new scope) drops the one
+stored longest ago, never the scope just named.
 
 ## Action result correlation
 
@@ -412,7 +449,7 @@ stable contract the frontend `$switch`es on:
 | Reason | Meaning |
 | --- | --- |
 | `invalid_credentials` | Login: username/password mismatch — including every account with no password set, which can never be signed in as |
-| `rate_limited`        | Login: too many failed attempts for this username (or across all of them); the right password is refused too until the lockout expires. `users_manager.authenticate` raises `RateLimitError`, which the REST credential routes answer as HTTP `429` |
+| `rate_limited`        | Login: too many failed attempts for this username, from this connection's address, or (a safety net) from all addresses together; the right password is refused too until the lockout expires. `users_manager.authenticate` raises `RateLimitError`, which the REST credential routes answer as HTTP `429` |
 | `bad_request`         | Write: missing required field in the request payload |
 | `bad_path`            | Write: datasource/path is unknown to the registry |
 | `bad_field`           | Write: field cannot be resolved to an OPC-UA node id |

@@ -773,8 +773,8 @@ def test_panel_login_is_404_when_the_panel_closes_during_the_check(client: TestC
     _open_tab(child, "c1", "line-a")
     real = users_manager.authenticate
 
-    async def slow_check(username, password):
-        result = await real(username, password)
+    async def slow_check(username, password, address):
+        result = await real(username, password, address)
         await child.disconnect("c1")
         return result
 

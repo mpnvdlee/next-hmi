@@ -24,6 +24,17 @@
   font-size: var(--hmi-type-caption-size);
 }
 
+/* A refused query is a fault in the screen, not an empty range: warning
+   colours, where "No data" stays muted. */
+.hmi-trend-chart__refused {
+  margin: 0;
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+  border-radius: var(--hmi-radius-sm);
+  background: var(--hmi-warn-soft);
+  color: var(--hmi-warn);
+  text-align: center;
+}
+
 .hmi-trend-chart__controls {
   display: flex;
   gap: var(--hmi-space-tight);

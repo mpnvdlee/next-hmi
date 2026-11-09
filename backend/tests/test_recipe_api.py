@@ -155,9 +155,12 @@ def test_upload_endpoint(recipe_client):
 
 
 def test_rest_upload_attributes_the_authenticated_caller(recipe_client, monkeypatch):
-    """Project credentials on the request name who saved the dataset."""
+    """Project credentials on the request name who saved the dataset. The
+    throttle meters the caller's address, so it is passed along."""
+    addresses: list[str | None] = []
 
-    async def authenticate(username, password):
+    async def authenticate(username, password, address):
+        addresses.append(address)
         if (username, password) == ("boss", "secret"):
             return {"username": username, "groups": ["admin"]}, {}
         return None
@@ -174,6 +177,7 @@ def test_rest_upload_attributes_the_authenticated_caller(recipe_client, monkeypa
     dataset = r.json()["datasetTypes"][0]["datasets"][0]
     assert dataset["values"]["temp"] == 150.0
     assert dataset["updatedBy"] == "boss"
+    assert addresses == ["testclient"]
 
 
 def test_rest_upload_through_the_editor_is_the_engineer_s(recipe_client):
@@ -189,7 +193,7 @@ def test_rest_upload_through_the_editor_is_the_engineer_s(recipe_client):
 def test_rest_upload_rejects_invalid_credentials(recipe_client, monkeypatch):
     """Credentials that do not authenticate are refused, not downgraded to guest."""
 
-    async def authenticate(username, password):
+    async def authenticate(username, password, address):
         return None
 
     monkeypatch.setattr(recipe_api_module.users_manager, "authenticate", authenticate)

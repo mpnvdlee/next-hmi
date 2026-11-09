@@ -171,6 +171,238 @@ def test_set_context_never_hands_out_a_disabled_variable() -> None:
     ]
 
 
+def _line_plc() -> DatasourceManager:
+    datasource_manager = DatasourceManager()
+    datasource_manager.apply_config("PLC", {
+        "name": "PLC",
+        "type": "opcua-client",
+        "variables": [{"kind": "folder", "name": "Line", "children": [
+            {"kind": "variable", "display_name": "Speed", "data_type": "Float",
+             "node_id": "ns=2;s=Speed", "enabled": True},
+            {"kind": "variable", "display_name": "SafetyLimit", "data_type": "Float",
+             "node_id": "ns=2;s=Limit", "enabled": False},
+        ]}],
+    })
+    return datasource_manager
+
+
+async def _set_context(manager: WebSocketManager, client_id: str, keys: list[str]) -> None:
+    await manager.handle_message(client_id, json.dumps({
+        "type": "set_context", "currentPageIds": [], "priorityKeys": keys,
+    }))
+
+
+def test_set_context_keeps_only_keys_naming_an_enabled_variable_or_a_folder() -> None:
+    # A key naming nothing (or a disabled variable) could never be answered or
+    # subscribed; kept, it would only sit in memory for the life of the connection.
+    datasource_manager = _line_plc()
+    manager = WebSocketManager()
+    manager.set_datasource_manager(datasource_manager)
+    manager.set_opcua_pool(FakePool(FakeEngine()))
+    manager._connections["c1"] = FakeWebSocket()  # type: ignore[attr-defined]
+
+    asyncio.run(_set_context(manager, "c1", [
+        "PLC:Line/Speed", "PLC:Line", "PLC:Line/SafetyLimit", "PLC:Line/Nope", "Other:Line/Speed",
+        "no-datasource",
+    ]))
+
+    assert datasource_manager.get_priority_keys() == {"PLC:Line/Speed", "PLC:Line"}
+
+
+@pytest.fixture
+def unpaced(monkeypatch) -> None:
+    """Every set_context applied and every recompute run as it comes."""
+    monkeypatch.setattr(websocket_manager_module, "_SET_CONTEXT_INTERVAL_S", 0.0)
+    monkeypatch.setattr(websocket_manager_module, "_PRIORITY_RECOMPUTE_INTERVAL_S", 0.0)
+
+
+async def _recomputed(manager: WebSocketManager) -> None:
+    if manager._priority_recompute_task is not None:
+        await manager._priority_recompute_task
+
+
+def test_set_context_resubscribes_only_when_the_union_of_pages_moves(unpaced) -> None:
+    # Each set_context used to rebuild the union over every connection and
+    # resubscribe; one that adds nothing new now costs only its own keys.
+    datasource_manager = _line_plc()
+    engine = FakeEngine()
+    manager = WebSocketManager()
+    manager.set_datasource_manager(datasource_manager)
+    manager.set_opcua_pool(FakePool(engine))
+    for client_id in ("c1", "c2"):
+        manager._connections[client_id] = FakeWebSocket()  # type: ignore[attr-defined]
+
+    async def _run() -> None:
+        await _set_context(manager, "c1", ["PLC:Line/Speed"])
+        await _recomputed(manager)
+        assert engine.priority_paths == [{"Line/Speed"}]
+        await _set_context(manager, "c2", ["PLC:Line/Speed"])
+        await _set_context(manager, "c2", ["PLC:Line/Speed", "PLC:Line/Nope"])
+        await _recomputed(manager)
+        assert len(engine.priority_paths) == 1
+        await manager.disconnect("c1")  # c2 still shows it
+        await _recomputed(manager)
+        assert len(engine.priority_paths) == 1
+        await _set_context(manager, "c2", ["PLC:Line"])
+        await _recomputed(manager)
+        assert engine.priority_paths[-1] == {"Line"}
+        await manager.disconnect("c2")
+        await _recomputed(manager)
+        assert engine.priority_paths[-1] == set()
+
+    asyncio.run(_run())
+
+    assert datasource_manager.get_priority_keys() == set()
+    assert datasource_manager._page_key_counts == {}
+
+
+def _plc(variables: int) -> DatasourceManager:
+    datasource_manager = DatasourceManager()
+    datasource_manager.apply_config("PLC", {
+        "name": "PLC",
+        "type": "opcua-client",
+        "variables": [
+            {"kind": "variable", "display_name": f"V{i}", "data_type": "Float",
+             "node_id": f"ns=2;s=V{i}", "enabled": True}
+            for i in range(variables)
+        ],
+    })
+    return datasource_manager
+
+
+def test_set_context_applies_at_most_one_context_per_interval_the_latest(monkeypatch) -> None:
+    monkeypatch.setattr(websocket_manager_module, "_SET_CONTEXT_INTERVAL_S", 0.05)
+    manager = WebSocketManager()
+    manager._connections["c1"] = FakeWebSocket()  # type: ignore[attr-defined]
+    applied: list[list[str]] = []
+
+    async def record(client_id, msg) -> None:
+        applied.append(msg["currentPageIds"])
+
+    manager._handle_set_context = record  # type: ignore[method-assign]
+
+    async def _run() -> None:
+        for page in ("a", "b", "c", "d"):
+            await manager.handle_message("c1", json.dumps({"type": "set_context", "currentPageIds": [page]}))
+        assert applied == [["a"]]
+        await asyncio.sleep(0.12)
+
+    asyncio.run(_run())
+
+    assert applied == [["a"], ["d"]]
+
+
+def test_a_flip_flop_flood_resubscribes_a_few_times_a_second(monkeypatch) -> None:
+    """Alternating a full key set and an empty one made the PLC delete and
+    recreate monitored items on every message, from any number of sockets."""
+    monkeypatch.setattr(websocket_manager_module, "_SET_CONTEXT_INTERVAL_S", 0.1)
+    monkeypatch.setattr(websocket_manager_module, "_PRIORITY_RECOMPUTE_INTERVAL_S", 0.1)
+    engine = FakeEngine()
+    manager = WebSocketManager()
+    manager.set_datasource_manager(_plc(30))
+    manager.set_opcua_pool(FakePool(engine))
+
+    async def flood(client_id: str, first: int) -> None:
+        manager._connections[client_id] = FakeWebSocket()  # type: ignore[attr-defined]
+        for flip in range(100):
+            await _set_context(manager, client_id, [f"PLC:V{first + i}" for i in range(10)] if flip % 2 else [])
+            await asyncio.sleep(0)
+
+    async def _run() -> None:
+        await asyncio.gather(*(flood(f"c{s}", 10 * s) for s in range(3)))
+        await asyncio.sleep(0.25)
+        await _recomputed(manager)
+
+    asyncio.run(_run())
+
+    # 300 messages: a run at once, then at most one per 0.1 s.
+    assert 1 <= len(engine.priority_paths) <= 5
+
+
+class _GatedEngine(FakeEngine):
+    """Reads park until released; each answers every path it was asked for."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.reads: list[set[str]] = []
+        self.release = asyncio.Event()
+
+    async def read_current_values(self, paths: set[str]) -> dict[str, object]:
+        self.reads.append(set(paths))
+        await self.release.wait()
+        return {f"PLC:{path}": 1.0 for path in paths}
+
+
+def test_a_socket_has_one_prefetch_in_flight_and_the_latest_context_follows(unpaced) -> None:
+    """Each set_context with uncached keys started its own read, untracked: a
+    socket repeating one could keep any number in flight against the PLC."""
+    engine = _GatedEngine()
+    manager = WebSocketManager()
+    manager.set_datasource_manager(_plc(10))
+    manager.set_opcua_pool(FakePool(engine))
+    ws = FakeWebSocket()
+    manager._connections["c1"] = ws  # type: ignore[attr-defined]
+
+    async def _run() -> None:
+        engine.release = asyncio.Event()
+        for i in range(6):
+            await _set_context(manager, "c1", ["PLC:V0", f"PLC:V{i}"])
+        await asyncio.sleep(0.01)
+        assert engine.reads == [{"V0"}]
+        engine.release.set()
+        for _ in range(20):
+            await asyncio.sleep(0.01)
+
+    asyncio.run(_run())
+
+    # The latest context's keys only, less what the first read cached.
+    assert engine.reads == [{"V0"}, {"V5"}]
+    assert [m["type"] for m in ws.messages].count("context_ready") == 2
+    assert manager._contexts["c1"].prefetch_task is None
+
+
+def test_sockets_opening_one_page_together_share_its_reads() -> None:
+    engine = _GatedEngine()
+    manager = WebSocketManager()
+    manager.set_datasource_manager(_plc(10))
+    manager.set_opcua_pool(FakePool(engine))
+
+    async def _run() -> None:
+        engine.release = asyncio.Event()
+        for s in range(10):
+            manager._connections[f"c{s}"] = FakeWebSocket()  # type: ignore[attr-defined]
+            await _set_context(manager, f"c{s}", ["PLC:V1", "PLC:V2"])
+        await asyncio.sleep(0.01)
+        engine.release.set()
+        for _ in range(20):
+            await asyncio.sleep(0.01)
+
+    asyncio.run(_run())
+
+    assert len(engine.reads) == websocket_manager_module._MAX_CONCURRENT_PREFETCHES
+    for s in range(10):
+        assert manager._connections[f"c{s}"].messages[-1]["type"] == "context_ready"
+
+
+def test_a_disconnect_drops_the_context_still_waiting_for_its_turn() -> None:
+    datasource_manager = _plc(10)
+    manager = WebSocketManager()
+    manager.set_datasource_manager(datasource_manager)
+    manager.set_opcua_pool(FakePool(FakeEngine()))
+    manager._connections["c1"] = FakeWebSocket()  # type: ignore[attr-defined]
+
+    async def _run() -> None:
+        await _set_context(manager, "c1", ["PLC:V1"])
+        await _set_context(manager, "c1", ["PLC:V2"])
+        await manager.disconnect("c1")
+        await asyncio.sleep(websocket_manager_module._SET_CONTEXT_INTERVAL_S + 0.05)
+
+    asyncio.run(_run())
+
+    assert datasource_manager.get_priority_keys() == set()
+    assert manager._contexts == {}
+
+
 def test_priority_batch_delay_uses_datasource_setting() -> None:
     manager = WebSocketManager()
     manager.set_datasource_manager(FakeDatasourceManager())
@@ -487,6 +719,55 @@ def test_collect_context_keys_v2_group_warms_all_sibling_pages(monkeypatch, tmp_
     keys = _collect_context_composite_keys(config, current_page_ids=["page-1"])
     assert "DS:Tag/A" in keys
     assert "DS:Tag/B" in keys  # sibling page is also warmed
+
+
+def test_set_context_walks_each_page_once_per_config(monkeypatch, tmp_path) -> None:
+    """2000 page ids each walked the page tree, on the event loop, on every
+    set_context. A named page is now walked once per config, and an id no
+    page or group carries not at all."""
+    pages_dir, _dialogs_dir = _runtime_dirs(monkeypatch, tmp_path)
+    for page_id, tag in (("page-1", "A"), ("page-2", "B"), ("page-3", "C")):
+        (pages_dir / f"{page_id}.json").write_text(json.dumps({"sections": {"content": [
+            {"id": f"w-{tag}", "type": "Label", "properties": {"value": {"$var": {"path": f"DS:Tag/{tag}"}}}},
+        ]}}))
+    config = {
+        "version": 2,
+        "pages": [
+            {"id": "grp-1", "title": "Group", "type": "page-group", "children": [
+                {"id": "page-1", "title": "Tab 1", "type": "page"},
+                {"id": "page-2", "title": "Tab 2", "type": "page"},
+            ]},
+            {"id": "page-3", "title": "Three", "type": "page"},
+        ],
+        "header": [{"id": "h", "type": "Label", "properties": {"value": {"$var": {"path": "DS:Clock"}}}}],
+        "footer": [], "dialogs": [],
+    }
+    (tmp_path / "config.json").write_text(json.dumps(config))
+    monkeypatch.setattr(websocket_manager_module, "_config_path", lambda: tmp_path / "config.json")
+    monkeypatch.setattr(websocket_manager_module, "_runtime_pages_config_cache", None)
+    page_ids = ["page-1", "page-3", "nope"] * 500
+    expected = _collect_context_composite_keys(config, current_page_ids=page_ids)
+    walks: list[str] = []
+    walk = websocket_manager_module._collect_active_scope_composite_keys
+
+    def counting(nodes, page_id, keys):
+        walks.append(page_id)
+        return walk(nodes, page_id, keys)
+
+    monkeypatch.setattr(websocket_manager_module, "_collect_active_scope_composite_keys", counting)
+
+    def resolve() -> set[str]:
+        return websocket_manager_module._resolve_context_composite_keys(
+            current_page_ids=page_ids, explicit_priority_keys={"DS:Extra"}
+        )
+
+    assert resolve() == expected | {"DS:Extra"} == {"DS:Clock", "DS:Tag/A", "DS:Tag/B", "DS:Tag/C", "DS:Extra"}
+    assert sorted(walks) == ["page-1", "page-3"]
+    resolve()
+    assert len(walks) == 2
+    websocket_manager_module.invalidate_runtime_pages_config_cache()
+    resolve()
+    assert len(walks) == 4
 
 
 def test_collect_context_keys_v1_inline_children_still_work(monkeypatch, tmp_path) -> None:

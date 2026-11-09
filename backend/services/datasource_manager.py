@@ -64,7 +64,9 @@ class DatasourceEntry:
         # composite_key -> current value
         self.cache: dict[str, Any] = {}
         # Pre-computed sets/dicts that depend only on the config (not on live values)
-        self._enabled_cache_keys: set[str] = set()  # composite keys valid for snapshot
+        # Composite keys valid for snapshot, each mapped to itself so a caller
+        # holding many of them can share these strings instead of its own copies.
+        self._enabled_cache_keys: dict[str, str] = {}
         self._build_registry()
 
     @cached_property
@@ -145,9 +147,9 @@ class DatasourceEntry:
             path for path, entry in self.registry.items() if is_subscribable(entry)
         }
         self._enabled_cache_keys = {
-            build_var_key(self.name, path) for path in subscribable_paths
-        } | {
-            build_var_key(self.name, fp) for fp in self.folder_registry
+            key: key
+            for paths in (subscribable_paths, self.folder_registry)
+            for key in (build_var_key(self.name, path) for path in paths)
         }
         self._log_invalid_ranges()
 
@@ -483,16 +485,22 @@ class DatasourceManager:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self.datasources: dict[str, DatasourceEntry] = {}  # name -> entry
-        self._active_pages: dict[str, set[str]] = {}  # client_id -> set[composite_key]
+        # client_id -> composite keys. Held for the life of a connection, so a
+        # tuple of the datasource's own key strings (see known_keys): a pointer
+        # per key, where a set of the client's strings costs several times that.
+        self._active_pages: dict[str, tuple[str, ...]] = {}
+        # The union of _active_pages as a count of the pages holding each key,
+        # so one client's set_context costs its own keys rather than a fresh
+        # union over every connected client.
+        self._page_key_counts: dict[str, int] = {}
         # Folder composites the server's own consumers read — an alarm trigger
         # addressing an array element by index. Registered the same way a
         # client's page is, so `_is_key_wanted` is one question with one answer
         # instead of a client-page check plus a hardcoded guess at who else
         # might care.
         self._interest_keys: dict[str, set[str]] = {}  # owner -> set[composite_key]
-        # Union of the two above, kept in step by their writers so the gate on
-        # the datachange path is one lookup rather than a scan per reader.
-        self._wanted_keys: set[str] = set()
+        # Union of _interest_keys, rebuilt by its (rare) writer.
+        self._interest_union: set[str] = set()
         self._enqueue_callback: Callable[..., None] | None = None
         self._value_listeners: list[Callable[[str, Any], None]] = []
         # name -> on-disk filename (no extension). Deterministic per name so
@@ -1215,27 +1223,39 @@ class DatasourceManager:
         cache kept correct, so ``snapshot()`` and ``set_context`` stay right for
         the next client to connect.
 
-        One membership test against a union kept in step by the (rare) writers,
-        rather than a scan of every reader's set: this runs once per ancestor
-        per datachange, on the path the rest of this file exists to make cheap,
+        Membership tests against unions kept in step by the writers, rather
+        than a scan of every reader's set: this runs once per ancestor per
+        datachange, on the path the rest of this file exists to make cheap,
         while ``set_client_page``/``set_interest_keys`` fire on page navigation
         and config edits.
         """
         with self._lock:
-            return key in self._wanted_keys
+            return key in self._page_key_counts or key in self._interest_union
 
     def _is_cached(self, entry: DatasourceEntry, key: str) -> bool:
         with self._lock:
             return key in entry.cache
 
-    def _rebuild_wanted_keys(self) -> None:
-        """Recompute the union read by ``_is_key_wanted``. Caller holds the lock."""
-        wanted: set[str] = set()
-        for keys in self._active_pages.values():
-            wanted |= keys
-        for keys in self._interest_keys.values():
-            wanted |= keys
-        self._wanted_keys = wanted
+    def _count_page_keys(self, added: set[str], removed: set[str]) -> bool:
+        """Apply one page's change to ``_page_key_counts``. Caller holds the lock.
+
+        Returns whether the union changed: a key no page held is now held, or
+        the last page holding one let it go.
+        """
+        counts = self._page_key_counts
+        changed = False
+        for key in added:
+            held = counts.get(key, 0)
+            counts[key] = held + 1
+            changed = changed or held == 0
+        for key in removed:
+            held = counts[key] - 1
+            if held:
+                counts[key] = held
+            else:
+                del counts[key]
+                changed = True
+        return changed
 
     def seed_cached_values(self, updates: dict[str, Any]) -> None:
         """Seed cache entries without broadcasting them to all clients."""
@@ -1350,16 +1370,38 @@ class DatasourceManager:
 
     # -- Priority subscription management ------------------------------------
 
-    def set_client_page(self, client_id: str, var_keys: set[str]) -> None:
-        """Record which composite keys are on a client's active page."""
-        with self._lock:
-            self._active_pages[client_id] = set(var_keys)
-            self._rebuild_wanted_keys()
+    def known_keys(self, keys: Iterable[str]) -> set[str]:
+        """The *keys* naming an enabled variable or a folder of a loaded datasource.
 
-    def clear_client(self, client_id: str) -> None:
+        The keys ``snapshot()`` answers, returned as the datasource's own
+        strings. ``set_context`` keeps only these: its keys come from any
+        client, and one naming nothing it can be given would be held for the
+        life of the connection.
+        """
+        known: set[str] = set()
         with self._lock:
-            self._active_pages.pop(client_id, None)
-            self._rebuild_wanted_keys()
+            for key in keys:
+                entry = self.datasources.get(parse_var_key(key)[0])
+                if entry is not None and (own := entry._enabled_cache_keys.get(key)) is not None:
+                    known.add(own)
+        return known
+
+    def set_client_page(self, client_id: str, var_keys: set[str]) -> bool:
+        """Record which composite keys are on a client's active page.
+
+        Returns whether ``get_priority_keys()`` changed as a result.
+        """
+        keys = set(var_keys)
+        with self._lock:
+            previous = set(self._active_pages.pop(client_id, ()))
+            if keys:
+                self._active_pages[client_id] = tuple(keys)
+            return self._count_page_keys(keys - previous, previous - keys)
+
+    def clear_client(self, client_id: str) -> bool:
+        """Forget a client's page. Returns whether ``get_priority_keys()`` changed."""
+        with self._lock:
+            return self._count_page_keys(set(), set(self._active_pages.pop(client_id, ())))
 
     def set_interest_keys(self, owner: str, var_keys: Iterable[str]) -> None:
         """Record the composite keys a server-side consumer reads.
@@ -1381,7 +1423,7 @@ class DatasourceManager:
                 self._interest_keys[owner] = keys
             else:
                 self._interest_keys.pop(owner, None)
-            self._rebuild_wanted_keys()
+            self._interest_union = set().union(*self._interest_keys.values())
 
     def client_page_keys(self, client_id: str) -> set[str]:
         """The composite keys a client's active page promotes."""
@@ -1404,10 +1446,7 @@ class DatasourceManager:
     def get_priority_keys(self) -> set[str]:
         """Return union of composite keys across all clients' active pages."""
         with self._lock:
-            result: set[str] = set()
-            for keys in self._active_pages.values():
-                result |= keys
-            return result
+            return set(self._page_key_counts)
 
 
 def _safe_filename(name: str) -> str:

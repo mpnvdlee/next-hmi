@@ -118,12 +118,17 @@ The manager is the device's front door, at the address without
   document, so a file someone put there cannot act with your dashboard
   sign-in. Custom widgets and external libraries are code the screens run on
   purpose and are not limited this way.
-- **Sign-ins are throttled**, per username on the screens, and for the
-  device-admin password and the setup code everywhere.
+- **Sign-ins are throttled**, per username and per address on the screens
+  (see [Users](users.md#add-users-and-groups)), and for the device-admin
+  password and the setup code everywhere.
 - **The open part takes at most 1 MB per request.** The device refuses a
   larger request before reading it, so no amount of data sent its way can
   exhaust the device's memory and take the screens down. An HTTP source whose
   request is over that is not sent, and the screen says so.
+- **A project serves at most 500 open screens at once.** One more is turned
+  away and its browser tries again every 10 seconds, so no flood of
+  connections can wear down the device or the PLC behind it. The editor is
+  never turned away.
 
 ## Showing NEXT HMI inside another site
 

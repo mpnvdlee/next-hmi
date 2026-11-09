@@ -11,6 +11,9 @@ import asyncio
 import copy
 import logging
 import shutil
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,7 +21,7 @@ from core import user_auth_throttle
 from core.exceptions import RateLimitError
 from core.passwords import verify_absent_user, verify_password
 from core.storage import active_project_root, read_json, write_json
-from core.validation import is_valid_user_id
+from core.validation import USER_ID_MAX_LEN, is_valid_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -92,24 +95,63 @@ def load() -> dict[str, Any]:
     return raw
 
 
-async def authenticate(username: Any, password: Any) -> tuple[dict[str, Any], dict[str, Any]] | None:
+async def authenticate(
+    username: Any, password: Any, address: str | None
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
     """Resolve one project-user identity using the shared password verifier.
 
     The single funnel every credential path runs through — the WebSocket
     ``login`` message and the REST Basic routes alike — so the throttle and the
-    constant-cost miss below cover all of them at once.
+    constant-cost miss below cover all of them at once. *address* is the
+    caller's client address, which the throttle meters on its own.
 
-    Raises ``RateLimitError`` (HTTP 429) while this username, or the whole
-    credential path, is locked out. Returns ``None`` for a credential that does
-    not authenticate, including every account with no password set.
+    Raises ``RateLimitError`` (HTTP 429) while this username, this address, or
+    the whole credential path, is locked out. Returns ``None`` for a credential
+    that does not authenticate, including every account with no password set.
     """
     if not isinstance(username, str) or not isinstance(password, str):
         return None
-    remaining = user_auth_throttle.lockout_remaining(username)
-    if remaining > 0:
-        raise RateLimitError(
-            f"Too many failed sign-in attempts. Try again in {int(remaining) + 1}s."
-        )
+    # No username is longer, so a cut one still names nobody, and a 64 KiB one
+    # cannot make the throttle's tables large.
+    name = username[: USER_ID_MAX_LEN + 1]
+    async with _one_check_at_a_time(name):
+        remaining = user_auth_throttle.begin_attempt(name, address)
+        if remaining > 0:
+            raise RateLimitError(
+                f"Too many failed sign-in attempts. Try again in {int(remaining) + 1}s."
+            )
+        authenticated = await _verify(username, password)
+        if authenticated is not None:
+            user_auth_throttle.register_login_success(name, address)
+        return authenticated
+
+
+@dataclass
+class _Check:
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    users: int = 0  # holding or waiting on the lock
+
+
+_checks: dict[str, _Check] = {}
+
+
+@asynccontextmanager
+async def _one_check_at_a_time(name: str) -> AsyncIterator[None]:
+    """Serialise the checks of one username, so parallel right passwords queue
+    rather than meet the lockout their own admission counted. A name's lock
+    lives only while someone holds or waits on it."""
+    check = _checks.setdefault(name, _Check())
+    check.users += 1
+    try:
+        async with check.lock:
+            yield
+    finally:
+        check.users -= 1
+        if not check.users:
+            del _checks[name]
+
+
+async def _verify(username: str, password: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
     document = load()
     user = next(
         (
@@ -128,9 +170,7 @@ async def authenticate(username: Any, password: Any) -> tuple[dict[str, Any], di
         else asyncio.to_thread(verify_password, user, password)
     )
     if not verified:
-        user_auth_throttle.register_login_failure(username)
         return None
-    user_auth_throttle.register_login_success(username)
     identity = {"username": user["username"], "groups": list(user.get("groups", ["guest"]))}
     return identity, document
 
