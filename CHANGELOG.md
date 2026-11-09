@@ -11,6 +11,15 @@ heading.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Repeater over a PLC array that counts from 1.** Over a struct array
+  `A[1..500]`, the first two copies both showed `A[1]` and `A[500]` was never
+  drawn. A copy now shows the element at its position, counted from 0 as the
+  array value is, so the first copy is `A[1]`. A struct binding's fixed index
+  counts the same way: on an array that counts from 1, index `1` is now
+  `A[2]`. The warnings pill judges a binding on the same element.
+
 ## [1.2.0] - 2026-11-08
 
 Opens the HMI to the systems around it and shuts out the ones that should not
