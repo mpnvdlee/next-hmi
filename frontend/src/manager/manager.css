@@ -69,6 +69,19 @@
   letter-spacing: 0.08em;
 }
 
+/* A lockout's cause over its countdown, as one alert. */
+.mgr-auth-card__lockout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+  margin-bottom: 0;
+  line-height: 1.5;
+}
+
+.mgr-auth-card__lockout code {
+  font-family: var(--cfg-font-mono);
+}
+
 /* ── instance status pill ─────────────────────────────────── */
 .mgr-status {
   display: inline-block;

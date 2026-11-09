@@ -9,9 +9,12 @@ API v1 (also in the manager) signs users in and out on a named panel through
 the ``panels`` hooks: the live connections are here, and so is the throttle the
 WebSocket ``login`` uses, which the password check must share.
 
-This router is only reachable on the child's ``127.0.0.1`` instance port. The
-manager reverse proxy refuses ``/runtime|editor/<id>/api/internal/*`` (see
-``manager.py``), so a browser holding a manager session can never drive it.
+This router is only reachable on the child's ``127.0.0.1`` instance port, and
+a supervisor-spawned child answers only requests carrying its instance secret
+(``core.instance_secret``). The manager reverse proxy refuses
+``/runtime|editor/<id>/api/internal/*`` in every encoding, and any dot segment
+that would collapse onto it on the way out (see ``manager.py``), so a browser
+holding a manager session can never drive it.
 """
 from __future__ import annotations
 

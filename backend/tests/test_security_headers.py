@@ -174,7 +174,7 @@ def client(manager_module) -> TestClient:
     with TestClient(manager_module.app) as tc:
         tc.post(
             "/api/manager/auth/setup",
-            json={"password": "secret", "setupCode": manager_auth.setup_code()},
+            json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
         )
         yield tc
 
@@ -353,7 +353,7 @@ result = {
 }
 browser.post(
     "/api/manager/auth/setup",
-    json={"password": "probe", "setupCode": manager_auth.setup_code()},
+    json={"password": "probe-password", "setupCode": manager_auth.setup_code()},
 )
 result["editor"] = seen(browser.get("/editor/ghost/"))
 browser.put("/api/system/embedding", json={"origins": ["https://portal.example.com"]})

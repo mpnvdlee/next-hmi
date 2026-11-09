@@ -13,6 +13,8 @@ Usage in a route:
         raise NotFoundError(f"Datasource '{name}' not found")
 """
 
+from typing import Any
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -42,8 +44,18 @@ class ValidationError(NextHmiError):
 
 
 class RateLimitError(NextHmiError):
-    """The caller is temporarily throttled (e.g. too many failed logins)."""
+    """The caller is temporarily throttled (e.g. too many failed logins).
+
+    ``retry_after`` (whole seconds) is sent as the ``Retry-After`` header and as
+    ``retryAfter`` in the body, so a client can count down; ``fields`` are added
+    to the body as they are.
+    """
     status_code = 429
+
+    def __init__(self, message: str, retry_after: int | None = None, **fields: Any) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+        self.fields = fields
 
 
 # --- Domain-specific subclasses ---
@@ -79,10 +91,14 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(NextHmiError)
     async def _nexthmi_error_handler(request: Request, exc: NextHmiError) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.message},
-        )
+        content: dict[str, Any] = {"detail": exc.message}
+        headers = None
+        if isinstance(exc, RateLimitError):
+            content.update(exc.fields)
+            if exc.retry_after is not None:
+                content["retryAfter"] = exc.retry_after
+                headers = {"Retry-After": str(exc.retry_after)}
+        return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
 
     # Imported here (not at module top) so importing core.exceptions stays
     # cheap — storage drags in pydantic + the manifest model.

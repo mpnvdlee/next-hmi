@@ -374,7 +374,7 @@ def client(monkeypatch, home: Path) -> TestClient:
     with TestClient(manager.app) as tc:
         tc.post(
             "/api/manager/auth/setup",
-            json={"password": "secret", "setupCode": manager_auth.setup_code()},
+            json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
         )
         yield tc
 
@@ -479,6 +479,42 @@ def test_restart_writes_the_sentinel_and_shuts_down_gracefully(
     assert response.json()["status"] == "restarting"
     assert scheduled == ["tls"]
     assert runtime_home.restart_sentinel_path().exists()
+
+
+def test_the_restart_that_turns_https_on_ends_every_session(
+    monkeypatch, client: TestClient
+) -> None:
+    """A cookie minted over plain HTTP is not Secure and has crossed the network
+    in the clear; it must not survive into the HTTPS install."""
+    from api import tls_api
+
+    async def fake_shutdown(_reason: str) -> None:
+        return None
+
+    monkeypatch.setattr(tls_api, "shutdown_after_response", fake_shutdown)
+    other_browser = manager_auth.issue_token()
+
+    client.post("/api/system/tls", json={"enabled": True})
+    assert client.get("/api/system/tls").status_code == 200  # setting it ends nothing
+    assert client.post("/api/system/tls/restart").status_code == 202
+
+    assert manager_auth.verify_token(other_browser) is False
+    assert client.get("/api/system/tls").status_code == 401
+
+
+def test_a_restart_for_a_new_certificate_keeps_sessions(monkeypatch, client: TestClient) -> None:
+    from api import tls_api
+
+    async def fake_shutdown(_reason: str) -> None:
+        return None
+
+    monkeypatch.setattr(tls_api, "shutdown_after_response", fake_shutdown)
+    enabled = client.post("/api/system/tls", json={"enabled": True}).json()
+    tls_settings.mark_served(True, enabled["generatedCertificate"]["fingerprint"])
+    client.post("/api/system/tls/certificate")
+
+    assert client.post("/api/system/tls/restart").status_code == 202
+    assert client.get("/api/system/tls").status_code == 200
 
 
 def test_restart_stays_up_when_the_sentinel_cannot_be_written(

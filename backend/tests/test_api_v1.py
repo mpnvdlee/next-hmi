@@ -107,11 +107,9 @@ def client(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     manager_auth.set_password(PASSWORD)
-    manager_auth.register_login_success()
-    from api import v1_api
-
+    manager_auth.reset_throttle()
     # asyncio.Lock binds to the first loop that waits on it; each test has its own.
-    monkeypatch.setattr(v1_api, "_basic_lock", asyncio.Lock())
+    monkeypatch.setattr(manager_auth, "_password_lock", asyncio.Lock())
     for project_id in ("P1", "P2"):
         _write_project(tmp_path / project_id)
     manifest = load_manifest()
@@ -121,7 +119,7 @@ def client(monkeypatch, tmp_path: Path):
     save_manifest(manifest)
     with TestClient(manager.app, raise_server_exceptions=False) as tc:
         yield tc
-    manager_auth.register_login_success()
+    manager_auth.reset_throttle()
 
 
 def _api_token(*scopes: str) -> str:

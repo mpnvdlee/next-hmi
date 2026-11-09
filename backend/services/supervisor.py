@@ -5,11 +5,13 @@ separate child process started from the same entry point (``launcher.py`` in
 source, the frozen binary in a packaged build) in *instance mode*
 (``--serve-project``). Children bind ``127.0.0.1`` on an ephemeral port and are
 reached only through the manager's reverse proxy under ``/runtime/<slug>/`` or
-``/editor/<slug>/``.
+``/editor/<slug>/``, and the manager's own loopback calls. Each spawn gets a fresh
+secret that every one of those requests carries (``core.instance_secret``).
 
 Responsibilities:
   * start/stop children and track their state,
-  * health-check a freshly started child before reporting it running,
+  * health-check a freshly started child, and have it prove it holds its
+    secret, before reporting it running,
   * auto-restart a child that exits unexpectedly, with exponential backoff and
     a circuit-breaker that flips it to ``crashed`` after repeated rapid failures,
   * persist the running set to the manifest so it can be resumed after a manager
@@ -30,12 +32,15 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from core import runtime_home, start_guards, users_document
+import httpx
+from core import instance_secret, runtime_home, start_guards, users_document
 from core.manifest import (
     find_project,
     load_manifest,
@@ -64,6 +69,9 @@ _HEALTH_TIMEOUT_SECONDS = 25.0
 _HEALTH_POLL_INTERVAL = 0.25
 # Grace period for SIGTERM before escalating to SIGKILL.
 _STOP_GRACE_SECONDS = 8.0
+# No proxy from the environment: the probe carries the child's secret, and a
+# proxy could not reach this machine's loopback anyway.
+_LOOPBACK_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 def base_path_for(project_id: str) -> str:
@@ -91,6 +99,7 @@ class ChildInstance:
     started_at: float | None = None
     restarts: int = 0
     last_error: str | None = None
+    secret: str | None = field(default=None, repr=False)
     # Monotonic timestamps of recent (auto)starts — drives the circuit breaker.
     _restart_times: list[float] = field(default_factory=list)
 
@@ -271,6 +280,7 @@ class Supervisor:
     ) -> None:
         port = _pick_port(preferred)
         instance.port = port
+        instance.secret = instance_secret.new_secret()
         instance.status = "starting"
         instance.started_at = time.time()
         instance.last_error = None
@@ -301,6 +311,9 @@ class Supervisor:
             runtime_home.widget_build_dir() / instance.project_id
         )
         env["NEXTHMI_LOGS_DIR"] = str(log_dir)
+        # In the environment, never in ``args``: any local user can read a
+        # command line.
+        env[instance_secret.ENV_VAR] = instance.secret
         # The launcher resolves the runtime home without the checkout fallback
         # the manager has in dev; both must agree on it for the translation
         # locks they share (``core.translations``).
@@ -372,23 +385,44 @@ class Supervisor:
     # ── health check ─────────────────────────────────────────────────────────
 
     def _await_health(self, instance: ChildInstance) -> bool:
-        port = instance.port
-        if port is None:
+        """Wait for the child to answer ``/api/health`` and prove it is the child.
+
+        Between ``_pick_port`` releasing the port and the child binding it,
+        another local process can take it, and the child then fails to bind.
+        Only the child can answer the nonce with an HMAC under its secret, so
+        an answer without one is never taken for it.
+        """
+        port, secret = instance.port, instance.secret
+        if port is None or secret is None:
             return False
         url = f"http://127.0.0.1:{port}/api/health"
+        squatter = f"another process answered on 127.0.0.1:{port} instead of the instance"
+        squatted = False
         deadline = time.monotonic() + _HEALTH_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             proc = instance.proc
             if proc is not None and proc.poll() is not None:
                 instance.last_error = f"process exited with code {proc.returncode} during startup"
+                if squatted:
+                    instance.last_error += f"; {squatter}"
                 return False
+            nonce = instance_secret.new_nonce()
+            probe = urllib.request.Request(
+                url, headers={instance_secret.HEADER: secret, instance_secret.NONCE_HEADER: nonce}
+            )
             try:
-                with urllib.request.urlopen(url, timeout=2.0) as resp:  # localhost
-                    if resp.status == 200:
+                with _LOOPBACK_OPENER.open(probe, timeout=2.0) as resp:
+                    presented = resp.headers.get(instance_secret.PROOF_HEADER)
+                    if resp.status == 200 and instance_secret.is_proof(secret, nonce, presented):
                         return True
+                    squatted = True
+            except urllib.error.HTTPError:
+                squatted = True
             except OSError:
                 pass
             time.sleep(_HEALTH_POLL_INTERVAL)
+        if squatted:
+            instance.last_error = squatter
         return False
 
     # ── crash monitor / auto-restart ──────────────────────────────────────────
@@ -425,6 +459,11 @@ class Supervisor:
         now = time.monotonic()
         with self._lock:
             instance.proc = None
+            if instance.project_id in self._stopping:
+                return
+            # Off the proxy until the replacement proves itself: whatever binds
+            # the port next is not this child.
+            instance.status = "starting"
             instance._restart_times = [
                 t for t in instance._restart_times if now - t <= _RESTART_WINDOW_SECONDS
             ]
@@ -473,6 +512,16 @@ class Supervisor:
             with self._lock:
                 instance.status = "running"
             upsert_running(instance.project_id, instance.port)
+            return
+        # A replacement that never proved itself is a failed start, reported as
+        # one, rather than an instance left "starting" for good.
+        with self._lock:
+            if instance.project_id in self._stopping:
+                return
+        self._terminate(instance)
+        with self._lock:
+            instance.status = "crashed"
+            instance.last_error = instance.last_error or "health check timed out"
 
     # ── resume / shutdown ──────────────────────────────────────────────────────
 
@@ -570,8 +619,39 @@ class Supervisor:
         validate_project_id(project_id)
         with self._lock:
             instance = self._instances.get(project_id)
-            if instance is None or instance.status != "running":
-                return None
-            return instance.port
+            return instance.port if instance is not None and _serving(instance) else None
+
+    def child_headers(self, port: int | None) -> dict[str, str]:
+        """The header that authenticates the manager to the running child on *port*."""
+        with self._lock:
+            for instance in self._instances.values():
+                if instance.port == port and instance.secret and _serving(instance):
+                    return {instance_secret.HEADER: instance.secret}
+        return {}
+
+
+def _serving(instance: ChildInstance) -> bool:
+    # A child that has exited no longer holds its port, and anything may have
+    # bound it since: the monitor notices only within a second.
+    return (
+        instance.status == "running"
+        and instance.proc is not None
+        and instance.proc.poll() is None
+    )
+
+
+class ChildAuth(httpx.Auth):
+    """Adds :meth:`Supervisor.child_headers` to every request a client sends.
+
+    Set on each client the manager reaches its children with (the proxy, the
+    reload and panel hooks), so no call can leave the secret out, and it
+    replaces any copy a browser sent through the proxy.
+    """
+
+    def auth_flow(self, request: httpx.Request) -> Iterator[httpx.Request]:
+        if request.url.host == "127.0.0.1":
+            request.headers.update(supervisor.child_headers(request.url.port))
+        yield request
+
 
 supervisor = Supervisor()

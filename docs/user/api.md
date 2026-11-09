@@ -41,10 +41,12 @@ token, with **Revoke** on each.
 **The device-admin password.** The password that unlocks the dashboard also
 works, over HTTP Basic, with the username `admin`. It reaches every project and
 every scope, so keep it for your own scripts and testing. After five wrong
-passwords the API, and the dashboard sign-in, lock for a minute. A correct
-password over the API does not wipe that count; a correct one entered anywhere
-else (the dashboard sign-in, a password change, pairing an MCP client or another
-machine), or the lock itself, starts it again.
+passwords from one address, the API and the dashboard sign-in lock for that
+address for a minute (`429`, with a `Retry-After` header); other machines are
+not affected. A correct password over the API does not wipe that count; a
+correct one entered anywhere else from the same address (the dashboard sign-in,
+a password change, pairing an MCP client or another machine), or the lock
+itself, starts it again.
 
 A username and password from the project's *Users* list never works here.
 Neither does an MCP token: those are for AI agents (see [AI agents over MCP](mcp.md)).

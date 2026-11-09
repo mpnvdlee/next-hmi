@@ -46,6 +46,7 @@ from api.tls_api import router as tls_router
 from api.v1_api import router as api_v1_router
 from core import (
     audit,
+    instance_secret,
     manager_auth,
     peer_tokens,
     telemetry,
@@ -77,7 +78,7 @@ from fastapi.staticfiles import StaticFiles
 from mcp_server.server import mount_workspace_mcp, run_session_manager_once
 from mcp_server.write_helpers import drain_inflight_broadcasts
 from services import frontend_serve, project_resume
-from services.supervisor import supervisor
+from services.supervisor import ChildAuth, supervisor
 from starlette.background import BackgroundTask
 from starlette.datastructures import Headers
 from starlette.routing import get_route_path
@@ -134,6 +135,9 @@ def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
     scheme the manager derived itself, and a client's ``X-Forwarded-Host``,
     ``X-Forwarded-Prefix`` and ``Forwarded`` are dropped — the child bakes the
     prefix into ``index.html``, so only the manager's own alias may set it.
+    The instance-secret headers are the manager's too: the proxy client adds
+    the secret itself (``ChildAuth``), and a nonce would turn the child into a
+    signing oracle.
     """
     headers: list[tuple[str, str]] = []
     for key, value in request.headers.items():
@@ -146,6 +150,8 @@ def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
             "x-real-ip",
             "forwarded",
             audit.EDITOR_HEADER,
+            instance_secret.HEADER,
+            instance_secret.NONCE_HEADER,
         ):
             continue
         if key.lower() == "cookie":
@@ -181,7 +187,11 @@ async def lifespan(app: FastAPI):
                 served = tls_settings.describe(None, tls_settings.mode())
         tls_settings.mark_served(True, (served or {}).get("fingerprint"))
     global _proxy_client
-    _proxy_client = httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=None, write=None, pool=5.0))
+    _proxy_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=5.0, read=None, write=None, pool=5.0),
+        auth=ChildAuth(),
+        trust_env=False,
+    )
     # The workspace MCP transport runs for the life of the manager; its session
     # manager must be entered inside the lifespan.
     async with run_session_manager_once():
@@ -312,9 +322,10 @@ _THEME_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
 # The live view is the product's public face: an operator panel must come up on
 # a wall-mounted browser with no device-admin password. The project child mounts
-# every router on one app and has no auth of its own (``backend/main.py``), so
-# this table *is* the boundary. Deny by default; each entry is exact, or exact
-# with one wildcard segment. Query strings never take part in the match.
+# every router on one app and authenticates no user (it only checks that a
+# request came through this manager, ``core.instance_secret``), so this table
+# *is* the boundary. Deny by default; each entry is exact, or exact with one
+# wildcard segment. Query strings never take part in the match.
 _RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str | re.Pattern[str], ...], ...]] = {
     "GET": (
         ("api", "config", "config"),
@@ -541,6 +552,24 @@ def _is_plain_sub_path(sub_path: str) -> bool:
     return all(_is_plain_segment(segment) for segment in sub_path.split("/"))
 
 
+def _has_dot_segment(sub_path: str) -> bool:
+    """True when a segment of *sub_path* is, or decodes to, ``.`` or ``..``.
+
+    The proxy's own check for every prefix, session or not. ``httpx`` collapses
+    a literal one when it builds the upstream URL and the child decodes an
+    encoded one, so either moves the request to a route other than the one
+    judged here: ``api/./internal/reload`` reached the internal hook. Unlike
+    :func:`_is_plain_sub_path` it leaves empty segments alone, which nothing
+    collapses, so an editor's trailing-slash request keeps working.
+    """
+    return any(
+        part in (".", "..")
+        for segment in sub_path.split("/")
+        for form in _decoded_forms(segment)
+        for part in form.split("/")
+    )
+
+
 def _decoded_path(path: str) -> str:
     """*path* with every segment decoded to its fixpoint, for a literal compare.
 
@@ -672,7 +701,8 @@ async def _auth_gate(request: Request, call_next):
 
 
 app.add_middleware(OriginCheckMiddleware)
-# Outermost, so the gate's and the proxy's documents are covered too.
+# Outside the gate and the proxy, so their documents are covered too; only the
+# body cap added below sits further out, and its 413 is JSON.
 app.add_middleware(FrameAncestorsMiddleware)
 
 
@@ -753,13 +783,25 @@ async def _proxy_ws_to_child(
     import websockets
 
     await websocket.accept()
-    # The child attributes this socket's writes, recipe loads and acks to
-    # "engineer". The upstream is a fresh connection carrying none of the
-    # browser's headers, so only the session-gated editor prefix can set it.
-    headers = {audit.EDITOR_HEADER: "1"} if require_session else None
+    headers = supervisor.child_headers(port)
+    # The upstream is a fresh connection carrying none of the browser's
+    # headers. The address the manager saw goes along as the HTTP hop sends it
+    # (``_forwarded_headers``), so the child's sign-in throttle meters each
+    # browser rather than one loopback address for all of them. The child
+    # attributes an editor socket's writes, recipe loads and acks to
+    # "engineer", so only the session-gated editor prefix sets that mark.
+    if websocket.client:
+        headers["x-forwarded-for"] = websocket.client.host
+    if require_session:
+        headers[audit.EDITOR_HEADER] = "1"
     try:
+        # ``proxy=None``: an environment proxy cannot reach loopback, and would
+        # be handed the child's secret.
         async with websockets.connect(
-            f"ws://127.0.0.1:{port}/ws", max_size=None, additional_headers=headers
+            f"ws://127.0.0.1:{port}/ws",
+            max_size=None,
+            additional_headers=headers or None,
+            proxy=None,
         ) as upstream:
             await _pump_websocket(websocket, upstream)
     except Exception as exc:  # pragma: no cover — upstream gone mid-connect
@@ -923,6 +965,10 @@ async def _proxy_http_to_child(
             status_code=409,
         )
 
+    # Refused rather than collapsed, so the path forwarded below is the one
+    # every check here judged.
+    if _has_dot_segment(path):
+        raise HTTPException(status_code=400, detail="Invalid request path")
     # The child's loopback reload hook is driven by the manager directly (over
     # the instance port), never through this browser-facing proxy.
     # Compare the decoded form: ``api%2finternal%2freload`` is one opaque
@@ -950,8 +996,14 @@ async def _proxy_http_to_child(
     port = _upstream_port_or_503(project_id)
     assert _proxy_client is not None
     try:
+        # Built from parts, not parsed from a string: a decoded ``?`` or ``#``
+        # in the path would otherwise end it there, and the child would serve
+        # a shorter path than the one checked.
         url = httpx.URL(
-            f"http://127.0.0.1:{port}/{path}",
+            scheme="http",
+            host="127.0.0.1",
+            port=port,
+            path="/" + path.replace("?", "%3F").replace("#", "%23"),
             query=request.url.query.encode("utf-8"),
         )
     except httpx.InvalidURL as exc:

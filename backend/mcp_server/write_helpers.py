@@ -31,8 +31,12 @@ def loopback_client() -> Any:
     global _loopback_client
     if _loopback_client is None:
         import httpx
+        from services.supervisor import ChildAuth
 
-        _loopback_client = httpx.AsyncClient(timeout=_RELOAD_TIMEOUT_SECONDS)
+        # ``ChildAuth`` adds the secret of the child each call is addressed to.
+        _loopback_client = httpx.AsyncClient(
+            timeout=_RELOAD_TIMEOUT_SECONDS, auth=ChildAuth(), trust_env=False
+        )
     return _loopback_client
 
 

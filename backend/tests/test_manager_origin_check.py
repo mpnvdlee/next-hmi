@@ -95,7 +95,7 @@ def _post(client: TestClient, path: str, origin: str | None):
 def test_same_origin_post_passes(client: TestClient) -> None:
     resp = client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
         headers={"Origin": "http://testserver"},
     )
     assert resp.status_code == 200
@@ -104,7 +104,7 @@ def test_same_origin_post_passes(client: TestClient) -> None:
 def test_cross_origin_post_is_refused_before_it_acts(client: TestClient) -> None:
     resp = client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
         headers={"Origin": "http://evil.example"},
     )
     assert resp.status_code == 403
@@ -155,7 +155,7 @@ def test_editor_socket_refuses_a_cross_origin_upgrade_even_with_a_session(
 ) -> None:
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     with client.websocket_connect("/editor/ghost/ws", headers={"Origin": "http://testserver"}) as ws:
         ws.send_text("hi")
@@ -266,9 +266,10 @@ def test_ws_proxy_does_not_forward_origin(client: TestClient, running_child) -> 
     (args, kwargs), = running_child
     assert args == ("ws://127.0.0.1:65000/ws",)
     # websockets sends an Origin header only when given ``origin=``; the
-    # runtime hop adds no header of its own either.
-    assert set(kwargs) == {"max_size", "additional_headers"}
-    assert kwargs["additional_headers"] is None
+    # runtime hop adds only the address the manager saw.
+    assert set(kwargs) == {"max_size", "additional_headers", "proxy"}
+    assert kwargs["additional_headers"] == {"x-forwarded-for": "testclient"}
+    assert kwargs["proxy"] is None
 
 
 # Runs in a subprocess: importing ``main`` bootstraps a project and grafts its

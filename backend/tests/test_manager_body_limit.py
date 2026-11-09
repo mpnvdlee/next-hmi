@@ -28,9 +28,9 @@ def home(monkeypatch, tmp_path: Path) -> Path:
 
 @pytest.fixture(autouse=True)
 def _reset_throttle():
-    manager_auth.register_login_success()
+    manager_auth.reset_throttle()
     yield
-    manager_auth.register_login_success()
+    manager_auth.reset_throttle()
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def child(monkeypatch, client: TestClient) -> list[httpx.Request]:
 def _sign_in(client: TestClient) -> None:
     resp = client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     assert resp.status_code == 200
 

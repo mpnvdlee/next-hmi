@@ -303,7 +303,7 @@ def client(monkeypatch, home: Path) -> TestClient:
     with TestClient(manager.app) as tc:
         tc.post(
             "/api/manager/auth/setup",
-            json={"password": "secret", "setupCode": manager_auth.setup_code()},
+            json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
         )
         yield tc
 

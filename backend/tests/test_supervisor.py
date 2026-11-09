@@ -502,12 +502,18 @@ def test_resume_prunes_a_project_it_refused_to_start(
 
 _CHILD_SERVER_SOURCE = '''
 import argparse
+import hashlib
+import hmac
 import http.server
 import os
 import signal
 import threading
 import time
 from pathlib import Path
+
+# What the real instance does in ``core.instance_secret``, written out again so
+# this stand-in also pins the wire format.
+SECRET = os.environ["NEXTHMI_INSTANCE_SECRET"]
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--port", type=int, required=True)
@@ -522,7 +528,15 @@ if args.ignore_sigterm:
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.headers.get("x-nexthmi-instance-secret") != SECRET:
+            self.send_response(403)
+            self.end_headers()
+            return
         self.send_response(200)
+        nonce = self.headers.get("x-nexthmi-instance-nonce")
+        if nonce:
+            proof = hmac.new(SECRET.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+            self.send_header("x-nexthmi-instance-proof", proof)
         self.end_headers()
 
     def log_message(self, *a):
@@ -693,3 +707,196 @@ def test_real_subprocess_crash_triggers_auto_restart(
         assert marker.exists()  # the crashing run did happen, not a fluke pass
     finally:
         sup.stop(project_id)
+
+
+# ── the instance secret and the port race ───────────────────────────────────
+
+
+def _spawns(monkeypatch) -> list[tuple[list[str], dict[str, str]]]:
+    """Each ``Popen`` the supervisor makes, as ``(cmd, env)``."""
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def popen(cmd, **kwargs):
+        calls.append((cmd, kwargs["env"]))
+        return _FakeProc()
+
+    monkeypatch.setattr(supervisor_mod.subprocess, "Popen", popen)
+    return calls
+
+
+class _Squatter:
+    """Another local process on the port, answering everything with 200."""
+
+    def __init__(self) -> None:
+        import http.server
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        self._server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.port = self._server.server_address[1]
+        threading.Thread(target=self._server.serve_forever, daemon=True).start()
+
+    def close(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+
+
+def test_each_spawn_gets_a_fresh_secret_in_its_environment_only(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """Never on the command line: every local user can read that."""
+    from core import instance_secret
+
+    project_id = _register_project(home, tmp_path)
+    spawns = _spawns(monkeypatch)
+    sup = supervisor_mod.Supervisor()
+    monkeypatch.setattr(sup, "_await_health", lambda instance: True)
+
+    snap = sup.start(project_id)
+    sup.stop(project_id)
+    sup.start(project_id)
+
+    (first_cmd, first_env), (_, second_env) = spawns
+    first, second = first_env[instance_secret.ENV_VAR], second_env[instance_secret.ENV_VAR]
+    assert first and second and first != second
+    assert not any(first in arg for arg in first_cmd)
+    assert first not in json.dumps(snap)
+    assert second not in repr(sup._instances[project_id])
+    # The child resolves the runtime home the manager uses, which the
+    # translation locks they share live under.
+    assert first_env["NEXTHMI_DATA_DIR"] == str(home)
+
+
+def test_child_headers_name_only_a_live_running_child(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    from core import instance_secret
+
+    project_id = _register_project(home, tmp_path)
+    spawns = _spawns(monkeypatch)
+    sup = supervisor_mod.Supervisor()
+    monkeypatch.setattr(sup, "_await_health", lambda instance: True)
+    port = sup.start(project_id)["port"]
+    secret = spawns[0][1][instance_secret.ENV_VAR]
+
+    assert sup.child_headers(port) == {instance_secret.HEADER: secret}
+    assert sup.child_headers(port + 1) == {}
+
+
+def test_an_exited_child_is_off_the_proxy_before_the_monitor_notices(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """Its port is free again the moment it exits, and anything may bind it."""
+    project_id = _register_project(home, tmp_path)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+    port = sup.start(project_id)["port"]
+    sup._instances[project_id].proc.kill()
+
+    assert sup.status(project_id)["status"] == "running"
+    assert sup.port_for(project_id) is None
+    assert sup.child_headers(port) == {}
+
+
+def test_child_auth_signs_loopback_requests_and_replaces_a_forged_secret(monkeypatch) -> None:
+    import asyncio
+
+    import httpx
+    from core import instance_secret
+    from mcp_server import write_helpers
+
+    seen: list[list[str]] = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get_list(instance_secret.HEADER))
+        return httpx.Response(200)
+
+    monkeypatch.setattr(
+        supervisor_mod.supervisor,
+        "child_headers",
+        lambda port: {instance_secret.HEADER: "real"} if port == 65000 else {},
+    )
+
+    async def send() -> None:
+        transport = httpx.MockTransport(upstream)
+        async with httpx.AsyncClient(transport=transport, auth=supervisor_mod.ChildAuth()) as client:
+            forged = {instance_secret.HEADER: "forged"}
+            await client.get("http://127.0.0.1:65000/api/health", headers=forged)
+            await client.get("http://example.com:65000/api/health")
+
+    asyncio.run(send())
+    assert seen == [["real"], []]
+    # The reload and panel hooks go through this client.
+    client = write_helpers.loopback_client()
+    assert isinstance(client.auth, supervisor_mod.ChildAuth)
+    assert client.trust_env is False
+
+
+def test_health_never_takes_an_answer_without_proof_for_the_child(
+    home: Path, monkeypatch
+) -> None:
+    """Between ``_pick_port`` releasing the port and the child binding it, any
+    local process can take it and answer ``/api/health`` itself."""
+    squatter = _Squatter()
+    monkeypatch.setattr(supervisor_mod, "_HEALTH_TIMEOUT_SECONDS", 0.6)
+    instance = supervisor_mod.ChildInstance(
+        project_id="plant-a",
+        name="Plant",
+        path="/nowhere",
+        base_path="/runtime/plant-a/",
+        port=squatter.port,
+        proc=_FakeProc(),
+        secret="the-child-s-own",
+    )
+    try:
+        assert supervisor_mod.Supervisor()._await_health(instance) is False
+    finally:
+        squatter.close()
+    assert "another process answered" in instance.last_error
+
+
+def test_a_restart_that_never_proves_itself_is_reported_crashed(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """Rather than left "starting" for good, off the proxy with nothing said."""
+    project_id = _register_project(home, tmp_path)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+    sup.start(project_id)
+    instance = sup._instances[project_id]
+    instance.proc.kill()
+    monkeypatch.setattr(sup, "_await_health", lambda instance: False)
+    monkeypatch.setattr(supervisor_mod.time, "sleep", lambda _seconds: None)
+
+    sup._handle_crash(instance)
+
+    assert instance.status == "crashed"
+    assert instance.last_error
+    assert sup.port_for(project_id) is None
+
+
+def test_real_subprocess_never_routes_to_a_squatter_on_its_port(
+    home: Path, tmp_path: Path, monkeypatch, child_script: Path
+) -> None:
+    """The child cannot bind the port another process holds and exits; that is
+    a failed start, not the squatter taking over its traffic."""
+    squatter = _Squatter()
+    project_id = _register_project(home, tmp_path)
+    monkeypatch.setattr(
+        supervisor_mod, "_child_command", _fake_child_command(child_script, tmp_path / "marker")
+    )
+    monkeypatch.setattr(supervisor_mod, "_pick_port", lambda preferred: squatter.port)
+    sup = supervisor_mod.Supervisor()
+    try:
+        snap = sup.start(project_id)
+    finally:
+        squatter.close()
+        sup.stop(project_id)
+
+    assert snap["status"] == "crashed"
+    assert snap["lastError"]
+    assert sup.port_for(project_id) is None

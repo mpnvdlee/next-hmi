@@ -38,7 +38,6 @@ from core import manager_auth, peer_tokens, peer_trust, runtime_home
 from core.exceptions import (
     ConflictError,
     NotFoundError,
-    RateLimitError,
     ValidationError,
 )
 from core.manifest import (
@@ -654,15 +653,8 @@ class PairBody(BaseModel):
 @public_router.post("/pair", status_code=201)
 async def pair(body: PairBody, request: Request) -> dict[str, Any]:
     _require_private_client(request)
-    remaining = manager_auth.lockout_remaining()
-    if remaining > 0:
-        raise RateLimitError(
-            f"Too many failed attempts. Try again in {int(remaining) + 1}s."
-        )
-    if not manager_auth.verify_password(body.password):
-        manager_auth.register_login_failure()
+    if not await manager_auth.check_password(manager_auth.client_address(request), body.password):
         raise ValidationError("Incorrect device-admin password")
-    manager_auth.register_login_success()
     runtime_id = body.runtimeId if body.runtimeId and _RUNTIME_ID.fullmatch(body.runtimeId) else None
     token_id, token = peer_tokens.issue(
         body.name,

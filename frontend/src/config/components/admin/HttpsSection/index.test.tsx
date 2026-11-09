@@ -90,6 +90,12 @@ function renderSection(overrides: Partial<TlsStatus> | null, handlers = {}) {
   return props;
 }
 
+/** Turning HTTPS on asks first: it ends every session. */
+async function turnOnHttps() {
+  await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Turn on HTTPS' }));
+}
+
 describe('HttpsSection', () => {
   it('marks the protocol the device is actually serving', () => {
     renderSection({ enabled: true });
@@ -102,10 +108,42 @@ describe('HttpsSection', () => {
     const onRestart = vi.fn().mockResolvedValue(undefined);
     renderSection({}, { onApply, onRestart });
 
-    await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
+    await turnOnHttps();
 
     await waitFor(() => expect(onApply).toHaveBeenCalledWith(true, 'generated'));
     expect(onRestart).toHaveBeenCalled();
+  });
+
+  it('asks before turning HTTPS on, naming where everyone signs in again', async () => {
+    stubLocation('http://panel:8000/settings');
+    const onApply = vi.fn().mockResolvedValue(undefined);
+    renderSection({ httpPort: 8000, httpsPort: 8443 }, { onApply });
+
+    await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
+
+    expect(screen.getByText('Turn on HTTPS?')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Everyone who is signed in, you included, signs in again at https://panel:8443. ' +
+          'Sessions started over plain HTTP stop working.',
+      ),
+    ).toBeInTheDocument();
+    expect(onApply).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('Turn on HTTPS?')).not.toBeInTheDocument();
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing when HTTPS is already on', async () => {
+    stubLocation('https://panel:8443/settings');
+    const onApply = vi.fn().mockResolvedValue(undefined);
+    renderSection({ enabled: true, httpPort: 8000, httpsPort: 8443 }, { onApply });
+
+    await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
+
+    expect(screen.queryByText('Turn on HTTPS?')).not.toBeInTheDocument();
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith(true, 'generated'));
   });
 
   it('reopens the page on the port HTTPS actually binds', async () => {
@@ -115,7 +153,7 @@ describe('HttpsSection', () => {
     const replace = stubLocation('http://panel:8000/config/admin');
     renderSection({ httpPort: 8000, httpsPort: 8443 });
 
-    await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
+    await turnOnHttps();
 
     expect(screen.getByText('https://panel:8443/config/admin')).toBeInTheDocument();
     // Two polls: the old listener going down, then :8000 answering as the
@@ -174,7 +212,7 @@ describe('HttpsSection', () => {
     const replace = stubLocation('http://panel:8000/config/admin', poll);
     renderSection({ httpPort: 8000, httpsPort: 8443 });
 
-    await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
+    await turnOnHttps();
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith('https://panel:8443/config/admin'), {
       timeout: 3000,
@@ -187,7 +225,7 @@ describe('HttpsSection', () => {
     const replace = stubLocation('http://localhost:8000/config/admin');
     renderSection({ httpPort: null, httpsPort: null });
 
-    await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
+    await turnOnHttps();
 
     await waitFor(() =>
       expect(replace).toHaveBeenCalledWith('https://localhost:8000/config/admin'),
@@ -209,7 +247,7 @@ describe('HttpsSection', () => {
     const onRestart = vi.fn().mockResolvedValue(undefined);
     renderSection({}, { onApply, onRestart });
 
-    await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
+    await turnOnHttps();
 
     await waitFor(() => expect(screen.getByText('nope')).toBeInTheDocument());
     expect(onRestart).not.toHaveBeenCalled();
@@ -249,7 +287,8 @@ describe('HttpsSection', () => {
     const onRegenerate = vi.fn().mockResolvedValue(undefined);
     renderSection({ enabled: true, generatedCertificate: certificate() }, { onRegenerate });
 
-    expect(screen.getByText('a'.repeat(64))).toBeInTheDocument();
+    // In the groups of four the peer-pairing dialog asks to compare it with.
+    expect(screen.getByText(Array(16).fill('aaaa').join(' '))).toBeInTheDocument();
     expect(screen.getByText('localhost, 127.0.0.1')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
     expect(onRegenerate).toHaveBeenCalled();

@@ -41,7 +41,7 @@ origin root; an individual project's HMI is at
 ```
 <runtime_home>/
   projects.json           manifest: running[], projects[], peers[], defaultProjectId, defaultProjectsRoot
-  .manager-auth.json      device-admin password digest + session secret
+  .manager-auth.json      device-admin password digest, token secret, sign-ins
   .logs/                  rotating application logs
   .widget-build/          compiled custom-widget JS (regenerated)
   .restart-pending        sentinel for /api/system/restart
@@ -126,14 +126,17 @@ The **manager dashboard** (the origin root, behind the device-admin
 password) is the operator surface:
 
 - **First-run setup** — on first launch the dashboard asks for the **setup
-  code** and a device-admin password. Until a password is set, the device
-  prints the code (`XXXX-XXXX`) in its console and its log at every start;
-  with Docker, `docker logs nexthmi` shows it. The code works once, and a
-  restart prints a new one. The password is stored hashed in
+  code** and a device-admin password of at least 8 characters. Until a
+  password is set, the device prints the code (`XXXX-XXXX`) in its console
+  and its log at every start; with Docker, `docker logs nexthmi` shows it.
+  The code works once, and a restart prints a new one. The password is stored hashed in
   `<runtime_home>/.manager-auth.json` and gates every subsequent visit.
   Signing in lasts a day, counted from the moment you sign in and not from
   your last click: after that the dashboard asks for the password again, and
   an editor left open on the panel shows **Signed out** until someone does.
+  Signing out ends the sign-in on the device too; **Settings › Security ›
+  Sign out everywhere** ends every browser's, and changing the password ends
+  every one but your own.
 - **Project credentials** — a project brings its own `users.json` and nothing
   else gates it: a project copied from the bundled seed holds only the
   anonymous `guest` user, so it starts and opens with no password of its own.
@@ -337,7 +340,9 @@ moving it would break the port mapping the operator already published.
 
 **Settings → HTTPS** is the normal route and needs no shell access:
 
-1. Pick **HTTPS** on the protocol switch.
+1. Pick **HTTPS** on the protocol switch and confirm. Everyone signed in to
+   the dashboard, you included, signs in again over HTTPS: a sign-in made over
+   plain HTTP stops working.
 2. Under **Certificate**, keep *Generated for this device* — the manager
    creates a self-signed certificate covering `localhost`, this host's name,
    and its addresses, including the one it is routed to on the network — or
@@ -511,7 +516,10 @@ the password is typed, whether the peer was discovered or entered by hand.
 
 The manager session cookie is marked `Secure` automatically on requests that
 arrive over HTTPS (directly or via a trusted proxy), and stays unmarked on
-plain HTTP so local installs keep working.
+plain HTTP so local installs keep working. The restart that turns HTTPS on in
+**Settings → HTTPS** ends every dashboard sign-in: a cookie set over plain HTTP
+is not `Secure`, has crossed the network readable, and the browser would keep
+sending it to the HTTP port.
 
 ## Docker
 
@@ -675,9 +683,9 @@ an existing project's users and passwords byte-for-byte.
 no password to check, so the first-run page asks for the code instead. The
 device prints it only in this terminal and in its log, and a website cannot
 read either: a page that points a name of its own at the device gets past its
-other checks, but not this one. Five wrong codes lock setup for a minute, as
-five wrong passwords lock sign-in. Anyone who can read the terminal or the log
-can still claim the install, and it advertises itself over mDNS the whole time
+other checks, but not this one. Five wrong codes from one address lock setup
+from that address for a minute, as five wrong passwords lock sign-in. Anyone
+who can read the terminal or the log can still claim the install, and it advertises itself over mDNS the whole time
 it waits, so set the password right after the first start. The code works once;
 a restart prints a new one.
 

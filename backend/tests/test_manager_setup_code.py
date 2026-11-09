@@ -28,9 +28,9 @@ def home(monkeypatch, tmp_path: Path) -> Path:
 
 @pytest.fixture(autouse=True)
 def _reset_throttle():
-    manager_auth.register_login_success()
+    manager_auth.reset_throttle()
     yield
-    manager_auth.register_login_success()
+    manager_auth.reset_throttle()
 
 
 @pytest.fixture
@@ -55,7 +55,7 @@ def test_code_is_eight_unambiguous_characters_and_stable_until_used(home: Path) 
     assert manager_auth.setup_code() == code
 
 
-@pytest.mark.parametrize("body", [{"password": "secret"}, {"password": "secret", "setupCode": "  "}])
+@pytest.mark.parametrize("body", [{"password": "secret-pw"}, {"password": "secret-pw", "setupCode": "  "}])
 def test_setup_without_the_code_is_refused(client: TestClient, body: dict) -> None:
     resp = client.post(SETUP, json=body)
 
@@ -70,13 +70,13 @@ def test_wrong_code_is_refused_and_counted_by_the_lockout(client: TestClient) ->
     wrong = "AAAA-AAAA" if code != "AAAA-AAAA" else "BBBB-BBBB"
 
     for _ in range(manager_auth._LOCKOUT_THRESHOLD):
-        resp = client.post(SETUP, json={"password": "secret", "setupCode": wrong})
+        resp = client.post(SETUP, json={"password": "secret-pw", "setupCode": wrong})
         assert resp.status_code == 422
         assert resp.json()["detail"].startswith("Incorrect setup code.")
 
     # Locked out like a wrong password: even the right code waits.
-    assert manager_auth.lockout_remaining() > 0
-    locked = client.post(SETUP, json={"password": "secret", "setupCode": code})
+    assert manager_auth.lockout_remaining("testclient") > 0
+    locked = client.post(SETUP, json={"password": "secret-pw", "setupCode": code})
     assert locked.status_code == 429
     assert _password_set(client) is False
 
@@ -84,7 +84,7 @@ def test_wrong_code_is_refused_and_counted_by_the_lockout(client: TestClient) ->
 def test_right_code_sets_the_password_and_signs_in(client: TestClient) -> None:
     code = manager_auth.setup_code()
 
-    resp = client.post(SETUP, json={"password": "secret", "setupCode": code})
+    resp = client.post(SETUP, json={"password": "secret-pw", "setupCode": code})
 
     assert resp.status_code == 200
     assert resp.json() == {"authenticated": True}
@@ -96,19 +96,19 @@ def test_code_is_read_as_typed_from_a_terminal(client: TestClient) -> None:
     assert code is not None
     typed = f" {code.replace('-', '').lower()} "
 
-    assert client.post(SETUP, json={"password": "secret", "setupCode": typed}).status_code == 200
+    assert client.post(SETUP, json={"password": "secret-pw", "setupCode": typed}).status_code == 200
 
 
 def test_code_is_spent_once_the_password_is_set(client: TestClient) -> None:
     code = manager_auth.setup_code()
     assert code is not None
-    client.post(SETUP, json={"password": "secret", "setupCode": code})
+    client.post(SETUP, json={"password": "secret-pw", "setupCode": code})
 
     assert manager_auth.setup_code() is None
     assert manager_auth.verify_setup_code(code) is False
     again = client.post(SETUP, json={"password": "taken-over", "setupCode": code})
     assert again.status_code == 409
-    assert manager_auth.verify_password("secret") is True
+    assert manager_auth.verify_password("secret-pw") is True
 
 
 @pytest.mark.parametrize("path", ["/api/manager/mcp/pair", "/api/manager/peer/pair"])

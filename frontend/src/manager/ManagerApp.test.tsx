@@ -1,10 +1,11 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import ManagerApp from './ManagerApp';
 import { useManagerStore, type InstanceSnapshot } from './managerStore';
 import { useProjectsStore, type ProjectEntry } from '@config/store/projectsStore';
 import { enterpriseAppGates } from '@enterprise';
+import { apiErrorFrom } from '@shared/utils/api';
 
 function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
   return {
@@ -126,6 +127,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   useManagerStore.setState(MANAGER_INITIAL);
@@ -258,8 +260,8 @@ describe('auth gate form', () => {
     const inputs = container.querySelectorAll('input[type="password"]');
 
     await userEvent.type(screen.getByPlaceholderText('XXXX-XXXX'), 'K7PM-3QXD');
-    await userEvent.type(inputs[0], 'hunter2');
-    await userEvent.type(inputs[1], 'hunter3');
+    await userEvent.type(inputs[0], 'hunter22');
+    await userEvent.type(inputs[1], 'hunter33');
     await userEvent.click(screen.getByRole('button', { name: 'Set password & continue' }));
 
     expect(await screen.findByText('Passwords do not match')).toBeInTheDocument();
@@ -272,8 +274,8 @@ describe('auth gate form', () => {
     const { container } = renderAt('/projects');
     const inputs = container.querySelectorAll('input[type="password"]');
 
-    await userEvent.type(inputs[0], 'hunter2');
-    await userEvent.type(inputs[1], 'hunter2');
+    await userEvent.type(inputs[0], 'hunter22');
+    await userEvent.type(inputs[1], 'hunter22');
     await userEvent.click(screen.getByRole('button', { name: 'Set password & continue' }));
 
     expect(
@@ -291,11 +293,11 @@ describe('auth gate form', () => {
     const inputs = container.querySelectorAll('input[type="password"]');
 
     await userEvent.type(screen.getByPlaceholderText('XXXX-XXXX'), 'K7PM-3QXD');
-    await userEvent.type(inputs[0], 'hunter2');
-    await userEvent.type(inputs[1], 'hunter2');
+    await userEvent.type(inputs[0], 'hunter22');
+    await userEvent.type(inputs[1], 'hunter22');
     await userEvent.click(screen.getByRole('button', { name: 'Set password & continue' }));
 
-    await waitFor(() => expect(setup).toHaveBeenCalledWith('hunter2', 'K7PM-3QXD'));
+    await waitFor(() => expect(setup).toHaveBeenCalledWith('hunter22', 'K7PM-3QXD'));
   });
 
   it('surfaces a refused setup code as an inline error', async () => {
@@ -309,8 +311,8 @@ describe('auth gate form', () => {
     const inputs = container.querySelectorAll('input[type="password"]');
 
     await userEvent.type(screen.getByPlaceholderText('XXXX-XXXX'), 'AAAA-AAAA');
-    await userEvent.type(inputs[0], 'hunter2');
-    await userEvent.type(inputs[1], 'hunter2');
+    await userEvent.type(inputs[0], 'hunter22');
+    await userEvent.type(inputs[1], 'hunter22');
     await userEvent.click(screen.getByRole('button', { name: 'Set password & continue' }));
 
     expect(
@@ -327,6 +329,97 @@ describe('auth gate form', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     expect(await screen.findByText('Invalid password')).toBeInTheDocument();
+  });
+
+  /** The manager's 429 for a locked-out sign-in (`manager_auth.require_not_locked_out`). */
+  function lockedOut(body: Record<string, unknown>) {
+    return apiErrorFrom(
+      new Response(JSON.stringify(body), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  }
+
+  it('counts a lockout down on the button and signs in again at zero', async () => {
+    const refusal = await lockedOut({
+      detail: 'Too many failed attempts from 192.168.1.77. Try again in 3s.',
+      retryAfter: 3,
+      clientAddress: '192.168.1.77',
+    });
+    const login = vi.fn().mockRejectedValueOnce(refusal).mockResolvedValue(undefined);
+    useManagerStore.setState({ auth: 'needs-login', login });
+    // Only the countdown's clock: React and user-event keep their real timers.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    renderAt('/projects');
+
+    await userEvent.type(screen.getByLabelText(/Password/i), 'hunter2');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Too many failed attempts from this address');
+    expect(alert).toHaveTextContent(
+      'Sign-in from 192.168.1.77 is paused for 3 seconds. Other devices can still sign in.',
+    );
+    expect(screen.getByRole('button', { name: 'Try again in 3 s' })).toBeDisabled();
+
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByRole('button', { name: 'Try again in 2 s' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('paused for 2 seconds');
+
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(login).toHaveBeenCalledTimes(2);
+  });
+
+  it('says the whole device is paused when every address is locked', async () => {
+    const login = vi
+      .fn()
+      .mockRejectedValue(await lockedOut({ detail: 'Too many failed attempts', retryAfter: 30 }));
+    useManagerStore.setState({ auth: 'needs-login', login });
+    renderAt('/projects');
+
+    await userEvent.type(screen.getByLabelText(/Password/i), 'hunter2');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Too many failed attempts');
+    expect(alert).toHaveTextContent('Sign-in on this device is paused for 30 seconds.');
+    expect(alert).not.toHaveTextContent('Other devices');
+  });
+
+  it('holds setup until the new password has 8 characters, saying so as it is typed', async () => {
+    useManagerStore.setState({ auth: 'needs-setup' });
+    const { container } = renderAt('/projects');
+    const inputs = container.querySelectorAll('input[type="password"]');
+    const submit = screen.getByRole('button', { name: 'Set password & continue' });
+    await userEvent.type(screen.getByPlaceholderText('XXXX-XXXX'), 'K7PM-3QXD');
+
+    const rule = screen.getByText(/At least 8 characters/);
+    expect(inputs[0]).toHaveAttribute('aria-describedby', rule.id);
+    await userEvent.type(inputs[0], 'pump3');
+    await userEvent.type(inputs[1], 'pump3');
+    expect(rule).toHaveTextContent('At least 8 characters (5 of 8)');
+    expect(rule).toHaveClass('cfg-password-rule--unmet');
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(inputs[0], '-ok');
+    expect(rule).toHaveTextContent(/^At least 8 characters$/);
+    expect(rule).toHaveClass('cfg-password-rule--met');
+    await userEvent.type(inputs[1], '-ok');
+    expect(submit).toBeEnabled();
+  });
+
+  it('puts no length rule on the sign-in form: a stored short password still works', async () => {
+    const login = vi.fn().mockResolvedValue(undefined);
+    useManagerStore.setState({ auth: 'needs-login', login });
+    renderAt('/projects');
+
+    expect(screen.queryByText(/At least 8 characters/)).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/Password/i), '1234');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(login).toHaveBeenCalledWith('1234');
   });
 });
 
@@ -980,11 +1073,11 @@ describe('security section', () => {
     const fields = dialog.querySelectorAll('input[type="password"]');
 
     await userEvent.type(fields[0], 'old');
-    await userEvent.type(fields[1], 'new');
-    await userEvent.type(fields[2], 'new');
+    await userEvent.type(fields[1], 'new-password');
+    await userEvent.type(fields[2], 'new-password');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change password' }));
 
-    await waitFor(() => expect(changePassword).toHaveBeenCalledWith('old', 'new'));
+    await waitFor(() => expect(changePassword).toHaveBeenCalledWith('old', 'new-password'));
     await waitFor(() => expect(modal()).toBeNull());
   });
 
@@ -998,7 +1091,7 @@ describe('security section', () => {
     const fields = dialog.querySelectorAll('input[type="password"]');
 
     await userEvent.type(fields[0], 'old');
-    await userEvent.type(fields[1], 'new');
+    await userEvent.type(fields[1], 'new-password');
     await userEvent.type(fields[2], 'nope');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change password' }));
 
@@ -1017,12 +1110,85 @@ describe('security section', () => {
     const fields = dialog.querySelectorAll('input[type="password"]');
 
     await userEvent.type(fields[0], 'bad');
-    await userEvent.type(fields[1], 'new');
-    await userEvent.type(fields[2], 'new');
+    await userEvent.type(fields[1], 'new-password');
+    await userEvent.type(fields[2], 'new-password');
     await userEvent.type(fields[2], '{Enter}');
 
     expect(await screen.findByText('Wrong password')).toBeInTheDocument();
     expect(modal()).not.toBeNull();
+  });
+
+  it('holds a new password under 8 characters, saying so as it is typed', async () => {
+    const changePassword = vi.fn().mockResolvedValue(undefined);
+    stubManagerActions({ changePassword });
+    renderAt('/settings');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    const dialog = await openModal();
+    const fields = dialog.querySelectorAll('input[type="password"]');
+    const submit = within(dialog).getByRole('button', { name: 'Change password' });
+    const rule = within(dialog).getByText(/At least 8 characters/);
+
+    await userEvent.type(fields[0], '1234');
+    await userEvent.type(fields[1], 'pump3');
+    await userEvent.type(fields[2], 'pump3');
+    expect(rule).toHaveTextContent('(5 of 8)');
+    expect(submit).toBeDisabled();
+    await userEvent.type(fields[2], '{Enter}');
+    expect(changePassword).not.toHaveBeenCalled();
+
+    await userEvent.type(fields[1], '-station');
+    await userEvent.type(fields[2], '-station');
+    expect(rule).toHaveClass('cfg-password-rule--met');
+    expect(submit).toBeEnabled();
+  });
+
+  it('says a password change signs out every other browser', () => {
+    renderAt('/settings');
+    expect(screen.getByText('Changing it signs out every other browser.')).toBeInTheDocument();
+  });
+
+  /** Answers sign-out-everywhere with *response*; every other call 503s, as in `beforeEach`. */
+  function stubSignOutEverywhere(response: { ok: boolean; status: number; json(): unknown }) {
+    const fetchMock = vi.fn(async (url: string) =>
+      url === '/api/manager/auth/logout-everywhere'
+        ? response
+        : { ok: false, status: 503, json: async () => ({}) },
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('signs out everywhere and lands on the sign-in screen', async () => {
+    const fetchMock = stubSignOutEverywhere({
+      ok: true,
+      status: 200,
+      json: async () => ({ authenticated: false }),
+    });
+    renderAt('/settings');
+
+    expect(
+      screen.getByText(
+        'A sign-in stays valid for 24 hours, or until you sign out. Signing out everywhere ends ' +
+          'every browser session on this manager, this one included. MCP and API tokens keep ' +
+          'working.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out everywhere' }));
+
+    expect(await screen.findByText('Manager sign-in')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/manager/auth/logout-everywhere',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('stays put and says why when signing out everywhere fails', async () => {
+    stubSignOutEverywhere({ ok: false, status: 500, json: async () => ({ detail: 'Disk full' }) });
+    renderAt('/settings');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out everywhere' }));
+    expect(await screen.findByText('Disk full')).toBeInTheDocument();
+    expect(screen.queryByText('Manager sign-in')).not.toBeInTheDocument();
   });
 });
 

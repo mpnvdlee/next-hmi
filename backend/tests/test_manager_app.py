@@ -57,7 +57,7 @@ def test_setup_then_access(client: TestClient) -> None:
 
     resp = client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     assert resp.status_code == 200
     assert resp.json()["authenticated"] is True
@@ -70,7 +70,7 @@ def test_setup_then_access(client: TestClient) -> None:
 
 def test_second_setup_rejected(client: TestClient) -> None:
     code = manager_auth.setup_code()
-    client.post("/api/manager/auth/setup", json={"password": "secret", "setupCode": code})
+    client.post("/api/manager/auth/setup", json={"password": "secret-pw", "setupCode": code})
     resp = client.post("/api/manager/auth/setup", json={"password": "again", "setupCode": code})
     assert resp.status_code == 409
 
@@ -215,16 +215,16 @@ def _session_set_cookie(response) -> str:
 def test_session_cookie_is_secure_over_https(tls_client: TestClient, route: str) -> None:
     setup = tls_client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     if route == "setup":
         resp = setup
     elif route == "login":
-        resp = tls_client.post("/api/manager/auth/login", json={"password": "secret"})
+        resp = tls_client.post("/api/manager/auth/login", json={"password": "secret-pw"})
     elif route == "change-password":
         resp = tls_client.post(
             "/api/manager/auth/change-password",
-            json={"currentPassword": "secret", "newPassword": "newsecret"},
+            json={"currentPassword": "secret-pw", "newPassword": "newsecret"},
         )
     else:
         resp = tls_client.post("/api/manager/auth/logout")
@@ -239,10 +239,10 @@ def test_session_cookie_lifetime_matches_the_token(client: TestClient) -> None:
     """A cookie outliving its token reads as signed in while every call 401s."""
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     client.post("/api/manager/auth/logout")
-    resp = client.post("/api/manager/auth/login", json={"password": "secret"})
+    resp = client.post("/api/manager/auth/login", json={"password": "secret-pw"})
     assert f"max-age={manager_auth.SESSION_TTL_SECONDS}" in _session_set_cookie(resp)
     assert manager_auth.SESSION_TTL_SECONDS == 24 * 3600
 
@@ -252,7 +252,7 @@ def test_session_cookie_not_secure_over_plain_http(client: TestClient, route: st
     """Plain-HTTP installs must keep working — a Secure cookie is never stored there."""
     setup = client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     resp = setup if route == "setup" else client.post("/api/manager/auth/logout")
     assert "secure" not in _session_set_cookie(resp)
@@ -261,7 +261,7 @@ def test_session_cookie_not_secure_over_plain_http(client: TestClient, route: st
 def test_login_wrong_password(client: TestClient) -> None:
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     client.post("/api/manager/auth/logout")
     bad = client.post("/api/manager/auth/login", json={"password": "nope"})
@@ -271,11 +271,11 @@ def test_login_wrong_password(client: TestClient) -> None:
 def test_change_password_then_login_with_new(client: TestClient) -> None:
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     resp = client.post(
         "/api/manager/auth/change-password",
-        json={"currentPassword": "secret", "newPassword": "newsecret"},
+        json={"currentPassword": "secret-pw", "newPassword": "newsecret"},
     )
     assert resp.status_code == 200
     # Rotating the secret invalidates other sessions, but this response's cookie
@@ -283,7 +283,7 @@ def test_change_password_then_login_with_new(client: TestClient) -> None:
     assert client.get("/api/manager/running").status_code == 200
 
     client.post("/api/manager/auth/logout")
-    assert client.post("/api/manager/auth/login", json={"password": "secret"}).status_code == 422
+    assert client.post("/api/manager/auth/login", json={"password": "secret-pw"}).status_code == 422
     ok = client.post("/api/manager/auth/login", json={"password": "newsecret"})
     assert ok.status_code == 200
 
@@ -291,7 +291,7 @@ def test_change_password_then_login_with_new(client: TestClient) -> None:
 def test_change_password_wrong_current_rejected(client: TestClient) -> None:
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     resp = client.post(
         "/api/manager/auth/change-password",
@@ -300,7 +300,7 @@ def test_change_password_wrong_current_rejected(client: TestClient) -> None:
     assert resp.status_code == 422
     # Old password still works.
     client.post("/api/manager/auth/logout")
-    assert client.post("/api/manager/auth/login", json={"password": "secret"}).status_code == 200
+    assert client.post("/api/manager/auth/login", json={"password": "secret-pw"}).status_code == 200
 
 
 def test_system_diagnostics_gated_without_auth(client: TestClient) -> None:
@@ -311,7 +311,7 @@ def test_system_diagnostics_gated_without_auth(client: TestClient) -> None:
 def test_system_diagnostics_served_when_authed(client: TestClient) -> None:
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
 
     info = client.get("/api/system/info")
@@ -328,7 +328,7 @@ def test_system_restart_not_exposed_on_manager(client: TestClient) -> None:
     would SIGTERM the supervisor and tear down every running project."""
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     # A production SPA catch-all can claim the URL for GET and make Starlette
     # report 405; without that optional mount the absent route reports 404.
@@ -348,7 +348,7 @@ def test_proxy_excludes_internal_reload_hook_even_when_project_is_running(
 
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     monkeypatch.setattr(manager_module.supervisor, "port_for", lambda pid: 65000)
 
@@ -695,7 +695,10 @@ def test_only_the_editor_socket_reaches_the_child_marked_as_editor(
         ws.send_text("hello")
         assert ws.receive_text() == "echo:hello"
 
-    assert upstream_headers == [None, {"x-nexthmi-editor": "1"}]
+    assert upstream_headers == [
+        {"x-forwarded-for": "testclient"},
+        {"x-forwarded-for": "testclient", "x-nexthmi-editor": "1"},
+    ]
 
 
 def test_only_an_editor_http_request_reaches_the_child_marked_as_editor(
@@ -727,6 +730,139 @@ def test_only_an_editor_http_request_reaches_the_child_marked_as_editor(
     assert client.post(f"/editor/ghost/{path}", json={}, headers={"x-nexthmi-editor": "0"}).status_code == 200
 
     assert seen == [None, "1"]
+
+
+def test_every_hop_to_the_child_carries_its_secret_and_no_browser_copy(
+    client: TestClient, monkeypatch
+) -> None:
+    """The child refuses whatever does not carry the secret it was spawned with.
+    The manager adds it on the HTTP and the socket hop alike; a browser's own
+    copy, or a nonce that would make the child sign for it, never gets through."""
+    import httpx
+    import manager as manager_module
+    import websockets
+    from core import instance_secret
+    from services.supervisor import ChildAuth
+
+    # The client the lifespan built is the one every proxied request takes.
+    assert isinstance(manager_module._proxy_client.auth, ChildAuth)
+    assert manager_module._proxy_client.trust_env is False
+
+    seen: list[dict[str, list[str]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(
+            {
+                name: request.headers.get_list(name)
+                for name in (instance_secret.HEADER, instance_secret.NONCE_HEADER)
+            }
+        )
+        return httpx.Response(200, stream=httpx.ByteStream(b"{}"))
+
+    sockets: list[dict] = []
+
+    def fake_connect(*_args, **kwargs):
+        sockets.append(kwargs)
+        return _FakeUpstreamSocket()
+
+    monkeypatch.setattr(manager_module.supervisor, "port_for", lambda pid: 65000)
+    monkeypatch.setattr(
+        manager_module.supervisor,
+        "child_headers",
+        lambda port: {instance_secret.HEADER: "real"} if port == 65000 else {},
+    )
+    monkeypatch.setattr(
+        manager_module,
+        "_proxy_client",
+        httpx.AsyncClient(transport=httpx.MockTransport(handler), auth=ChildAuth()),
+    )
+    monkeypatch.setattr(websockets, "connect", fake_connect)
+    forged = {instance_secret.HEADER: "forged", instance_secret.NONCE_HEADER: "sign-me"}
+
+    assert client.get("/runtime/ghost/api/config/config", headers=forged).status_code == 200
+    with client.websocket_connect("/runtime/ghost/ws", headers=forged) as ws:
+        ws.send_text("hello")
+        assert ws.receive_text() == "echo:hello"
+
+    assert seen == [{instance_secret.HEADER: ["real"], instance_secret.NONCE_HEADER: []}]
+    assert sockets[0]["additional_headers"] == {
+        instance_secret.HEADER: "real",
+        "x-forwarded-for": "testclient",
+    }
+    assert sockets[0]["proxy"] is None
+
+
+@pytest.mark.parametrize(
+    ("requested", "forwarded"),
+    [
+        ("/editor/ghost/api/config/pages/home", (b"/api/config/pages/home", b"")),
+        # A decoded ``?`` used to end the path there: deleting the key
+        # ``Start?`` deleted ``Start``.
+        (
+            "/editor/ghost/api/config/translations/Start%3F?dict=Default",
+            (b"/api/config/translations/Start%3F", b"dict=Default"),
+        ),
+        ("/editor/ghost/api/config/translations/a%23b", (b"/api/config/translations/a%23b", b"")),
+        # Nothing collapses an empty segment, so it is not refused.
+        ("/editor/ghost/config/", (b"/config/", b"")),
+    ],
+)
+def test_the_proxy_forwards_exactly_the_path_it_checked(
+    client: TestClient, monkeypatch, requested: str, forwarded: tuple[bytes, bytes]
+) -> None:
+    import httpx
+    import manager as manager_module
+
+    seen: list[tuple[bytes, bytes]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path, _, query = request.url.raw_path.partition(b"?")
+        seen.append((path, query))
+        return httpx.Response(200, stream=httpx.ByteStream(b"{}"))
+
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "manager-secret", "setupCode": manager_auth.setup_code()},
+    )
+    monkeypatch.setattr(manager_module.supervisor, "port_for", lambda pid: 65000)
+    monkeypatch.setattr(
+        manager_module, "_proxy_client", httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+
+    assert client.delete(requested).status_code == 200
+    assert seen == [forwarded]
+
+
+@pytest.mark.parametrize("prefix", ["editor", "runtime"])
+@pytest.mark.parametrize(
+    "sub_path",
+    ["api/%2e/internal/reload", "api/x/%2E%2E/internal/reload", "api/x/.%2e/internal/reload"],
+)
+def test_an_encoded_dot_segment_never_reaches_the_child_even_with_a_session(
+    client: TestClient, monkeypatch, prefix: str, sub_path: str
+) -> None:
+    """``httpx`` sends these as they are; the literal forms are only
+    expressible over a raw socket (test_manager_gate_raw_http.py)."""
+    import httpx
+    import manager as manager_module
+
+    seen: list[bytes] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.raw_path)
+        return httpx.Response(200, stream=httpx.ByteStream(b"{}"))
+
+    client.post(
+        "/api/manager/auth/setup",
+        json={"password": "manager-secret", "setupCode": manager_auth.setup_code()},
+    )
+    monkeypatch.setattr(manager_module.supervisor, "port_for", lambda pid: 65000)
+    monkeypatch.setattr(
+        manager_module, "_proxy_client", httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+
+    assert client.post(f"/{prefix}/ghost/{sub_path}", json={}).status_code == 400
+    assert seen == []
 
 
 def test_unauthenticated_fetch_gets_a_typed_401(client: TestClient) -> None:
@@ -832,7 +968,7 @@ def test_root_path_mount_keeps_the_public_surface_public(
 def test_runtime_editor_aliases_503_when_authed_unknown_project(client: TestClient) -> None:
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     assert client.get("/runtime/ghost/api/health").status_code == 503
     assert client.get("/editor/ghost/api/health").status_code == 503
@@ -849,7 +985,7 @@ def test_document_navigation_to_unopenable_project_is_sent_back_to_projects(
     explains the outage in place — see the test below."""
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
 
     resp = client.get(
@@ -896,7 +1032,7 @@ def test_document_navigation_to_unopenable_project_is_served_the_project_shell(
         with TestClient(manager.app) as tc:
             tc.post(
                 "/api/manager/auth/setup",
-                json={"password": "secret", "setupCode": manager_auth.setup_code()},
+                json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
             )
             resp = tc.get(
                 f"/{prefix}/ghost/", headers={"accept": "text/html"}, follow_redirects=False
@@ -975,7 +1111,7 @@ def test_non_document_requests_still_get_the_503(client: TestClient) -> None:
     getting a machine-readable failure so callers can retry or report."""
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     resp = client.get("/runtime/ghost/api/health", follow_redirects=False)
     assert resp.status_code == 503
@@ -1058,7 +1194,7 @@ def test_legacy_p_prefix_routing_removed(client: TestClient) -> None:
     assert client.get("/p/ghost/api/health").status_code == 404
     client.post(
         "/api/manager/auth/setup",
-        json={"password": "secret", "setupCode": manager_auth.setup_code()},
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
     )
     assert client.get("/p/ghost/api/health").status_code == 404
     assert client.get("/p/ghost/").status_code == 404
@@ -1163,7 +1299,7 @@ def test_root_redirects_to_running_default(monkeypatch, tmp_path: Path) -> None:
         with TestClient(manager.app) as tc:
             tc.post(
                 "/api/manager/auth/setup",
-                json={"password": "secret", "setupCode": manager_auth.setup_code()},
+                json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
             )
             resp = tc.get("/", follow_redirects=False)
             assert resp.status_code in (302, 307)

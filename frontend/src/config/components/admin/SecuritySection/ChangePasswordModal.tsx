@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import Button from '@config/components/ui/Button';
 import ModalShell from '@config/components/ui/ModalShell';
 import { describeError } from '@config/store/projectsStore';
+import PasswordLengthRule from './PasswordLengthRule';
+import { meetsAdminPasswordRule } from './passwordRule';
 import './style.css';
 
 interface Props {
@@ -17,7 +19,10 @@ export default function ChangePasswordModal({ onChangePassword, onClose }: Props
   const [error, setError] = useState<string | null>(null);
   const currentRef = useRef<HTMLInputElement>(null);
 
+  const ruleMet = meetsAdminPasswordRule(next);
+
   async function handleSubmit() {
+    if (!ruleMet) return;
     setError(null);
     if (next !== confirm) {
       setError('New passwords do not match');
@@ -38,7 +43,7 @@ export default function ChangePasswordModal({ onChangePassword, onClose }: Props
     if (event.key === 'Enter') void handleSubmit();
   }
 
-  const canSubmit = !busy && !!current && !!next && !!confirm;
+  const canSubmit = !busy && !!current && ruleMet && !!confirm;
 
   return (
     <ModalShell
@@ -66,10 +71,12 @@ export default function ChangePasswordModal({ onChangePassword, onClose }: Props
             type="password"
             className="cfg-prop-input cfg-prop-input--tall"
             autoComplete="new-password"
+            aria-describedby="cfg-change-password-rule"
             value={next}
             onChange={(e) => setNext(e.target.value)}
             onKeyDown={handleKeyDown}
           />
+          <PasswordLengthRule id="cfg-change-password-rule" password={next} />
         </label>
         <label className="project-form__field">
           <span className="project-form__label">Confirm new password</span>

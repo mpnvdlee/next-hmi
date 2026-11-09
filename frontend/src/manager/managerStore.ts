@@ -39,6 +39,8 @@ interface ManagerStore {
   setup(password: string, setupCode: string): Promise<void>;
   login(password: string): Promise<void>;
   logout(): Promise<void>;
+  /** Ends every browser session on this manager, this one included. */
+  logoutEverywhere(): Promise<void>;
   changePassword(currentPassword: string, newPassword: string): Promise<void>;
 
   refreshRunning(): Promise<void>;
@@ -59,6 +61,14 @@ interface ManagerStore {
   loadTelemetry(): Promise<void>;
   applyTelemetry(enabled: boolean): Promise<void>;
   dismissContactPrompt(): Promise<void>;
+}
+
+function signedOut(set: (partial: Partial<ManagerStore>) => void): void {
+  set({ auth: 'needs-login', instances: {} });
+  // Stores contributed through the edition seam hold device state of their
+  // own that this one cannot name; they clear themselves here so signing out
+  // is exhaustive rather than exhaustive-for-core.
+  for (const reset of enterpriseSessionResets) reset();
 }
 
 export const useManagerStore = create<ManagerStore>((set, get) => ({
@@ -86,23 +96,21 @@ export const useManagerStore = create<ManagerStore>((set, get) => ({
     set({ auth: 'authed', authError: null });
   },
 
+  // A refused sign-in is the form's to show: kept here too, a lockout's
+  // "try again in 60s" would outlive its own countdown.
   login: async (password: string) => {
-    try {
-      await apiJson('/api/manager/auth/login', { method: 'POST', body: { password } });
-      set({ auth: 'authed', authError: null });
-    } catch (e) {
-      set({ authError: describeError(e) });
-      throw e;
-    }
+    await apiJson('/api/manager/auth/login', { method: 'POST', body: { password } });
+    set({ auth: 'authed', authError: null });
   },
 
   logout: async () => {
     await apiJson('/api/manager/auth/logout', { method: 'POST' });
-    set({ auth: 'needs-login', instances: {} });
-    // Stores contributed through the edition seam hold device state of their
-    // own that this one cannot name; they clear themselves here so signing out
-    // is exhaustive rather than exhaustive-for-core.
-    for (const reset of enterpriseSessionResets) reset();
+    signedOut(set);
+  },
+
+  logoutEverywhere: async () => {
+    await apiJson('/api/manager/auth/logout-everywhere', { method: 'POST' });
+    signedOut(set);
   },
 
   changePassword: async (currentPassword: string, newPassword: string) => {

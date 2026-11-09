@@ -72,7 +72,9 @@ The manager is the device's front door, at the address without
 - see whether a device-admin password has been set;
 - try the device-admin password: on the sign-in page, when pairing an MCP
   client or another NEXT HMI device, or over the API. Five wrong passwords
-  lock all of them for a minute;
+  from one address lock that address out of all of them for a minute, while
+  other devices can still sign in; a hundred wrong passwords within a minute
+  from all addresses together lock everyone out for a minute;
 - see that the device exists: it announces itself on the local network so
   other NEXT HMI devices can find it for a project transfer.
 
@@ -92,6 +94,18 @@ The manager is the device's front door, at the address without
 | **MCP token** | The [MCP endpoint](mcp.md) on every project, to read, or to read and write (writes only where **MCP write enabled** is ticked). Created under **Settings › Tokens** on the dashboard. |
 | **Peer token** | Sending and fetching projects between two NEXT HMI devices, after one pairing with the other device's device-admin password. Expires after 90 days without use; listed and revoked under **Settings › Tokens**. See [Managing projects](install.md#managing-projects). |
 | **A project user's password** | Signing in on that project's screens. It changes what the screens show and who actions are recorded as. It never opens the editor or the API. See [Users, groups & permissions](users.md). |
+
+A device-admin password must be at least 8 characters when it is set or
+changed; one set before this rule keeps working until it is changed.
+
+A sign-in on the dashboard lasts 24 hours, or until that browser signs out.
+The device keeps track of every sign-in, so signing out ends it on the device
+too, and a copy of the browser's sign-in cookie stops working at the same
+moment. **Settings › Security › Sign out everywhere** ends every browser's
+sign-in, your own included, and turning HTTPS on ends them all: a sign-in made
+over plain HTTP has crossed the network readable. MCP, API and peer tokens are
+not sign-ins and keep working through both. Changing the device-admin password
+ends every sign-in but your own, and revokes those tokens too.
 
 ## What protects the open part
 
@@ -113,14 +127,19 @@ The manager is the device's front door, at the address without
   only the device itself, never a name. On a new install it cannot set the
   device-admin password either: that takes the setup code, which only the
   device's console and log show.
+- **Other programs on the device go through the front door too.** Each
+  running project listens on the device's own internal address only, and
+  answers only requests that carry a secret the device gave it when it
+  started. Another program or user account on the same machine that finds it
+  gets nothing, and cannot take its place to receive the screens' traffic.
 - **Files in the project folders run no script.** An HTML or SVG file in
   `assets` or `custom-widgets`, opened at its own address, shows as a plain
   document, so a file someone put there cannot act with your dashboard
   sign-in. Custom widgets and external libraries are code the screens run on
   purpose and are not limited this way.
 - **Sign-ins are throttled**, per username and per address on the screens
-  (see [Users](users.md#add-users-and-groups)), and for the device-admin
-  password and the setup code everywhere.
+  (see [Users](users.md#add-users-and-groups)), and per address for the
+  device-admin password and the setup code everywhere.
 - **The open part takes at most 1 MB per request.** The device refuses a
   larger request before reading it, so no amount of data sent its way can
   exhaust the device's memory and take the screens down. An HTTP source whose

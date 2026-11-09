@@ -126,5 +126,6 @@
 .cfg-admin-https__fingerprint {
   font-family: var(--cfg-font-mono);
   font-size: 0.95em;
-  word-break: break-all;
+  /* Eight groups to a line, the two lines the peer-pairing dialog shows. */
+  max-width: 40ch;
 }

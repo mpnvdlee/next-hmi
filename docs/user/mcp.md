@@ -162,7 +162,7 @@ They are ordinary instructions, not privileged calls — the agent still works t
 | *MCP writes are disabled for project '…'* | The token is fine, the project's **MCP write enabled** tick is not. Step 1 above. |
 | `401` with a token made in version 1.0 or 1.1 | Those tokens named one project. Tokens now cover every project, so an old one is refused rather than widened. Create a new one under **Settings › Tokens**. |
 | `422` *Extra inputs are not permitted* on `projectId` while pairing | Pairing no longer takes a project: a token covers every project. Drop `projectId` from the body. |
-| *Too many failed attempts. Try again in Ns.* | Wrong device-admin password on `/pair`; the same lockout that guards the dashboard login. Wait it out. |
+| `429` · *Too many failed attempts from &lt;address&gt;. Try again in Ns.* | Five wrong device-admin passwords from this machine's address, on `/pair` or wherever else the password is asked; the same lockout that guards the dashboard login. Wait it out; other machines are not affected. |
 | `404` · *Session not found* after a pause | A session idle for 30 minutes is closed. Most clients open a new one on their own; otherwise reconnect the client. |
 | `503` · *Too many open sessions* | 1 000 sessions are open at once, usually a client that starts a new one for every call and never ends it. Idle ones close after 30 minutes; restart that client, or wait. |
 | `404` on `GET`, `405` on `POST`, or a bare `307` | The URL reached the router but not the transport — add the trailing slash (`/mcp/`). A proxy in front can rewrite the path too. |

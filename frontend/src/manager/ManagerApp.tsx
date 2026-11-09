@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useManagerStore, type InstanceSnapshot } from './managerStore';
 import { useProjectsStore, describeError, type ProjectEntry } from '@config/store/projectsStore';
 import { safeSignInTarget } from '@shared/store/sessionStore';
+import { isApiError } from '@shared/utils/api';
 import { getVersion } from '@shared/utils/runtimeBase';
 import { useDocumentTitle } from '@shared/hooks/useDocumentTitle';
 import AppTopBarNav from '@shared/components/AppTopBarNav';
@@ -33,6 +34,8 @@ import LogsSection from '@config/components/admin/LogsSection';
 import LogViewerModal from '@config/components/admin/LogViewerModal';
 import ProjectThumbnail from './ProjectThumbnail';
 import SecuritySection from '@config/components/admin/SecuritySection';
+import PasswordLengthRule from '@config/components/admin/SecuritySection/PasswordLengthRule';
+import { meetsAdminPasswordRule } from '@config/components/admin/SecuritySection/passwordRule';
 import TokensSection from '@config/components/admin/TokensSection';
 import HttpsSection from '@config/components/admin/HttpsSection';
 import EmbeddingSection from '@config/components/admin/EmbeddingSection';
@@ -176,6 +179,26 @@ function RootRedirect() {
 
 // ── auth gate ──────────────────────────────────────────────────────────────────
 
+/** Seconds left on a lockout the server reported, ticking down to `null`. */
+function useCountdown(): [number | null, (seconds: number) => void] {
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [left, setLeft] = useState<number | null>(null);
+  useEffect(() => {
+    if (deadline === null) return;
+    const id = setInterval(() => {
+      const seconds = Math.ceil((deadline - Date.now()) / 1000);
+      setLeft(seconds > 0 ? seconds : null);
+      if (seconds <= 0) setDeadline(null);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [deadline]);
+  const start = useCallback((seconds: number) => {
+    setLeft(seconds);
+    setDeadline(Date.now() + seconds * 1000);
+  }, []);
+  return [left, start];
+}
+
 function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
   const setup = useManagerStore((s) => s.setup);
   const login = useManagerStore((s) => s.login);
@@ -185,11 +208,15 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [lockedFor, startLockout] = useCountdown();
+  // Absent when every address is locked, not just this one.
+  const [lockedAddress, setLockedAddress] = useState<string | null>(null);
 
   const isSetup = mode === 'needs-setup';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (lockedFor !== null) return;
     setLocalError(null);
     if (isSetup && !setupCode.trim()) {
       setLocalError(
@@ -206,7 +233,12 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
       if (isSetup) await setup(password, setupCode);
       else await login(password);
     } catch (err) {
-      setLocalError(describeError(err));
+      if (isApiError(err) && err.status === 429 && err.retryAfter !== null) {
+        setLockedAddress(err.clientAddress);
+        startLockout(err.retryAfter);
+      } else {
+        setLocalError(describeError(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -253,8 +285,10 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
               className="cfg-prop-input cfg-prop-input--tall"
               value={password}
               autoFocus={!isSetup}
+              aria-describedby={isSetup ? 'mgr-setup-password-rule' : undefined}
               onChange={(e) => setPassword(e.target.value)}
             />
+            {isSetup && <PasswordLengthRule id="mgr-setup-password-rule" password={password} />}
           </label>
           {isSetup && (
             <label className="project-form__field">
@@ -267,15 +301,47 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
               />
             </label>
           )}
-          {(localError || authError) && (
-            <p className="project-form__status project-form__status--error">
-              {localError ?? authError}
-            </p>
+          {lockedFor !== null ? (
+            <div role="alert" className="cfg-error-banner mgr-auth-card__lockout">
+              <strong>
+                {lockedAddress
+                  ? 'Too many failed attempts from this address'
+                  : 'Too many failed attempts'}
+              </strong>
+              {lockedAddress ? (
+                <span>
+                  Sign-in from <code>{lockedAddress}</code> is paused for {lockedFor} seconds. Other
+                  devices can still sign in.
+                </span>
+              ) : (
+                <span>Sign-in on this device is paused for {lockedFor} seconds.</span>
+              )}
+            </div>
+          ) : (
+            (localError || authError) && (
+              <p className="project-form__status project-form__status--error">
+                {localError ?? authError}
+              </p>
+            )
           )}
         </div>
         <div className="name-modal__actions">
-          <Button variant="primary" type="submit" fullWidth disabled={busy || !password}>
-            {isSetup ? 'Set password & continue' : 'Sign in'}
+          <Button
+            variant="primary"
+            type="submit"
+            fullWidth
+            disabled={
+              busy ||
+              lockedFor !== null ||
+              !password ||
+              (isSetup && !meetsAdminPasswordRule(password))
+            }
+          >
+            {lockedFor !== null
+              ? `Try again in ${lockedFor} s`
+              : isSetup
+                ? 'Set password & continue'
+                : 'Sign in'}
           </Button>
         </div>
       </form>
@@ -740,6 +806,7 @@ function SettingsPage() {
   const runtimeHome = useProjectsStore((s) => s.runtimeHome);
   const loadRuntimeHome = useProjectsStore((s) => s.loadRuntimeHome);
   const changePassword = useManagerStore((s) => s.changePassword);
+  const logoutEverywhere = useManagerStore((s) => s.logoutEverywhere);
   const tls = useManagerStore((s) => s.tls);
   const loadTls = useManagerStore((s) => s.loadTls);
   const applyTls = useManagerStore((s) => s.applyTls);
@@ -776,7 +843,7 @@ function SettingsPage() {
         <SystemInfoSection info={systemInfo} />
         <RuntimeHomeSection status={runtimeHome ? { path: runtimeHome } : null} />
         <LogsSection onOpen={() => setLogsOpen(true)} />
-        <SecuritySection onChangePassword={changePassword} />
+        <SecuritySection onChangePassword={changePassword} onSignOutEverywhere={logoutEverywhere} />
         <TokensSection />
         <HttpsSection
           status={tls}

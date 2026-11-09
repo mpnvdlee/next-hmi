@@ -140,7 +140,7 @@ Config-domain stores (`frontend/src/config/store/`):
 Manager store:
 
 - `manager/managerStore.ts`
-  - device-admin auth (`auth/status`, `setup`, `login`, `logout`) and the running-instance list (`GET /api/manager/running`, per-project `start`/`stop`). Drives the dashboard; no project pipeline state.
+  - device-admin auth (`auth/status`, `setup`, `login`, `logout`, `logout-everywhere`) and the running-instance list (`GET /api/manager/running`, per-project `start`/`stop`). Drives the dashboard; no project pipeline state.
 - `config/store/projectsStore.ts`
   - the project list (`GET /api/projects`), create/import/export/locate/delete, and the manager peer-transfer flow: `loadPeers` (mDNS + manual), `probePeer`/`pairPeer`/`listPeerProjects` (session-proxied `POST /api/manager/peer-probe`, `/peer-pair` and `/peer-projects`), and `beginPeerTransfer`/`beginPeerPull` plus their `get*`/`cancel*` counterparts (`/api/manager/transfers` and `/api/manager/pulls`). Used for generic project CRUD from both the manager dashboard and the config app; the peer-transfer slice specifically is manager-only — `PeerTransferModal` (`config/components/projects/ProjectsView/PeerTransferModal.tsx`) is mounted from `manager/ManagerApp.tsx` and drives both the push and pull direction off this store. The bearer token from pairing lives only in the modal's component state, never in the store or web storage; a device the operator chose to remember has its token kept by the manager instead, and the modal passes only the peer's `runtimeId`. A refusal of that token carries `PEER_PAIRING_REFUSED` (on the error, or on the transfer status), and the modal's **Pair again** calls `forgetPeerPairing`.
 - `themeViewStore.ts` (config)

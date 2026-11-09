@@ -52,7 +52,7 @@ Outside any project, the runtime keeps its own state:
 ```text
 <runtime_home>/
   projects.json           ← manifest (running[], projects[], peers[], defaultProjectId, defaultProjectsRoot)
-  .manager-auth.json      ← device-admin password digest + session secret (PBKDF2 + HMAC)
+  .manager-auth.json      ← device-admin password digest (PBKDF2), token secret, live session digests
   licenses/               ← signed Ed25519 license tokens, one file per license (<id>.key)
   .logs/                  ← rotating application logs
   .widget-build/          ← compiled custom-widget JS (shared across all instances)

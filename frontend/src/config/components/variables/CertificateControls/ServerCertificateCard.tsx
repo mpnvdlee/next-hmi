@@ -5,7 +5,7 @@ import { apiJson, errorMessage } from '@shared/utils/api';
 import { formatFingerprint } from '@shared/utils/formatFingerprint';
 import type { ServerCertificateInfo, ServerCertificateStatus } from '@shared/types/datasource';
 
-/** Trust on first use for a secured connection's server certificate. Shown
+/** Explicit trust for a secured connection's server certificate. Shown
  *  while the endpoint presents one that is not pinned; trusting pins exactly
  *  the fingerprint on screen, and the backend restarts the connection on it.
  *  The one place the panel says why such a connection holds: "Not now" folds
