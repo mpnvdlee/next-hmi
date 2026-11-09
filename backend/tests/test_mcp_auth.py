@@ -230,6 +230,31 @@ def test_mcp_answers_a_client_on_the_lan(manager_client: TestClient):
     _initialize(manager_client, Authorization=f"Bearer {token}", Host="192.168.1.5:8000")
 
 
+@pytest.fixture
+def _two_session_cap(monkeypatch):
+    from mcp_server import server as mcp_server
+
+    monkeypatch.setattr(mcp_server, "MCP_MAX_SESSIONS", 2)
+
+
+def test_mcp_caps_open_sessions(_two_session_cap, manager_client: TestClient):
+    """CVE-2026-59951: stateful sessions were never reclaimed or capped. Past
+    the cap a new session is refused while the open ones keep working."""
+    from mcp_server import server as mcp_server
+
+    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    _initialize(manager_client)
+    _initialize(manager_client)
+    refused = manager_client.post(
+        "/mcp",
+        json=_INITIALIZE,
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert refused.status_code == 503
+    session_manager = mcp_server.mcp_app.session_manager
+    assert session_manager.session_idle_timeout == mcp_server.MCP_SESSION_IDLE_TIMEOUT_S
+
+
 def _drop_session_cookie(client: TestClient) -> None:
     """setup/login/change-password all leave a session cookie on the client,
     which would otherwise authenticate every later request on its own and

@@ -19,10 +19,10 @@ import pytest
 from mcp_server.server import mcp_app
 from packaging.specifiers import SpecifierSet
 
-# Mirrors backend/requirements.txt's ``mcp~=2.0.0`` pin. If this fails after
+# Mirrors backend/requirements.txt's ``mcp>=2.2.0,<3`` pin. If this fails after
 # a deliberate dependency bump, update both together and re-verify the public
 # extension point below still exists on the new version.
-_PINNED_MCP_SPECIFIER = "~=2.0.0"
+_PINNED_MCP_SPECIFIER = ">=2.2.0,<3"
 
 
 def test_installed_mcp_version_matches_the_pin():

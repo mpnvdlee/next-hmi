@@ -57,6 +57,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from core import manager_auth, mcp_tokens
+from mcp.server.mcpserver.exceptions import ToolError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -72,7 +73,7 @@ class McpIdentity:
     token_id: str | None = None
 
 
-class McpAuthError(Exception):
+class McpAuthError(ToolError):
     """Raised when a tool call is not authorized for its ``project``/access."""
 
     code = "mcp_unauthorized"
@@ -120,6 +121,11 @@ class McpAuthMiddleware:
             await self._app(scope, receive, send)
         finally:
             _identity.reset(token)
+
+
+def current_identity() -> McpIdentity | None:
+    """The identity ``McpAuthMiddleware`` authenticated for this request."""
+    return _identity.get()
 
 
 def require_mcp_access(*, need_write: bool) -> None:
