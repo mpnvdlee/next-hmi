@@ -1413,10 +1413,12 @@ _ELEMENT_FOLDER = re.compile(r"\[(\d+)\]$")
 
 
 def _index_struct_elements(paths: dict[str, dict]) -> dict[str, dict[int, str]]:
-    """Array path -> element index -> element folder, for every struct array in
-    one datasource's registry. An element is the folder right below the array
-    whose name ends in `[N]` — `[2]`, or `Line[2]` from a static server — the
-    reading the runtime's `structElementPath` gives it."""
+    """Array path -> element position -> element folder, for every struct array
+    in one datasource's registry. An element is the folder right below the array
+    whose name ends in `[N]` — `[2]`, or `Line[2]` from a static server — and its
+    position is its place in `N` order, counting from 0 as the array value does
+    whatever the PLC counts from: the reading the runtime's `structElementPath`
+    gives it."""
     arrays = {
         key
         for key, var_type in paths.items()
@@ -1436,7 +1438,7 @@ def _index_struct_elements(paths: dict[str, dict]) -> dict[str, dict[int, str]]:
             index.setdefault(parent, {})[int(match.group(1))] = key
     unlisted = arrays - index.keys()
     if not unlisted:
-        return index
+        return _by_position(index)
     # An element folder that only shows through its members' keys.
     for key in paths:
         if "]/" not in key:
@@ -1447,7 +1449,14 @@ def _index_struct_elements(paths: dict[str, dict]) -> dict[str, dict[int, str]]:
             match = _ELEMENT_FOLDER.search(parts[depth]) if parent in unlisted else None
             if match:
                 index.setdefault(parent, {})[int(match.group(1))] = f"{parent}/{parts[depth]}"
-    return index
+    return _by_position(index)
+
+
+def _by_position(index: dict[str, dict[int, str]]) -> dict[str, dict[int, str]]:
+    return {
+        array: {i: path for i, (_, path) in enumerate(sorted(elements.items()))}
+        for array, elements in index.items()
+    }
 
 
 class _StructElements:
@@ -1482,15 +1491,15 @@ def _struct_elements_for(registry: _Registry) -> _StructElements:
 
 
 def _element_path(ctx: ValidationContext, ds_name: str, array_path: str, index: Any) -> str | None:
-    """The element folder a struct-array binding is judged on: the bound
-    element when an index is bound and exists, otherwise the lowest-index
-    element — the rule `checkBindingSpec` applies at runtime."""
+    """The element folder a struct-array binding is judged on: the element at
+    the bound position when an index is bound and exists, otherwise the first
+    — the rule `checkBindingSpec` applies at runtime."""
     elements = ctx.struct_elements.of(ds_name, array_path)
     if not elements:
         return None
     if isinstance(index, int) and not isinstance(index, bool) and index in elements:
         return elements[index]
-    return elements[min(elements)]
+    return elements[0]
 
 
 def _writable(ctx: ValidationContext, ds_name: str, key: str) -> bool:
