@@ -133,6 +133,7 @@ export const OPERATORS = [
   { value: '!==', label: '≠' },
   { value: '>=', label: '≥' },
   { value: '>', label: '>' },
+  { value: 'contains', label: '∋' },
 ] as const;
 
 export type Operator = (typeof OPERATORS)[number]['value'];

@@ -174,7 +174,7 @@ export interface IfSource {
 export interface CompareSource {
   $compare: {
     left: unknown; // value-source-capable
-    operator: '>' | '<' | '>=' | '<=' | '===' | '!=='; // comparison operator
+    operator: '>' | '<' | '>=' | '<=' | '===' | '!==' | 'contains'; // comparison operator
     right: unknown; // value-source-capable
   };
 }
