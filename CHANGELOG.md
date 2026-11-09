@@ -33,7 +33,30 @@ heading.
   counts the same way: on an array that counts from 1, index `1` is now
   `A[2]`. The warnings pill judges a binding on the same element.
 
-## [1.2.0] - 2026-11-08
+- **Pages open fast on a large OPC-UA server.** Against a server with tens of
+  thousands of variables, a page opened while the background subscription was
+  still being built waited for all of it, every variable on a page cost its
+  own round trip, and a slow page open held up the next navigation, so
+  variables stayed on the fast subscription long after the operator had left
+  the page. The background subscription is now built in batches a page can
+  cut in on, a page's variables are promoted in one request, a navigation no
+  longer waits for the one before it, and one OPC-UA request may take 30 s
+  before it fails (`request_timeout_s`) instead of asyncua's 4 s, which on a
+  busy server fell back to one request per variable. A browser now also
+  receives only the values its own pages bind, instead of every change on
+  the server: no value snapshot on connect, and a page switch delivers the
+  page's values in one message. A struct array bound at a fixed index
+  (`Motors[3]`) puts only that element on the fast subscription, reads and
+  ships only that element, and a change inside a struct nested in an array
+  element patches the array value in place instead of rebuilding it. A
+  browser receives the shape metadata of its own pages' variables with each
+  page instead of the whole datasource on connect (13 MB for 100k
+  variables). The fast subscription samples at 50 ms by default (was 20),
+  and numeric variables carry an absolute deadband (**Deadband**, default
+  0.001) so a value jittering below it is never published; **Request
+  timeout** sits beside it in the datasource panel. The Admin page's
+  Connected Runtimes table shows per browser how many keys its context holds
+  and how much it has been sent.
 
 Opens the HMI to the systems around it and shuts out the ones that should not
 reach it: API v1 for a MES or badge reader, tokens under Settings › Tokens, bit

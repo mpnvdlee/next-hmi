@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { useVariableStore } from '../store/variableStore';
+import { analyzePropertyValue } from '../utils/analyzePropertyValue';
+import { extractLiveKeys } from '../utils/extractVarKeys';
 
 /** No listener registered, so no re-render — the snapshot still reads current. */
 const noSubscribe = (): (() => void) => () => {};
@@ -37,6 +39,24 @@ export function useLiveScalars(keys: readonly string[]): string {
   // still be woken (and re-serialised) on every tick of the variable store.
   const subscribe = keys.length ? useVariableStore.subscribe : noSubscribe;
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+const NO_META: Record<string, unknown> = {};
+
+/**
+ * The keys `useLiveScalars` should watch for `value`: its `$var` keys, plus
+ * the element key of every struct array bound at a literal index. Only a
+ * value with such an index subscribes to the metadata (the element's name
+ * comes from it); every other widget registers no listener for it.
+ */
+export function useLiveKeys(value: unknown): readonly string[] {
+  const indexed = analyzePropertyValue(value).indexedVarRefs.length > 0;
+  const varMeta = useSyncExternalStore(
+    indexed ? useVariableStore.subscribe : noSubscribe,
+    () => (indexed ? useVariableStore.getState().varMeta : NO_META),
+    () => NO_META,
+  );
+  return extractLiveKeys(value, varMeta);
 }
 
 function sigToken(value: unknown): unknown {

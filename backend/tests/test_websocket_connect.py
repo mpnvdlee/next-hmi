@@ -43,15 +43,11 @@ def test_connect_sends_full_replay_sequence_and_registers_client() -> None:
     assert client_id in manager._client_connected_at
 
     assert ws.messages[0] == {"type": "var_snapshot", "values": {}, "bootId": _BOOT_ID}
-    assert ws.messages[1] == {
-        "type": "var_metadata",
-        "meta": {"DS:A": {"kind": "scalar", "base": "int", "array": False}},
-    }
-    assert ws.messages[2] == {"type": "var_update", "values": {"DS:A": 1, "DS:B": 2}}
+    # No metadata or value snapshot: both follow the client's set_context.
     # opcua_status replay follows the pool snapshot, in the pool's own order.
-    assert ws.messages[3] == {"type": "opcua_status", "datasource": "DS1", "connected": True}
-    assert ws.messages[4] == {"type": "opcua_status", "datasource": "DS2", "connected": False}
-    assert len(ws.messages) == 5
+    assert ws.messages[1] == {"type": "opcua_status", "datasource": "DS1", "connected": True}
+    assert ws.messages[2] == {"type": "opcua_status", "datasource": "DS2", "connected": False}
+    assert len(ws.messages) == 3
 
 
 def test_connect_with_no_datasource_manager_or_pool_sends_minimal_snapshot() -> None:
@@ -62,13 +58,12 @@ def test_connect_with_no_datasource_manager_or_pool_sends_minimal_snapshot() -> 
 
     assert ws.accepted is True
     assert client_id in manager._connections
-    assert ws.messages == [
-        {"type": "var_snapshot", "values": {}, "bootId": _BOOT_ID},
-        {"type": "var_metadata", "meta": {}},
-    ]
+    assert ws.messages == [{"type": "var_snapshot", "values": {}, "bootId": _BOOT_ID}]
 
 
-def test_connect_chunks_large_snapshot_into_multiple_var_update_messages() -> None:
+def test_connect_sends_no_values_however_large_the_cache() -> None:
+    """A client holds only what its pages bind, so a 100k-variable cache must
+    not be streamed to every socket that opens."""
     ws = FakeWebSocket()
     manager = WebSocketManager()
     big_snapshot = {f"DS:V{i}": i for i in range(1200)}
@@ -76,17 +71,12 @@ def test_connect_chunks_large_snapshot_into_multiple_var_update_messages() -> No
 
     asyncio.run(manager.connect(ws))
 
-    chunk_messages = [m for m in ws.messages if m["type"] == "var_update"]
-    assert len(chunk_messages) == 3  # 500 + 500 + 200
-    merged: dict = {}
-    for m in chunk_messages:
-        merged.update(m["values"])
-    assert merged == big_snapshot
+    assert [m for m in ws.messages if m["type"] == "var_update"] == []
 
 
 def test_connect_failure_mid_replay_disconnects_client_and_reraises() -> None:
-    # Fail on the 3rd send (the var_update chunk), after var_snapshot + var_metadata.
-    ws = FakeWebSocket(fail_after=2)
+    # Fail on the very first send (var_snapshot).
+    ws = FakeWebSocket(fail_after=0)
     manager = WebSocketManager()
     dm = FakeDatasourceManager(snapshot_values={"DS:A": 1})
     manager.set_datasource_manager(dm)
@@ -108,6 +98,63 @@ def test_connect_failure_mid_replay_disconnects_client_and_reraises() -> None:
     assert len(dm.cleared_clients) == 1
 
 
+# -- _broadcast_values() ---------------------------------------------------------
+
+
+def test_broadcast_values_sends_each_client_only_its_context_keys() -> None:
+    manager = WebSocketManager()
+    page_a, page_b, idle = FakeWebSocket(), FakeWebSocket(), FakeWebSocket()
+    manager._connections = {"a": page_a, "b": page_b, "idle": idle}  # type: ignore[assignment]
+    manager._client_keys = {"a": {"DS:A", "DS:Shared"}, "b": {"DS:B"}}
+
+    asyncio.run(manager._broadcast_values({"DS:A": 1, "DS:B": 2, "DS:C": 3}))
+
+    assert page_a.messages == [{"type": "var_update", "values": {"DS:A": 1}}]
+    assert page_b.messages == [{"type": "var_update", "values": {"DS:B": 2}}]
+    assert idle.messages == []
+
+
+def test_delivery_keys_add_recipe_parameters_and_whole_array_elements() -> None:
+    """What a client receives is decided once per set_context: its promoted
+    keys, every recipe parameter, and the elements of an array it binds whole."""
+    from services.datasource_manager import DatasourceEntry, DatasourceManager
+
+    class _Recipes:
+        def get_parameter_paths_by_datasource(self) -> dict[str, set[str]]:
+            return {"DS": {"Setpoint"}}
+
+    def element(i: int) -> dict:
+        return {"kind": "folder", "name": f"[{i}]", "children": [
+            {"kind": "variable", "display_name": "Speed", "node_id": f"ns=2;s=M{i}", "data_type": "Float", "enabled": True},
+        ]}
+
+    dm = DatasourceManager()
+    dm.datasources["DS"] = DatasourceEntry({"name": "DS", "type": "opcua-client", "variables": [
+        {"kind": "folder", "name": "Motors", "is_array": True, "children": [element(0), element(1)]},
+    ]})
+    manager = WebSocketManager()
+    manager.set_datasource_manager(dm)
+    manager.set_recipe_manager(_Recipes())
+
+    assert manager._delivery_keys({"DS:Motors", "DS:Plain"}) == {
+        "DS:Motors", "DS:Motors/[0]", "DS:Motors/[1]", "DS:Plain", "DS:Setpoint",
+    }
+    # An element promoted on its own brings no siblings.
+    assert manager._delivery_keys({"DS:Motors/[1]"}) == {"DS:Motors/[1]", "DS:Setpoint"}
+
+
+def test_broadcast_values_shares_one_frame_between_clients_on_the_same_page() -> None:
+    manager = WebSocketManager()
+    a, b = FakeWebSocket(), FakeWebSocket()
+    manager._connections = {"a": a, "b": b}  # type: ignore[assignment]
+    manager._client_keys = {"a": {"DS:A"}, "b": {"DS:A"}}
+
+    asyncio.run(manager._broadcast_values({"DS:A": 1, "DS:B": 2}))
+
+    assert a.messages == b.messages == [{"type": "var_update", "values": {"DS:A": 1}}]
+    assert manager._client_bytes["a"] == manager._client_bytes["b"] > 0
+
+
 # -- disconnect() ----------------------------------------------------------------
 
 
@@ -122,7 +169,13 @@ def test_disconnect_removes_client_and_demotes_priority_keys() -> None:
     manager._client_connected_at["c1"] = "2026-01-01T00:00:00+00:00"
     dm._client_keys = {"DS:A"}
 
-    asyncio.run(manager.disconnect("c1"))
+    async def _run() -> None:
+        await manager.disconnect("c1")
+        # The recompute is scheduled, not awaited, so a slow engine never
+        # delays the socket cleanup; wait for it here.
+        await manager._priority_recompute_task
+
+    asyncio.run(_run())
 
     assert "c1" not in manager._connections
     assert "c1" not in manager._client_users

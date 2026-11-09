@@ -36,7 +36,7 @@ async def test_do_connect_resets_connected_state_on_subscription_setup_failure(m
     """A failure in _setup_subscriptions must reset _connected so the
     reconnect loop actually retries instead of reporting a healthy connection
     with zero working subscriptions forever."""
-    monkeypatch.setattr(engine_module, "Client", lambda url: _FakeAsyncuaClient(url))
+    monkeypatch.setattr(engine_module, "Client", lambda url, **_kw: _FakeAsyncuaClient(url))
 
     engine = DatasourceOpcuaEngine("DS")
     engine._config = {"server_url": "opc.tcp://fake:4840"}

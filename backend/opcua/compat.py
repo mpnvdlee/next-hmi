@@ -43,3 +43,16 @@ def apply_asyncua_watchdog_log_patch() -> None:
 
     asyncua_client_logger.addFilter(_WatchdogFilter())
     setattr(asyncua_client_logger, _MARKER, True)
+
+    # A notification for a monitored item deleted a moment ago (a page's
+    # variables demoted while the server already had its publish in flight)
+    # is a normal race, and asyncua warns once per item — a thousand lines
+    # per page switch on a large page.
+    class _UnknownHandleFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "notification for unknown handle" not in record.getMessage()
+
+    sub_logger = logging.getLogger("asyncua.common.subscription")
+    if not getattr(sub_logger, _MARKER, False):
+        sub_logger.addFilter(_UnknownHandleFilter())
+        setattr(sub_logger, _MARKER, True)

@@ -42,6 +42,10 @@ interface PropertyValueAnalysis {
    *  the viewer is actually looking at; the subscription uses `varKeys`, since a
    *  widget has to re-render when the branch it takes changes. */
   renderedVarKeys: readonly string[];
+  /** `$var` bindings with a literal element index: the key and that index.
+   *  A struct array's element lives under its own store key, so a live
+   *  subscription has to watch that key, not only the array's. */
+  indexedVarRefs: readonly { key: string; index: number }[];
   usesTime: boolean;
   usesHttp: boolean;
   /** Lets the binding overlay skip its per-render branch walk for a value with
@@ -53,12 +57,15 @@ interface WalkState {
   usesTime: boolean;
   usesHttp: boolean;
   usesBranch: boolean;
+  indexed: { key: string; index: number }[];
 }
 
 const EMPTY_KEYS: readonly string[] = Object.freeze([]);
+const EMPTY_REFS: readonly { key: string; index: number }[] = Object.freeze([]);
 const EMPTY: PropertyValueAnalysis = Object.freeze({
   varKeys: EMPTY_KEYS,
   renderedVarKeys: EMPTY_KEYS,
+  indexedVarRefs: EMPTY_REFS,
   usesTime: false,
   usesHttp: false,
   usesBranch: false,
@@ -73,7 +80,7 @@ export function analyzePropertyValue(value: unknown): PropertyValueAnalysis {
   const keys: string[] = [];
   const seen = new Set<string>();
   const rendered = new Set<string>();
-  const state: WalkState = { usesTime: false, usesHttp: false, usesBranch: false };
+  const state: WalkState = { usesTime: false, usesHttp: false, usesBranch: false, indexed: [] };
   walk(value, keys, seen, rendered, state, true);
 
   const result: PropertyValueAnalysis =
@@ -81,6 +88,7 @@ export function analyzePropertyValue(value: unknown): PropertyValueAnalysis {
       ? {
           varKeys: keys.length ? keys : EMPTY_KEYS,
           renderedVarKeys: rendered.size ? keys.filter((key) => rendered.has(key)) : EMPTY_KEYS,
+          indexedVarRefs: state.indexed.length ? state.indexed : EMPTY_REFS,
           usesTime: state.usesTime,
           usesHttp: state.usesHttp,
           usesBranch: state.usesBranch,
@@ -113,6 +121,10 @@ function walk(
         keys.push(path);
       }
       if (onScreen) rendered.add(path);
+      const index = value.$var.index;
+      if (typeof index === 'number' && Number.isInteger(index) && index >= 0) {
+        state.indexed.push({ key: path, index });
+      }
     }
     // A bound index is a source of its own, which may read another variable.
     walk(value.$var.index, keys, seen, rendered, state, onScreen);

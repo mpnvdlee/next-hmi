@@ -26,7 +26,7 @@ import {
 import { acceptedValueTypes } from '@shared/utils/valueTypes';
 import { isLocalInputKey, useVariableStore } from '../store/variableStore';
 import type { VarMeta } from '../store/variableStore';
-import { structShapeElementPath } from './repeatItemResolution';
+import { structElementKey, structShapeElementPath } from './repeatItemResolution';
 import { resolveComponentPropValue } from './componentPropResolution';
 import { takenBranch, type EvaluationContext } from './propertySourceEval';
 import { useDataSettling } from '../context/DataSettleContext';
@@ -345,8 +345,11 @@ export function checkBindingSpec(
   // has no access of its own; its members were judged above.
   if (write && meta.type.kind !== 'struct' && meta.writable !== true) return 'invalid';
 
-  const valueId = index !== undefined && meta.type.kind === 'struct' ? `${id}/[${index}]` : id;
-  if (!(valueId in s.values)) return 'pending';
+  if (index !== undefined && meta.type.kind === 'struct') {
+    // The element arrives under its own key; the whole array's value does not stand in.
+    return structElementKey(s.varMeta, id, index) in s.values ? 'ok' : 'pending';
+  }
+  if (!(id in s.values)) return 'pending';
   if (index !== undefined && meta.type.kind === 'scalar') {
     const value = s.values[id];
     if (!Array.isArray(value) || index >= value.length) return 'pending';
@@ -403,13 +406,13 @@ export function createBindingStatusSelector(
   if (bindingSpecs.length === 0) return () => 'ok';
 
   const depIds = Array.from(new Set(bindingSpecs.map((spec) => spec.id)));
-  const depValueIds = Array.from(
-    new Set(
-      bindingSpecs.flatMap((spec) =>
-        spec.index === undefined ? [spec.id] : [spec.id, `${spec.id}/[${spec.index}]`],
-      ),
-    ),
-  );
+  // An indexed struct binding reads its element's key, which the metadata
+  // names — so that key is resolved per check, against the current metadata.
+  const indexed = bindingSpecs.filter((spec) => spec.index !== undefined);
+  const depValueIds = (varMeta: Record<string, VarMeta>): string[] => [
+    ...depIds,
+    ...indexed.map((spec) => structElementKey(varMeta, spec.id, spec.index!)),
+  ];
   const depDatasources = Array.from(new Set(depIds.map((id) => id.split(':')[0])));
   // A struct's member checks read keys below it, which are not in `depIds`.
   const readsMembers = bindingSpecs.some((spec) => spec.requiredFields?.length);
@@ -428,7 +431,7 @@ export function createBindingStatusSelector(
       !cache ||
       s.metadataReceived !== cache.metadataReceived ||
       s.wsConnected !== cache.wsConnected ||
-      depValueIds.some((id) => s.values[id] !== cache!.values[id]) ||
+      depValueIds(s.varMeta).some((id) => s.values[id] !== cache!.values[id]) ||
       (readsMembers
         ? s.varMeta !== cache!.varMeta
         : depIds.some((id) => s.varMeta[id] !== cache!.varMeta[id])) ||

@@ -67,11 +67,13 @@ On accept, the backend sends, in order:
    { "type": "var_snapshot", "values": {} }
    ```
 
-2. `var_metadata` — shape metadata keyed by composite key. Sent
-   **unconditionally**, including as an empty `meta` when no datasource manager
-   or variables exist: it is an authoritative *replacement* snapshot, so a
-   reconnect must not be able to retain metadata from the previous backend
-   generation.
+2. No `var_metadata` here either: shape metadata follows the client's
+   `set_context`, for the keys that context resolved to plus their ancestor
+   folders (the array an element sits in) and descendants (a struct's members,
+   an array's elements). Each frame is an authoritative *replacement*
+   snapshot — the client drops values for keys outside it — and a datasource
+   edit re-sends every client its own. Metadata for 100k variables is 13 MB;
+   a page's is kilobytes. The frame's shape:
 
    ```json
    {
@@ -109,8 +111,8 @@ On accept, the backend sends, in order:
    members, and the write path refuses a write to a variable where it is not
    `true` (`read_only`, below).
 
-3. Chunked `var_update` messages with the full cached value snapshot (500
-   entries per chunk, yielding the event loop between chunks).
+3. No value snapshot: values follow the client's `set_context`, so a client
+   only ever holds what its pages bind (see below).
 4. One `opcua_status` per known datasource, replaying the current connection
    state.
 5. `alarm_snapshot` — full current alarm state plus summary.
@@ -125,7 +127,7 @@ leaving a half-initialised socket registered.
 | Type | Shape | When |
 |---|---|---|
 | `var_snapshot` | `{ type, values, bootId }` | Once on connect (empty `values`). `bootId` names the backend process; a client that sees it change on a reconnect knows the backend restarted, and the runtime (and an editor with nothing unsaved) reloads then. |
-| `var_metadata` | `{ type, meta }` | Once on connect; variable shape metadata. |
+| `var_metadata` | `{ type, meta }` | After each `set_context` (before that context's values) and after a datasource edit: the shape metadata of the context's keys, their ancestors and descendants. Authoritative replacement. |
 | `var_update` | `{ type, values: { [compositeKey]: value } }` — see [Value forms](#value-forms) | Value changes. Batched in a 50 ms window; the per-datasource priority window is `settings.priority_ws_batch_ms`, clamped to `[0, 1000]`, default 10 ms. |
 | `var_removed` | `{ type, ids: [compositeKey, ...] }` | Variables no longer available. |
 | `opcua_status` | `{ type, datasource, connected }` | Per-datasource connection-state change. |
@@ -201,7 +203,16 @@ integer digits keeps them too — and writes it back as a string.
     ≤ 5000. Excess entries are dropped silently.
   - The backend resolves bindings from the runtime pages config (walking nested
     `$if` / `$switch` / `$compare` expressions for `$var` references) and updates
-    OPC-UA fast subscriptions accordingly.
+    OPC-UA fast subscriptions accordingly. That update is scheduled and
+    coalesced, never awaited: the reply (`context_ready`, after the cached send
+    and the fresh read) and the client's next message do not wait for the
+    promote/demote round trips, and a burst of navigations converges on the
+    latest union instead of replaying every intermediate page. An array
+    folder bound only at literal indexes is promoted, read and shipped as
+    those element folders; the client reads an element under its own key.
+  - `var_update` frames are per client: a client receives the keys its last
+    `set_context` resolved to, the elements of any struct array it binds
+    whole, and every recipe parameter — nothing else.
 
   Current producers: `HmiView` (active page + open overlays), `PreviewView`
   (preview page/overlay context), `DatasourceVariableTable` (explicit

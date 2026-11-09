@@ -319,6 +319,29 @@ function OpcuaClientFields({
           placeholder="Optional path to server cert"
         />
       </PropRow>
+      <PropRow label="Request timeout (s)">
+        <input
+          className="cfg-prop-input"
+          type="number"
+          min={1}
+          max={300}
+          value={settings.request_timeout_s ?? 30}
+          onChange={(e) => onChange('request_timeout_s', Number(e.target.value))}
+        />
+      </PropRow>
+      <PropRow
+        label="Deadband"
+        description="Absolute change a numeric value must make before the server publishes it. 0 turns it off."
+      >
+        <input
+          className="cfg-prop-input"
+          type="number"
+          min={0}
+          step={0.001}
+          value={settings.deadband_abs ?? 0.001}
+          onChange={(e) => onChange('deadband_abs', Number(e.target.value))}
+        />
+      </PropRow>
       <PropRow label="Reconnect (s)">
         <input
           className="cfg-prop-input"
@@ -359,7 +382,7 @@ function OpcuaClientFields({
           min={0}
           max={5000}
           step={5}
-          value={settings.priority_sampling_interval_ms ?? 20}
+          value={settings.priority_sampling_interval_ms ?? 50}
           onChange={(e) => onChange('priority_sampling_interval_ms', Number(e.target.value))}
         />
       </PropRow>

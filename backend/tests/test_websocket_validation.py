@@ -81,6 +81,7 @@ def test_handle_set_context_prefetches_uncached_values(monkeypatch) -> None:
 
     async def _run() -> None:
         await manager._handle_set_context("client-1", {"currentPageIds": ["main"]})
+        await manager._priority_recompute_task
         for _ in range(10):
             if len(ws.messages) >= 3:
                 break
@@ -89,6 +90,7 @@ def test_handle_set_context_prefetches_uncached_values(monkeypatch) -> None:
     asyncio.run(_run())
 
     assert ws.messages == [
+        {"type": "var_metadata", "meta": {}},
         {"type": "var_update", "values": {"DS:Cached": 1}},
         {"type": "var_update", "values": {"DS:Fresh": 2}},
         {"type": "context_ready", "currentPageIds": ["main"]},
@@ -112,11 +114,14 @@ def test_handle_set_context_sends_ready_immediately_when_fully_cached(monkeypatc
         lambda **_kwargs: {"DS:Cached"},
     )
 
-    asyncio.run(
-        manager._handle_set_context("client-1", {"currentPageIds": ["main"]})
-    )
+    async def _run() -> None:
+        await manager._handle_set_context("client-1", {"currentPageIds": ["main"]})
+        await manager._priority_recompute_task
+
+    asyncio.run(_run())
 
     assert ws.messages == [
+        {"type": "var_metadata", "meta": {}},
         {"type": "var_update", "values": {"DS:Cached": 1}},
         {"type": "context_ready", "currentPageIds": ["main"]},
     ]
@@ -202,6 +207,42 @@ def test_extract_variable_keys_follows_a_bound_index() -> None:
     assert keys == {"DS:Open", "DS:Selected"}
 
 
+def test_context_keys_record_how_an_array_is_addressed() -> None:
+    keys = websocket_manager_module.ContextKeys()
+    _extract_variable_keys_from_value({"$var": {"path": "DS:Motors", "index": 3}}, keys)
+    _extract_variable_keys_from_value({"$var": {"path": "DS:Motors", "index": 7}}, keys)
+    _extract_variable_keys_from_value({"$var": {"path": "DS:Pumps", "repeatIndex": True}}, keys)
+    _extract_variable_keys_from_value({"$var": {"path": "DS:Valves", "index": {"$var": {"path": "DS:Sel"}}}}, keys)
+
+    assert keys == {"DS:Motors", "DS:Pumps", "DS:Valves", "DS:Sel"}
+    assert keys.index_refs == {"DS:Motors": {3, 7}, "DS:Pumps": {None}, "DS:Valves": {None}, "DS:Sel": {None}}
+
+
+def test_promotion_keys_promote_only_the_literally_indexed_elements() -> None:
+    from services.datasource_manager import DatasourceEntry, DatasourceManager
+
+    def element(i: int) -> dict:
+        return {"kind": "folder", "name": f"Motors[{i}]", "children": [
+            {"kind": "variable", "display_name": "Speed", "node_id": f"ns=2;s=M{i}", "data_type": "Float", "enabled": True},
+        ]}
+
+    dm = DatasourceManager()
+    dm.datasources["DS"] = DatasourceEntry({"name": "DS", "type": "opcua-client", "variables": [
+        {"kind": "folder", "name": "Motors", "is_array": True, "children": [element(i) for i in range(5)]},
+        {"kind": "folder", "name": "Pumps", "is_array": True, "children": [element(i) for i in range(2)]},
+    ]})
+    keys = websocket_manager_module.ContextKeys({"DS:Motors", "DS:Pumps", "DS:Plain"})
+    keys.index_refs = {"DS:Motors": {1, 3, 99}, "DS:Pumps": {0, None}}
+
+    promoted = websocket_manager_module._promotion_keys(keys, dm)
+
+    # Motors: two bound elements instead of the whole array (99 is out of range);
+    # Pumps: also bound whole somewhere, so it stays whole; Plain is untouched.
+    assert promoted == {"DS:Motors/Motors[1]", "DS:Motors/Motors[3]", "DS:Pumps", "DS:Plain"}
+    # A plain set (an explicit priorityKeys context) is promoted as is.
+    assert websocket_manager_module._promotion_keys({"DS:Motors"}, dm) == {"DS:Motors"}
+
+
 def test_extract_variable_keys_stops_at_depth_limit() -> None:
     keys: set[str] = set()
     nested: dict[str, object] = {"$var": {"path": "DS:Deep"}}
@@ -214,20 +255,20 @@ def test_extract_variable_keys_stops_at_depth_limit() -> None:
     assert "DS:Deep" not in keys
 
 
-def test_broadcast_var_metadata_sends_authoritative_empty_snapshot() -> None:
-    class _Manager:
-        @staticmethod
-        def variable_metadata() -> dict:
-            return {}
-
+def test_broadcast_var_metadata_sends_each_client_its_own_context() -> None:
     manager = WebSocketManager()
-    manager.set_datasource_manager(_Manager())
-    ws = FakeWebSocket()
-    manager._connections["client-1"] = ws  # type: ignore[attr-defined]
+    manager.set_datasource_manager(
+        FakeDatasourceManager(metadata={"DS:A": {"type": "a"}, "DS:B": {"type": "b"}})
+    )
+    on_a, idle = FakeWebSocket(), FakeWebSocket()
+    manager._connections = {"a": on_a, "idle": idle}  # type: ignore[assignment]
+    manager._client_keys = {"a": {"DS:A"}}
 
     asyncio.run(manager.broadcast_var_metadata())
 
-    assert ws.messages == [{"type": "var_metadata", "meta": {}}]
+    assert on_a.messages == [{"type": "var_metadata", "meta": {"DS:A": {"type": "a"}}}]
+    # A client with no context gets the (authoritative) empty map.
+    assert idle.messages == [{"type": "var_metadata", "meta": {}}]
 
 
 # ── v2 split-page storage tests ───────────────────────────────────────────────

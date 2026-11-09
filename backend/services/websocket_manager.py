@@ -21,7 +21,6 @@ Responsibilities:
 import asyncio
 import contextlib
 import hashlib
-import itertools
 import json
 import logging
 import secrets
@@ -136,6 +135,13 @@ class WebSocketManager:
         self._priority_recompute_task: asyncio.Task | None = None
         self._priority_recompute_rerun = False
         self._deferred_tasks: set[asyncio.Task] = set()
+        # The composite keys each client's last set_context asked for. A
+        # var_update reaches a client only for keys in here (plus the shared
+        # keys every client reads), so a 100k-variable server does not stream
+        # every change to every browser.
+        self._client_keys: dict[str, set[str]] = {}
+        # Bytes of value frames sent per client, for the Admin page.
+        self._client_bytes: dict[str, int] = {}
 
     # -- Dependency injection -------------------------------------------------
 
@@ -235,9 +241,9 @@ class WebSocketManager:
                     self._pending_updates = {}
                     self._next_flush_at = None
             if self._connections and priority_pending:
-                await self._broadcast({"type": "var_update", "values": priority_pending})
+                await self._broadcast_values(priority_pending)
             if self._connections and pending:
-                await self._broadcast({"type": "var_update", "values": pending})
+                await self._broadcast_values(pending)
 
     def _sleep_until_next_flush(self) -> float:
         with self._pending_lock:
@@ -263,18 +269,79 @@ class WebSocketManager:
         return value
 
     async def _broadcast(self, payload: dict) -> None:
-        message = json.dumps(payload)
         if not self._connections:
             return
-        # Snapshot the values (not a copy of the dict) so removals during gather are safe
-        clients = list(self._connections.items())
+        message = json.dumps(payload)
+        await self._send_all([(client_id, message) for client_id in self._connections])
+
+    async def _send_all(self, frames: list[tuple[str, str]]) -> None:
+        """Send each (client_id, frame) concurrently; a client whose send
+        fails or stalls past 5 s is dropped."""
+        live = [(client_id, self._connections.get(client_id), frame) for client_id, frame in frames]
+        live = [(client_id, ws, frame) for client_id, ws, frame in live if ws is not None]
+        if not live:
+            return
         results = await asyncio.gather(
-            *[asyncio.wait_for(ws.send_text(message), timeout=5.0) for _, ws in clients],
+            *[asyncio.wait_for(ws.send_text(frame), timeout=5.0) for _, ws, frame in live],
             return_exceptions=True,
         )
-        for (client_id, _), result in zip(clients, results, strict=False):
+        for (client_id, _, _), result in zip(live, results, strict=True):
             if isinstance(result, Exception):
                 self._connections.pop(client_id, None)
+
+    def _values_frame(self, client_id: str, values: dict[str, Any]) -> str:
+        """A var_update frame for one client, counted towards its bytes sent."""
+        frame = json.dumps({"type": "var_update", "values": values})
+        self._client_bytes[client_id] = self._client_bytes.get(client_id, 0) + len(frame)
+        return frame
+
+    def _shared_value_keys(self) -> set[str]:
+        """Keys every client reads whatever its page: a recipe's parameters,
+        which the client compares against the loaded dataset itself."""
+        if self._recipe_manager is None:
+            return set()
+        return {
+            build_var_key(ds_name, path)
+            for ds_name, paths in self._recipe_manager.get_parameter_paths_by_datasource().items()
+            for path in paths
+        }
+
+    def _delivery_keys(self, promoted: set[str]) -> set[str]:
+        """Every key a client holding *promoted* receives: those keys, the
+        shared recipe parameters, and the elements of each struct array it
+        binds whole (the client reads an element under its own key). Decided
+        once per set_context, so every delivery path — metadata, cached
+        values, the prefetch, the live broadcast — is one set lookup."""
+        keys = set(promoted) | self._shared_value_keys()
+        if self._datasource_manager is not None:
+            for key in promoted:
+                keys |= self._datasource_manager.element_keys(key)
+        return keys
+
+    async def _broadcast_values(self, values: dict[str, Any]) -> None:
+        """Send each client the slice of *values* its context asked for.
+        Clients wanting the same slice share one serialised frame."""
+        if not self._connections:
+            return
+        frames: list[tuple[str, str]] = []
+        shared_frames: dict[frozenset[str], str] = {}
+        for client_id in list(self._connections):
+            wanted = self._client_keys.get(client_id)
+            if not wanted:
+                continue
+            if len(wanted) < len(values):
+                subset = {k: values[k] for k in wanted if k in values}
+            else:
+                subset = {k: v for k, v in values.items() if k in wanted}
+            if not subset:
+                continue
+            signature = frozenset(subset)
+            frame = shared_frames.get(signature)
+            if frame is None:
+                frame = shared_frames[signature] = json.dumps({"type": "var_update", "values": subset})
+            self._client_bytes[client_id] = self._client_bytes.get(client_id, 0) + len(frame)
+            frames.append((client_id, frame))
+        await self._send_all(frames)
 
     async def broadcast_var_removed(self, var_ids: list[str]) -> None:
         """Notify all connected clients that these variable IDs are no longer available."""
@@ -284,21 +351,30 @@ class WebSocketManager:
     async def broadcast_var_values(self, values: dict[str, Any]) -> None:
         """Broadcast an explicit cache refresh after a datasource edit."""
         if values and self._connections:
-            await self._broadcast({"type": "var_update", "values": values})
+            await self._broadcast_values(values)
 
     async def broadcast_var_metadata(self) -> None:
-        """Broadcast the complete authoritative variable metadata snapshot.
+        """Send every client a fresh metadata snapshot for its own context.
 
         Datasource edits can add, remove, or reshape bindings while clients stay
-        connected. Sending a replacement snapshot keeps picker/runtime validation
-        in sync without requiring a WebSocket reconnect. An empty mapping is
-        significant and must also be sent.
+        connected. The snapshot is authoritative: the client drops values for
+        keys no longer in it, so one that lost all its keys gets an empty map.
         """
         if self._datasource_manager is None or not self._connections:
             return
-        await self._broadcast(
-            {"type": "var_metadata", "meta": self._datasource_manager.variable_metadata()}
-        )
+        for client_id in list(self._connections):
+            await self._send_context_metadata(client_id, self._client_keys.get(client_id, set()))
+
+    async def _send_context_metadata(self, client_id: str, keys: set[str]) -> None:
+        """The metadata a client holding *keys* reads (see ``variable_metadata``)."""
+        ws = self._connections.get(client_id)
+        if ws is None or self._datasource_manager is None:
+            return
+        meta = self._datasource_manager.variable_metadata(keys)
+        try:
+            await ws.send_text(json.dumps({"type": "var_metadata", "meta": meta}))
+        except Exception:
+            self._connections.pop(client_id, None)
 
     async def broadcast_opcua_status(self, datasource_name: str, connected: bool) -> None:
         """Notify all connected clients of an OPC-UA connection state change."""
@@ -376,24 +452,10 @@ class WebSocketManager:
             await websocket.send_text(
                 json.dumps({"type": "var_snapshot", "values": {}, "bootId": _BOOT_ID})
             )
-            # Metadata is an authoritative replacement snapshot. Send it even
-            # when no datasource manager/variables exist so a reconnect cannot
-            # retain metadata from the previous backend generation.
-            meta = (
-                self._datasource_manager.variable_metadata()
-                if self._datasource_manager is not None
-                else {}
-            )
-            await websocket.send_text(json.dumps({"type": "var_metadata", "meta": meta}))
-            if self._datasource_manager is not None:
-                snapshot = self._datasource_manager.snapshot()
-                it = iter(snapshot.items())
-                while True:
-                    chunk = dict(itertools.islice(it, 500))
-                    if not chunk:
-                        break
-                    await websocket.send_text(json.dumps({"type": "var_update", "values": chunk}))
-                    await asyncio.sleep(0)  # yield event loop between chunks
+            # No metadata or value snapshot here: both follow the client's
+            # set_context (metadata for its keys, cached values at once, the
+            # rest after a read), so a client only ever holds what its pages
+            # bind — 100k variables are 13 MB of metadata per connect otherwise.
             # Replay current OPC-UA connection status for every datasource so that
             # clients which connect after the PLC is already up receive the correct
             # state instead of staying stuck at opcuaConnected=false.
@@ -424,13 +486,15 @@ class WebSocketManager:
         """Remove client and demote any variables that were only priority for this client."""
         self._connections.pop(client_id, None)
         self._client_users.pop(client_id, None)
+        self._client_keys.pop(client_id, None)
+        self._client_bytes.pop(client_id, None)
         self._editor_clients.discard(client_id)
         self._client_panels.pop(client_id, None)
         self._client_connected_at.pop(client_id, None)
         if self._datasource_manager is not None:
             self._datasource_manager.clear_client(client_id)
             # Re-apply priority so demoted paths are moved back to background
-            await self._apply_priority_keys(client_id, set())
+            self._apply_priority_keys(client_id, set())
         logger.info(
             "WS client disconnected: %s (total: %d)",
             client_id[:8],
@@ -453,6 +517,11 @@ class WebSocketManager:
                             "username": identity.get("username", "guest"),
                             "groups": identity.get("groups", ["guest"]),
                             "connectedAt": connected_at,
+                            # What this socket's context asked for, and what
+                            # it has been sent — the per-client half of the
+                            # value filter made visible.
+                            "keys": len(self._client_keys.get(client_id, ())),
+                            "bytesSent": self._client_bytes.get(client_id, 0),
                         }
                     )
         return result
@@ -503,12 +572,20 @@ class WebSocketManager:
         else:
             logger.debug("Unknown WS message type '%s' from %s", msg_type, client_id[:8])
 
-    async def _apply_priority_keys(self, client_id: str, keys: set[str]) -> None:
-        """Store keys for this client, recompute union, update OPC-UA subscriptions."""
+    def _apply_priority_keys(self, client_id: str, keys: set[str]) -> None:
+        """Store keys for this client and schedule the OPC-UA subscription update.
+
+        Deliberately not awaited: a client's WebSocket messages are handled
+        one after another, so awaiting the promote/demote round-trips here
+        would queue the *next* navigation (and the "page left" context) behind
+        them — on a slow or very large server the fast subscription then lags
+        minutes behind the operator. The coalesced recompute always reads the
+        latest union, so superseded contexts are skipped, not replayed.
+        """
         if self._datasource_manager is None or self._opcua_pool is None:
             return
         self._datasource_manager.set_client_page(client_id, keys)
-        await self.recompute_priority_subscriptions()
+        self.schedule_priority_recompute()
 
     async def recompute_priority_subscriptions(self) -> None:
         """Recompute the per-datasource fast subscription set and push it to the pool.
@@ -521,6 +598,11 @@ class WebSocketManager:
         """
         if self._datasource_manager is None or self._opcua_pool is None:
             return
+        # A recipe edit changes what every client receives; cheap per client.
+        for client_id in list(self._client_keys):
+            self._client_keys[client_id] = self._delivery_keys(
+                self._datasource_manager.client_page_keys(client_id)
+            )
         priority_keys = self._datasource_manager.get_priority_keys()
         ds_keys = _group_priority_paths_by_datasource(priority_keys)
 
@@ -571,9 +653,21 @@ class WebSocketManager:
             current_page_ids=current_page_ids,
             explicit_priority_keys=explicit_priority_keys,
         )
-        sent_keys = await self._send_cached_values(client_id, composite_keys)
-        await self._apply_priority_keys(client_id, composite_keys)
-        missing_keys = composite_keys - sent_keys
+        # An array bound at a literal index is read, promoted and shipped as
+        # that element, never as the whole array (see _promotion_keys).
+        promoted = _promotion_keys(composite_keys, self._datasource_manager)
+        delivered = self._delivery_keys(promoted)
+        previous = self._client_keys.get(client_id)
+        self._client_keys[client_id] = delivered
+        # Metadata first: the client validates a binding against it and drops
+        # values for keys outside it, so it has to precede the values. An
+        # unchanged context (a scroll in the variable table) resends nothing.
+        if delivered != previous:
+            await self._send_context_metadata(client_id, delivered)
+        sent_keys = await self._send_cached_values(client_id, delivered)
+        self._apply_priority_keys(client_id, promoted)
+        # Elements of a whole-bound array arrive with the array itself.
+        missing_keys = (promoted | self._shared_value_keys()) - sent_keys
         if missing_keys:
             task = asyncio.create_task(
                 self._send_uncached_values_then_ready(client_id, missing_keys, current_page_ids)
@@ -1164,10 +1258,13 @@ class WebSocketManager:
         ws = self._connections.get(client_id)
         if ws is None:
             return set()
-        await ws.send_text(json.dumps({"type": "var_update", "values": cached}))
+        await ws.send_text(self._values_frame(client_id, cached))
         return set(cached)
 
     async def _send_uncached_values(self, client_id: str, composite_keys: set[str]) -> None:
+        """Read *composite_keys* from the server and send the client the ones
+        its current context still wants — a page it has already left only
+        warms the cache for its return."""
         if not composite_keys or self._datasource_manager is None or self._opcua_pool is None:
             return
 
@@ -1186,10 +1283,12 @@ class WebSocketManager:
 
         self._datasource_manager.seed_cached_values(fresh_values)
         ws = self._connections.get(client_id)
-        if ws is None:
+        wanted = self._client_keys.get(client_id, set())
+        values = {k: v for k, v in fresh_values.items() if k in wanted}
+        if ws is None or not values:
             return
         try:
-            await ws.send_text(json.dumps({"type": "var_update", "values": fresh_values}))
+            await ws.send_text(self._values_frame(client_id, values))
         except Exception:
             self._connections.pop(client_id, None)
             return
@@ -1347,8 +1446,34 @@ def _resolve_context_composite_keys(
         pages_config,
         current_page_ids=current_page_ids,
     )
+    # An explicit key the saved config does not bind (an unsaved edit, a
+    # variable table row) carries no index: it is wanted whole.
+    for key in explicit_priority_keys:
+        if key not in composite_keys:
+            composite_keys.index_refs.setdefault(key, set()).add(None)
     composite_keys.update(explicit_priority_keys)
     return composite_keys
+
+
+def _promotion_keys(composite_keys: set[str], dm: Any) -> set[str]:
+    """What to put on the fast subscription for *composite_keys*.
+
+    An array-of-struct folder bound only at literal indexes (``Motors[3]``,
+    ``Motors[7]``) is replaced by those element folders, so two bindings into
+    a 50-element array promote, cache and ship two elements instead of all
+    250 leaves. The client reads the element under its own key (see
+    ``resolveElement``) and falls back to ``value[index]`` of the aggregate
+    when a context named the array whole.
+    """
+    keys = set(composite_keys)
+    for key, indexes in getattr(composite_keys, "index_refs", {}).items():
+        if None in indexes:
+            continue
+        elements = dm.element_keys(key, indexes)
+        if elements:
+            keys.discard(key)
+            keys |= elements
+    return keys
 
 
 def _iter_dict_children(raw_children: Any) -> list[dict]:
@@ -1378,7 +1503,7 @@ def _collect_from_runtime_pages_config(
 
     A current page id may name a page in either index root: the routed page
     lives under ``pages``, an open page overlay under either one."""
-    keys: set[str] = set()
+    keys: set[str] = ContextKeys()
 
     _walk_components(pages_config.get("header", []), keys)
     _walk_components(pages_config.get("footer", []), keys)
@@ -1541,6 +1666,18 @@ def _to_runtime_page_node(node: dict, root: str) -> dict:
     return runtime
 
 
+class ContextKeys(set):
+    """The composite keys a context binds, plus how each array folder was
+    addressed: ``index_refs[key]`` holds every literal element index bound,
+    and ``None`` once something binds the array whole (a Repeater, a bound
+    index). ``_promotion_keys`` promotes only the bound elements of an array
+    that is addressed by literal indexes alone."""
+
+    def __init__(self, *args: Any) -> None:
+        super().__init__(*args)
+        self.index_refs: dict[str, set[int | None]] = {}
+
+
 def _extract_binding_from_value(value: Any) -> tuple[str, str] | None:
     """Return (datasource, location) from a canonical $var source."""
     if not isinstance(value, dict):
@@ -1579,9 +1716,15 @@ def _extract_variable_keys_from_value(value: Any, keys: set[str], depth: int = M
     binding = _extract_binding_from_value(value)
     if binding is not None:
         ds, path = binding
-        keys.add(build_var_key(ds, path))
+        key = build_var_key(ds, path)
+        keys.add(key)
+        index = value["$var"].get("index")
+        refs = getattr(keys, "index_refs", None)
+        if refs is not None:
+            literal = isinstance(index, int) and not isinstance(index, bool) and index >= 0
+            refs.setdefault(key, set()).add(index if literal else None)
         # A bound index is a source of its own, which may read another variable.
-        _extract_variable_keys_from_value(value["$var"].get("index"), keys, depth - 1)
+        _extract_variable_keys_from_value(index, keys, depth - 1)
         return
 
     for nested in value.values():

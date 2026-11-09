@@ -26,6 +26,10 @@ export interface RuntimeSession {
   username: string;
   groups: string[];
   connectedAt: string;
+  /** Composite keys this socket's last `set_context` resolved to. */
+  keys?: number;
+  /** Bytes of value frames sent to this socket since it connected. */
+  bytesSent?: number;
 }
 
 interface AdminViewStore {

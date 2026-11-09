@@ -40,10 +40,9 @@ import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { useRepeatScope } from '../context/RepeatScopeContext';
 import { useBindingStatus } from '../utils/bindingValidation';
 import { useResolvedProperties } from '../hooks/useResolvedProperties';
-import { useLiveScalars } from '../hooks/useLiveScalars';
+import { useLiveKeys, useLiveScalars } from '../hooks/useLiveScalars';
 import { useTimeTick } from '../hooks/useTimeTick';
 import { useHttpTick } from '../hooks/useHttpTick';
-import { extractVarKeys } from '../utils/extractVarKeys';
 import { usesTime } from '../utils/usesTime';
 import { usesHttp } from '../utils/usesHttp';
 import {
@@ -168,7 +167,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   // it actually references ticks. `resolvedProperties` already has any parent
   // `$componentProp` substituted to the real `$var`, so nested/component-prop
   // bindings are covered. Layout `$var` is handled by `useResolvedLayout`.
-  useLiveScalars(extractVarKeys(resolvedProperties));
+  useLiveScalars(useLiveKeys(resolvedProperties));
 
   // Granular `$time` subscription: only widgets that actually reference `$time`
   // re-render on the one-second tick (the rest stay idle). Replaces the blunt

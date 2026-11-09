@@ -55,11 +55,11 @@ def _struct_field_routes(ds_entry: Any) -> dict[str, tuple[str, str]]:
 
     ``field_name`` is a plain key for a direct struct field, a ``"/"``-joined
     nested path (mirrors ``_collect_struct_leaf_paths``) for a nested
-    sub-struct field, or an ``"idx:name"`` reference (mirrors the
-    ``array_elem`` encoding in ``read_current_values``) for a direct field of
-    an array-of-struct element. Fields nested *inside* an array-of-struct
-    element are left unmapped — those leaves fall back to the full-rebuild
-    path via ``_node_to_path``.
+    sub-struct field, or an ``"idx:name"`` / ``"idx:sub/name"`` reference
+    (mirrors the ``array_elem`` encoding in ``read_current_values``) for a
+    field of an array-of-struct element, nested sub-structs included — the
+    full-rebuild fallback cost one aggregate rebuild and deep copy per leaf
+    change, a hundred times the in-place patch on a 50-element array.
     """
     folder_registry = ds_entry.folder_registry
     routes: dict[str, tuple[str, str]] = {}
@@ -70,8 +70,8 @@ def _struct_field_routes(ds_entry: Any) -> dict[str, tuple[str, str]]:
                 elem_entry = folder_registry.get(elem_path)
                 if elem_entry is None:
                     continue
-                for child_path, field_name in elem_entry.get("_child_paths", {}).items():
-                    routes[child_path] = (folder_path, f"{idx}:{field_name}")
+                for field_path, child_path in _collect_struct_leaf_paths(elem_entry, folder_registry):
+                    routes[child_path] = (folder_path, f"{idx}:{field_path}")
         else:
             for field_path, child_path in _collect_struct_leaf_paths(fentry, folder_registry):
                 routes[child_path] = (folder_path, field_path)

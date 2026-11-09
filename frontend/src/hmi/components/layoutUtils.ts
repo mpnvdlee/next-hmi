@@ -15,7 +15,7 @@ import { resolveComponentPropValue, withDeclaredDefaults } from '../utils/compon
 import { componentDefinition } from '@shared/store/componentStore';
 import { useEvalContext } from '../hooks/useEvalContext';
 import { useInputScope } from '../context/InputScopeContext';
-import { useLiveScalars } from '../hooks/useLiveScalars';
+import { useLiveScalars, useLiveKeys } from '../hooks/useLiveScalars';
 import { getViewportSnapshot } from '../hooks/useViewport';
 import { useBindingValue, useVariableMeta } from '../hooks/useVariable';
 import { useUsersDocument } from '../hooks/useUsersDocument';
@@ -393,7 +393,7 @@ export function useResolvedLayout(raw?: LayoutConfig): LayoutConfig | undefined 
   // `width` actually reads — through the snapshot identity, which changes only
   // when a viewport field really did. `useEvalContext` already subscribes to
   // the viewport store, so reading the snapshot here costs no second listener.
-  const sig = useLiveScalars(extractVarKeys(layout));
+  const sig = useLiveScalars(useLiveKeys(layout));
   const viewport = getViewportSnapshot();
   return useMemo(() => {
     if (!layout) return layout;
