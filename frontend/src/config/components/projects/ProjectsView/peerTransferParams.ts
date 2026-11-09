@@ -9,6 +9,8 @@ export interface TransferParams {
   collisionPolicy: CollisionPolicy;
   replacementId: string;
   confirmReplace: boolean;
+  /** Replace only: the destination's accounts survive the new design. */
+  keepUsers: boolean;
   start: boolean;
 }
 
@@ -30,6 +32,7 @@ export function sameParams(a: TransferParams, b: TransferParams): boolean {
     a.collisionPolicy === b.collisionPolicy &&
     a.replacementId === b.replacementId &&
     a.confirmReplace === b.confirmReplace &&
+    a.keepUsers === b.keepUsers &&
     a.start === b.start
   );
 }

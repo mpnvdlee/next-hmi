@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import httpx
-from core import manager_auth, peer_tokens, peer_trust, runtime_home
+from core import manager_auth, peer_tokens, peer_trust, runtime_home, users_document
 from core.exceptions import (
     ConflictError,
     NotFoundError,
@@ -57,13 +57,14 @@ from core.manifest import (
 )
 from core.peer_discovery import peer_discovery
 from core.project_packer import (
+    USERS_FILENAME,
     UnsafeArchiveError,
     max_zip_bytes,
     pack_project,
     safe_filename,
     unpack_project,
 )
-from core.storage import write_text_atomic
+from core.storage import read_json, write_json, write_text_atomic
 from core.time_utils import iso_now
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -1250,6 +1251,8 @@ class TransferBody(BaseModel):
     token: str = Field(min_length=1)
     collisionPolicy: Literal["reject", "replace", "copy"] = "reject"
     confirmReplace: bool = False
+    # Replace only: the destination's accounts survive the new design.
+    keepUsers: bool = True
     start: bool = False
     transferId: str | None = None
 
@@ -1379,6 +1382,7 @@ async def _send_transfer(
             "destinationFolder": body.destinationFolder,
             "collisionPolicy": body.collisionPolicy,
             "confirmReplace": str(body.confirmReplace).lower(),
+            "keepUsers": str(body.keepUsers).lower(),
             "start": str(body.start).lower(),
         }
         # The file handle is a plain context manager; grouping it into the
@@ -1608,6 +1612,8 @@ class PullBody(BaseModel):
     token: str = Field(min_length=1)
     collisionPolicy: Literal["reject", "replace", "copy"] = "reject"
     confirmReplace: bool = False
+    # Replace only: the destination's accounts survive the new design.
+    keepUsers: bool = True
     start: bool = False
     transferId: str | None = None
 
@@ -1903,6 +1909,7 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
             source_project_id=body.sourceProjectId,
             destination_project_id=body.destinationProjectId,
             collision_policy=body.collisionPolicy,
+            keep_users=body.keepUsers,
             target=target,
             unpack_into_stage=unpack_into_stage,
             start=body.start,
@@ -2216,6 +2223,33 @@ def _pull_journal_committed_outcome(
         _save_pull_receipt(transfer_id, fingerprint, result)
 
 
+def _read_valid_users(path: Path) -> dict[str, Any] | None:
+    try:
+        document = read_json(path)
+    except (OSError, ValueError):
+        return None
+    return document if users_document.document_state(document).valid else None
+
+
+def _keep_installed_accounts(target: Path, stage: Path) -> list[str]:
+    """Carry the destination's accounts into the staged project; see
+    ``users_document.merge_installed_accounts``. Returns the groups put back."""
+    if not (target / USERS_FILENAME).exists():
+        return []  # no accounts to keep
+    installed = _read_valid_users(target / USERS_FILENAME)
+    if installed is None:
+        raise ConflictError(
+            f"The destination's {USERS_FILENAME} is invalid, so its users cannot be "
+            "kept. Repair it, or replace without keeping users."
+        )
+    incoming = _read_valid_users(stage / USERS_FILENAME)
+    if incoming is None:
+        raise ValidationError(f"The incoming project's {USERS_FILENAME} is invalid")
+    merged, restored = users_document.merge_installed_accounts(incoming, installed)
+    write_json(stage / USERS_FILENAME, merged)
+    return restored
+
+
 async def _stage_and_install(
     *,
     transfer_id: str,
@@ -2223,6 +2257,7 @@ async def _stage_and_install(
     source_project_id: str,
     destination_project_id: str,
     collision_policy: Literal["reject", "replace", "copy"],
+    keep_users: bool,
     target: Path,
     unpack_into_stage: Callable[[Path], ProjectMetadata],
     start: bool,
@@ -2252,6 +2287,7 @@ async def _stage_and_install(
     target_binding = None
     backup_binding = None
     backup: Path | None = None
+    restored_groups: list[str] = []
     installed = False
     backed_up = False
     manifest_committed = False
@@ -2356,6 +2392,8 @@ async def _stage_and_install(
                             "Destination path changed during replacement"
                         )
                     target_binding = _bind_staging_directory(target)
+                    if keep_users:
+                        restored_groups = _keep_installed_accounts(target, stage)
                     backup = root / f"{target.name}.bak-{transfer_id}"
                     if backup.exists() or backup.is_symlink():
                         raise ConflictError(f"Backup path already exists: {backup}")
@@ -2520,6 +2558,7 @@ async def _stage_and_install(
             "destinationFolder": target.name,
             "replaced": collision_policy == "replace",
             "backupPath": str(backup) if backup is not None else None,
+            "restoredGroups": restored_groups,
             "startRequested": start,
             "started": started,
             "startError": start_error,
@@ -2610,6 +2649,7 @@ async def receive_transfer(
     destinationFolder: str = Form(...),
     collisionPolicy: Literal["reject", "replace", "copy"] = Form("reject"),
     confirmReplace: bool = Form(False),
+    keepUsers: bool = Form(True),
     start: bool = Form(False),
 ) -> dict[str, Any]:
     _require_peer(request)
@@ -2629,6 +2669,9 @@ async def receive_transfer(
         collisionPolicy=collisionPolicy,
         confirmReplace=str(confirmReplace),
         start=str(start),
+        # Only when off, so a receipt journaled before the flag existed (a
+        # restart for an upgrade mid-transfer) still matches its retry.
+        **({} if keepUsers else {"keepUsers": "False"}),
     )
     archive_sha256, archive_size = await asyncio.to_thread(_archive_fingerprint, file)
     fingerprint = hashlib.sha256(
@@ -2797,6 +2840,7 @@ async def receive_transfer(
             source_project_id=sourceProjectId,
             destination_project_id=destinationProjectId,
             collision_policy=collisionPolicy,
+            keep_users=keepUsers,
             target=target,
             unpack_into_stage=unpack_into_stage,
             start=start,

@@ -185,6 +185,7 @@ interface ProjectsStore {
     token: string;
     collisionPolicy: 'reject' | 'replace' | 'copy';
     confirmReplace: boolean;
+    keepUsers: boolean;
     start: boolean;
     transferId: string;
   }): Promise<PeerTransferStatus>;
@@ -200,6 +201,7 @@ interface ProjectsStore {
     token: string;
     collisionPolicy: 'reject' | 'replace' | 'copy';
     confirmReplace: boolean;
+    keepUsers: boolean;
     start: boolean;
     transferId: string;
   }): Promise<PeerTransferStatus>;

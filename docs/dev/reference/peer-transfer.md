@@ -123,6 +123,31 @@ manager's configured `defaultProjectsRoot` — no absolute or nested paths.
 Only the transfer's own destination project may be started, and only when
 explicitly requested; every other running project and process is untouched.
 
+### Users on replace
+
+Accounts are installation data: operators add users, reset passwords and set
+languages on the machine itself (runtime user management, or API v1). So a
+`replace` keeps the destination's accounts by default (`keepUsers: true`, a
+checkbox in the modal that only shows for a replace). After validation and
+before the backup rename, with the destination stopped and its operation lock
+held, `_keep_installed_accounts` writes into the staged `users.json` the
+destination's `users[]`, keeping the incoming project's `groups` and
+`settings` (`users_document.merge_installed_accounts`). A group an installed
+account still names but the new design dropped is put back with its id as
+label, so nobody silently loses access; the result lists those ids in
+`restoredGroups`.
+
+- A destination without `users.json` has nothing to keep; the incoming one
+  installs as it is. One that is unreadable or invalid refuses the transfer
+  (`409`), since its accounts could not be carried — repair it, or replace with
+  `keepUsers: false`.
+- `keepUsers: false` installs the incoming `users.json` as it is, as before.
+- `copy` and a fresh install carry the incoming accounts as starting accounts.
+  Zip import always creates a new project and is unaffected.
+- A receiver from before this field ignores it and overwrites the accounts.
+- The receipt fingerprint names `keepUsers` only when it is off, so a retry of a
+  receive journaled before the field existed still matches its receipt.
+
 ## Reliability
 
 - **Staging** — the incoming archive is validated in a transfer-owned sibling

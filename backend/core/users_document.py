@@ -82,3 +82,26 @@ def document_state(document: Any) -> DocumentState:
         usernames.add(user["username"])
 
     return _VALID
+
+
+def merge_installed_accounts(incoming: dict, installed: dict) -> tuple[dict, list[str]]:
+    """``incoming`` with the accounts of ``installed`` in place of its own.
+
+    A project replaced on a machine keeps the accounts operators made there:
+    groups and settings are design and come from the incoming project, the
+    accounts belong to the installation. A group an installed account still
+    names but the new design dropped is put back (label = id) rather than
+    stripping access nobody chose to remove; its id is returned so the
+    operator hears about it. Both documents must already be valid.
+    """
+    groups = [dict(group) for group in incoming["groups"]]
+    known = {group["id"] for group in groups}
+    restored: list[str] = []
+    for user in installed["users"]:
+        for group_id in user["groups"]:
+            if group_id not in known:
+                known.add(group_id)
+                restored.append(group_id)
+                groups.append({"id": group_id, "label": group_id})
+    merged = {**incoming, "groups": groups, "users": [dict(user) for user in installed["users"]]}
+    return merged, restored

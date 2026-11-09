@@ -322,6 +322,7 @@ describe('manager calls from a proxied project instance', () => {
       token: 'tok',
       collisionPolicy: 'reject',
       confirmReplace: false,
+      keepUsers: true,
       start: false,
       transferId: 'tx-1',
     });

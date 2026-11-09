@@ -987,11 +987,14 @@ SHA-256 digest of each random peer token.
   modal reads a missing value as `true`.
 - `POST /api/manager/peer/transfers` — bearer-authenticated multipart receive (`201`):
   `file`, `transferId`, `sourceProjectId`, `destinationProjectId`,
-  `destinationFolder`, `collisionPolicy`, `confirmReplace`, and `start`.
+  `destinationFolder`, `collisionPolicy`, `confirmReplace`, `keepUsers`
+  (default `true`) and `start`.
   The folder must be one direct child of `defaultProjectsRoot`. `reject` is the
   default. `copy` requires a new ID. `replace` requires explicit confirmation,
   a stopped registered destination, and its exact target-root folder; it keeps
-  a sibling backup and rolls back on apply/manifest failure. No project starts
+  a sibling backup and rolls back on apply/manifest failure. With `keepUsers`
+  it keeps the destination's accounts ([Users on replace](peer-transfer.md#users-on-replace));
+  the result's `restoredGroups` lists groups put back for them. No project starts
   unless requested, and unrelated processes/running entries are untouched.
 - `DELETE /api/manager/peer/transfers/{transferId}` — cancel an in-flight
   receive; `{ transferId, cancelRequested, tooLate? }`, `409` for a
@@ -1008,7 +1011,7 @@ SHA-256 digest of each random peer token.
 - `POST /api/manager/transfers` — starts an outgoing explicit-source transfer
   with HTTP 202. Body `{ sourceProjectId, destinationProjectId,
   destinationFolder, peerHost, peerPort = 8000, peerScheme, token,
-  collisionPolicy, confirmReplace, start, transferId? }` — an omitted
+  collisionPolicy, confirmReplace, keepUsers = true, start, transferId? }` — an omitted
   `transferId` is minted by the server. `GET` / `DELETE
   /api/manager/transfers/{transferId}` polls or cancels it. The state object is
   `{ transferId, sourceProjectId, destinationProjectId, phase, failedPhase,

@@ -499,6 +499,52 @@ def test_replace_transfer_keeps_the_source_format_stamp(monkeypatch, tmp_path: P
     assert installed.minAppVersion is not None
 
 
+@pytest.mark.parametrize("keep_users", [True, False])
+def test_replace_keeps_the_destinations_accounts_unless_told_not_to(
+    monkeypatch, tmp_path: Path, keep_users: bool
+):
+    """Accounts made on the machine survive a new design; groups come from it."""
+    _, root = _configure_home(monkeypatch, tmp_path)
+    destination = root / "destination-users"
+    destination.mkdir()
+    write_project_metadata(destination, ProjectMetadata(id="destination-users-id", name="Old"))
+    installed_users = {
+        "settings": {"autoLoginName": "guest"},
+        "groups": [{"id": "line2", "label": "Line 2"}],
+        "users": [{"id": "op", "username": "op", "password": "", "groups": ["line2"], "language": "de"}],
+    }
+    (destination / "users.json").write_text(json.dumps(installed_users), encoding="utf-8")
+    manifest = load_manifest()
+    manifest.projects.append(
+        ProjectEntry(
+            id="destination-users-id", name="Old", path=str(destination), addedAt="2026-01-01T00:00:00Z"
+        )
+    )
+    save_manifest(manifest)
+
+    with TestClient(_app()) as client:
+        response = _receive(
+            client,
+            _pair(client),
+            _archive_at_current_format(tmp_path),
+            transferId=f"tx-users-{keep_users}",
+            destinationProjectId="destination-users-id",
+            destinationFolder="destination-users",
+            collisionPolicy="replace",
+            confirmReplace="true",
+            keepUsers=str(keep_users).lower(),
+        )
+    assert response.status_code == 201, response.text
+    users = json.loads((destination / "users.json").read_text(encoding="utf-8"))
+    if keep_users:
+        assert [u["username"] for u in users["users"]] == ["op"]
+        assert users["groups"] == [{"id": "line2", "label": "line2"}]
+        assert response.json()["restoredGroups"] == ["line2"]
+    else:
+        assert users == {"settings": {}, "groups": [], "users": []}
+        assert response.json()["restoredGroups"] == []
+
+
 def test_copy_transfer_with_start_runs_the_real_upgrade_gate(
     monkeypatch, tmp_path: Path
 ):

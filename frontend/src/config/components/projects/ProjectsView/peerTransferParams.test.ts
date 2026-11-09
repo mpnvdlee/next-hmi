@@ -34,6 +34,7 @@ describe('sameParams', () => {
     collisionPolicy: 'reject',
     replacementId: '',
     confirmReplace: false,
+    keepUsers: true,
     start: false,
   };
 
@@ -47,6 +48,7 @@ describe('sameParams', () => {
     ['collisionPolicy', { collisionPolicy: 'copy' as const }],
     ['replacementId', { replacementId: 'p9' }],
     ['confirmReplace', { confirmReplace: true }],
+    ['keepUsers', { keepUsers: false }],
     ['start', { start: true }],
   ])('sees a changed %s, which the backend would refuse under the same id', (_field, change) => {
     expect(sameParams(base, { ...base, ...change })).toBe(false);
