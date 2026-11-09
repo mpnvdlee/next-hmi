@@ -11,6 +11,14 @@ heading.
 
 ## [Unreleased]
 
+### Added
+
+- **Filter a list as the operator types.** `$compare` gains **contains**
+  (∋): true when the left text holds the right one, ignoring case, and always
+  true for an empty right side. Compare a list row's **Visible** against a
+  String Input's value and the list narrows with every keystroke, without a
+  custom widget.
+
 ### Fixed
 
 - **A Repeater over a PLC array that counts from 1.** Over a struct array
