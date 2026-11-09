@@ -1356,7 +1356,9 @@ describe('propertySourceEval', () => {
 
 describe('evaluateVar with resolveElement', () => {
   it('reads an indexed element through resolveElement and slices the whole value without it', () => {
-    const whole: EvaluationContext = { resolveVariable: () => [10, 20, 30] as unknown as ResolvedValue };
+    const whole: EvaluationContext = {
+      resolveVariable: () => [10, 20, 30] as unknown as ResolvedValue,
+    };
     expect(evaluatePropertyValue({ $var: { path: 'PLC:Arr', index: 1 } }, whole)).toBe(20);
 
     const perElement: EvaluationContext = {

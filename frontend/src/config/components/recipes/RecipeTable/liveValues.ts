@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { clearContextProducer, setContextProducer } from '@hmi/hooks/useWebSocket';
 
-
 /**
  * Keep a recipe's bound variables hot while the Live column is on.
  *

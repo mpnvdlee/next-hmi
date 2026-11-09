@@ -8,7 +8,12 @@ import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useComponentStore } from '@shared/store/componentStore';
 import { useHmiStore } from '../store/hmiStore';
-import { sendWsMessage, setBackendRestartHandler, setContextProducer, clearContextProducer } from '../hooks/useWebSocket';
+import {
+  sendWsMessage,
+  setBackendRestartHandler,
+  setContextProducer,
+  clearContextProducer,
+} from '../hooks/useWebSocket';
 import { useVariableStore } from '../store/variableStore';
 import { resolveMainStyle, resolvePageContext } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';

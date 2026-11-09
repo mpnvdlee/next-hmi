@@ -239,7 +239,8 @@ function sendMergedContext(): void {
   const currentPageIds: string[] = [];
   const priorityKeys = new Set<string>();
   for (const producer of _contextProducers.values()) {
-    for (const id of producer.currentPageIds ?? []) if (!currentPageIds.includes(id)) currentPageIds.push(id);
+    for (const id of producer.currentPageIds ?? [])
+      if (!currentPageIds.includes(id)) currentPageIds.push(id);
     for (const key of producer.priorityKeys ?? []) priorityKeys.add(key);
   }
   // Dropped while the socket is down; `onopen` sends the merged context again.

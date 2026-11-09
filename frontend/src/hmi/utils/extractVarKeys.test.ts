@@ -98,7 +98,11 @@ describe('extractLiveKeys', () => {
   it('adds the element key of a struct array bound at a literal index, by position', () => {
     const props = { a: v('PLC:Motors', 1), b: v('PLC:Other') };
     // Position 1 is the second element — Line[2] on an array that counts from 1.
-    expect(extractLiveKeys(props, varMeta)).toEqual(['PLC:Motors', 'PLC:Other', 'PLC:Motors/Line[2]']);
+    expect(extractLiveKeys(props, varMeta)).toEqual([
+      'PLC:Motors',
+      'PLC:Other',
+      'PLC:Motors/Line[2]',
+    ]);
   });
 
   it('returns the plain keys when nothing is indexed, and memoises per metadata', () => {

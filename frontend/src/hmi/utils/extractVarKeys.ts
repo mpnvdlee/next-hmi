@@ -24,7 +24,10 @@ const liveKeysCache = new WeakMap<readonly string[], WeakMap<object, readonly st
  * not the whole array, so a live subscription on the array alone would never
  * tick. Memoised per (analysis, metadata) like the analysis itself.
  */
-export function extractLiveKeys(value: unknown, varMeta: Record<string, unknown>): readonly string[] {
+export function extractLiveKeys(
+  value: unknown,
+  varMeta: Record<string, unknown>,
+): readonly string[] {
   const analysis = analyzePropertyValue(value);
   if (analysis.indexedVarRefs.length === 0) return analysis.varKeys;
   let byMeta = liveKeysCache.get(analysis.varKeys);
