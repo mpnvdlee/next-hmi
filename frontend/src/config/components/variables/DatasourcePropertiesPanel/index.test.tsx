@@ -53,6 +53,37 @@ describe('DatasourcePropertiesPanel', () => {
     vi.unstubAllGlobals();
   });
 
+  it('suggests browsed folders, by path, as the browse root node', () => {
+    const config = makeOpcuaClientConfig();
+    config.variables = [
+      {
+        kind: 'folder',
+        name: 'PLC',
+        node_id: 'ns=4;s=gPlc',
+        children: [
+          { kind: 'folder', name: 'Line1', node_id: 'ns=4;s=gPlc.Line1', children: [] },
+          {
+            kind: 'variable',
+            node_id: 'ns=4;s=gPlc.Speed',
+            display_name: 'Speed',
+            data_type: 'Float',
+            enabled: true,
+          },
+        ],
+      },
+    ];
+
+    const { container } = render(
+      <DatasourcePropertiesPanel config={config} connected={false} onSave={vi.fn()} />,
+    );
+
+    const options = [...container.querySelectorAll('datalist#browse-root-PLC option')];
+    expect(options.map((o) => [o.getAttribute('value'), o.textContent])).toEqual([
+      ['ns=4;s=gPlc', 'PLC'],
+      ['ns=4;s=gPlc.Line1', 'PLC/Line1'],
+    ]);
+  });
+
   describe('LifecycleButtons', () => {
     it('shows Starting… while in flight, then reverts and refreshes status after the 1500ms delay', async () => {
       mockedApiJson.mockResolvedValue(undefined);
