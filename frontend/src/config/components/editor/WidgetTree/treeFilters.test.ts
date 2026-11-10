@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { PageConfig, PageGroupConfig, WidgetConfig } from '@shared/types/config';
-import { filterComponents, filterPage, filterPageGroup } from './treeFilters';
+import {
+  collectAllCollapsibleIds,
+  filterComponents,
+  filterPage,
+  filterPageGroup,
+} from './treeFilters';
+import { makePageGroupAreaId, makePageSectionId } from '@shared/constants/editorSentinels';
 
 const motor: WidgetConfig = { id: 'motor-1', type: 'NumericDisplay', name: 'Motor Speed' };
 const pressure: WidgetConfig = { id: 'pressure-1', type: 'Gauge', name: 'Pressure' };
@@ -64,5 +70,31 @@ describe('editor tree search filters', () => {
     const result = filterPageGroup(group, 'header motor');
     expect(result?.header).toEqual([motor]);
     expect(result?.footer).toEqual([]);
+  });
+
+  it('collects page sections and page-group header/footer folders as collapsible', () => {
+    const withChrome = {
+      ...page('Overview', [motor]),
+      showHeader: true,
+      showFooter: true,
+    } as PageConfig;
+    const group = {
+      type: 'page-group',
+      id: 'area-a',
+      title: 'Area A',
+      children: [withChrome],
+    } as unknown as PageGroupConfig;
+    const shell = { header: [], footer: [], leftSidebar: [], rightSidebar: [] };
+
+    const ids = collectAllCollapsibleIds([group], shell, []);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        makePageGroupAreaId('area-a', 'header'),
+        makePageGroupAreaId('area-a', 'footer'),
+        makePageSectionId('overview', 'header'),
+        makePageSectionId('overview', 'content'),
+        makePageSectionId('overview', 'footer'),
+      ]),
+    );
   });
 });

@@ -7,7 +7,7 @@
  * - OPC-UA Test Server: port, endpoint path, network reach, start/stop
  */
 
-import { Fragment, useState, useEffect, useCallback, useRef } from 'react';
+import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useProjectStore } from '@shared/store/projectStore';
 import { useVariablesDomainStore } from '@config/store/domains/variablesDomainStore';
 import Button from '@config/components/ui/Button';
@@ -24,8 +24,9 @@ import type {
   OpcuaClientSettings,
   ServerCertificateStatus,
   TestServerSettings,
+  TreeNode,
 } from '@shared/types/datasource';
-import { isOpcuaClientSettings, isTestServerSettings } from '@shared/types/datasource';
+import { isFolder, isOpcuaClientSettings, isTestServerSettings } from '@shared/types/datasource';
 import { apiJson } from '@shared/utils/api';
 
 interface Props {
@@ -220,7 +221,12 @@ export default function DatasourcePropertiesPanel({
           <div className="cfg-section__title">Settings</div>
 
           {config.type === 'opcua-client' && isOpcuaClientSettings(settings) && (
-            <OpcuaClientFields dsName={config.name} settings={settings} onChange={updateSetting} />
+            <OpcuaClientFields
+              dsName={config.name}
+              settings={settings}
+              variables={config.variables}
+              onChange={updateSetting}
+            />
           )}
 
           {config.type === 'opcua-test-server' && isTestServerSettings(settings) && (
@@ -242,15 +248,28 @@ export default function DatasourcePropertiesPanel({
 
 // ── Sub-forms ────────────────────────────────────────────────────────────────
 
+/** Every browsed folder that carries a node id, labelled by its path — the
+ *  candidates for a browse root, which the operator otherwise has to look up. */
+function browseRootOptions(nodes: TreeNode[], prefix = ''): { nodeId: string; path: string }[] {
+  return nodes.filter(isFolder).flatMap((folder) => {
+    const path = prefix ? `${prefix}/${folder.name}` : folder.name;
+    const own = folder.node_id ? [{ nodeId: folder.node_id, path }] : [];
+    return [...own, ...browseRootOptions(folder.children, path)];
+  });
+}
+
 function OpcuaClientFields({
   dsName,
   settings,
+  variables,
   onChange,
 }: {
   dsName: string;
   settings: OpcuaClientSettings;
+  variables: TreeNode[];
   onChange: (key: string, value: unknown) => void;
 }) {
+  const rootOptions = useMemo(() => browseRootOptions(variables), [variables]);
   const securityPolicy = settings.security_policy ?? 'NoSecurity';
   const securityMode = settings.security_mode ?? 'SignAndEncrypt';
   const secureEnabled = securityPolicy !== 'NoSecurity';
@@ -440,14 +459,25 @@ function OpcuaClientFields({
           labels={['On', 'Off']}
         />
       </PropRow>
-      <PropRow label="Browse Root Node">
+      <PropRow
+        label="Browse Root Node"
+        description="The OPC UA node id Browse starts from; empty starts at Objects. Pick a folder from an earlier browse, or hover a folder in the variable table to see its node id."
+      >
         <input
           className="cfg-prop-input"
           type="text"
+          list={`browse-root-${dsName}`}
           value={settings.browse_root_node ?? ''}
           onChange={(e) => onChange('browse_root_node', e.target.value || undefined)}
           placeholder="e.g. ns=4;s=gPlc (default: Objects)"
         />
+        <datalist id={`browse-root-${dsName}`}>
+          {rootOptions.map(({ nodeId, path }) => (
+            <option key={nodeId} value={nodeId}>
+              {path}
+            </option>
+          ))}
+        </datalist>
       </PropRow>
     </>
   );

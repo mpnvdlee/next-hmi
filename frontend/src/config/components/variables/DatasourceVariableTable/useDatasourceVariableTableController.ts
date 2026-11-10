@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useVariablesDomainStore } from '@config/store/domains/variablesDomainStore';
+import { useProjectStore } from '@shared/store/projectStore';
 import {
   DATASOURCE_CAPABILITIES,
   type DatasourceConfig,
@@ -82,7 +83,7 @@ export function useDatasourceVariableTableController({ datasource, onVariablesCh
     browsing,
     browseError,
     progress: browseProgress,
-    handleBrowse,
+    handleBrowse: browseSaved,
   } = useDatasourceBrowse({
     dsName,
     latestTree,
@@ -102,9 +103,19 @@ export function useDatasourceVariableTableController({ datasource, onVariablesCh
   useEffect(() => {
     if (browseRequested && isConnected && !browsing && !hasPendingBrowse) {
       clearBrowseRequest();
-      void handleBrowse();
+      void browseSaved();
     }
-  }, [browseRequested, isConnected, browsing, hasPendingBrowse, clearBrowseRequest, handleBrowse]);
+  }, [browseRequested, isConnected, browsing, hasPendingBrowse, clearBrowseRequest, browseSaved]);
+
+  // The server browses with its saved settings, so unsaved connection edits
+  // (root node, endpoint, …) are saved first. Saving restarts the connection,
+  // hence the deferred request that waits for it to come back.
+  const handleBrowse = useCallback(async () => {
+    const variables = useVariablesDomainStore.getState();
+    if (!variables.propsDrafts[dsName]) return browseSaved();
+    await useProjectStore.getState()._saveCallbacks.get(`ds-props-${dsName}`)?.();
+    variables.requestBrowse(dsName);
+  }, [browseSaved, dsName]);
 
   const applyPendingBrowse = useCallback(
     (diff: BrowseDiff, selected: ReadonlySet<string>) => {
