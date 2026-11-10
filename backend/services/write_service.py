@@ -612,6 +612,15 @@ async def _wire_data_type(
     return wire.name
 
 
+def _access_refusal(entry_data: dict[str, Any]) -> str | None:
+    """Why no write to this variable can succeed, or ``None`` if one can."""
+    if not is_subscribable(entry_data):
+        return REASON_DISABLED
+    if not is_writable(entry_data):
+        return REASON_READ_ONLY
+    return None
+
+
 def _is_struct_folder(entry_data: dict[str, Any]) -> bool:
     """Whether *entry_data* is a ``folder_registry`` entry, which every folder
     the manager registers carries ``_child_paths`` for."""
@@ -735,11 +744,8 @@ async def write_value(
     data_type = coercion_entry.get("data_type")
     # A struct folder has no state or access of its own: writing one whole is
     # a shape the write path cannot take, reported as invalid_value.
-    if not _is_struct_folder(coercion_entry):
-        if not is_subscribable(coercion_entry):
-            return WriteOutcome(False, REASON_DISABLED)
-        if not is_writable(coercion_entry):
-            return WriteOutcome(False, REASON_READ_ONLY)
+    if not _is_struct_folder(coercion_entry) and (refusal := _access_refusal(coercion_entry)):
+        return WriteOutcome(False, refusal)
 
     index_match = _ARRAY_INDEX_RE.search(path)
     if index_match is not None:
@@ -865,10 +871,8 @@ async def _write_bit(
     if entry_data is None or _ARRAY_INDEX_RE.search(word_path):
         return WriteOutcome(False, REASON_BAD_PATH)
     # Before the word is read: a disabled variable is never read.
-    if not is_subscribable(entry_data):
-        return WriteOutcome(False, REASON_DISABLED)
-    if not is_writable(entry_data):
-        return WriteOutcome(False, REASON_READ_ONLY)
+    if refusal := _access_refusal(entry_data):
+        return WriteOutcome(False, refusal)
     data_type = str(entry_data.get("data_type") or "").strip().lower()
     width = BIT_WIDTHS.get(data_type, 0)
     if bit >= width:
@@ -922,12 +926,9 @@ async def toggle_value(
     if entry_data is None:
         return WriteOutcome(False, REASON_BAD_PATH), None
     data_type = entry_data.get("data_type")
-    if not _is_struct_folder(entry_data):
-        # Before the read below: a disabled variable is never read.
-        if not is_subscribable(entry_data):
-            return WriteOutcome(False, REASON_DISABLED), None
-        if not is_writable(entry_data):
-            return WriteOutcome(False, REASON_READ_ONLY), None
+    # Before the read below: a disabled variable is never read.
+    if not _is_struct_folder(entry_data) and (refusal := _access_refusal(entry_data)):
+        return WriteOutcome(False, refusal), None
     if bit is None and (
         not isinstance(data_type, str)
         or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) != "boolean"

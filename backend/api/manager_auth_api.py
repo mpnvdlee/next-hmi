@@ -6,6 +6,8 @@ These routes are reachable without a session (the gate middleware allow-lists
 """
 from __future__ import annotations
 
+import asyncio
+
 from core import manager_auth, mcp_tokens, peer_tokens
 from core.exceptions import ConflictError, ValidationError
 from fastapi import APIRouter, Request, Response
@@ -105,7 +107,8 @@ async def setup_password(body: SetupBody, request: Request, response: Response) 
             "it changes every time the device starts."
         )
     manager_auth.register_login_success(address)
-    manager_auth.set_password(body.password)
+    # PBKDF2 at 600k rounds: off the loop, or every proxied request stalls with it.
+    await asyncio.to_thread(manager_auth.set_password, body.password)
     _set_session_cookie(request, response, manager_auth.issue_token())
     return {"authenticated": True}
 
@@ -133,7 +136,7 @@ async def change_password(
     address = manager_auth.client_address(request)
     if not await manager_auth.check_password(address, body.currentPassword):
         raise ValidationError("Incorrect current password")
-    manager_auth.set_password(body.newPassword)
+    await asyncio.to_thread(manager_auth.set_password, body.newPassword)
     peer_tokens.revoke_all()
     mcp_tokens.revoke_all()
     _set_session_cookie(request, response, manager_auth.issue_token())

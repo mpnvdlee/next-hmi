@@ -32,9 +32,9 @@ from api.docs_api import bundled_docs_dir
 from api.docs_api import router as help_router
 from api.embedding_api import router as embedding_router
 from api.manager_auth_api import router as manager_auth_router
+from api.manager_peers_api import TRANSFER_DEADLINE_SECONDS, reconcile_transfer_journals
 from api.manager_peers_api import manager_router as manager_peers_router
 from api.manager_peers_api import public_router as public_manager_peers_router
-from api.manager_peers_api import reconcile_transfer_journals
 from api.mcp_auth_api import manager_router as mcp_tokens_router
 from api.mcp_auth_api import public_router as public_mcp_auth_router
 from api.projects_api import router as projects_router
@@ -79,6 +79,7 @@ from mcp_server.server import mount_workspace_mcp, run_session_manager_once
 from mcp_server.write_helpers import drain_inflight_broadcasts
 from services import frontend_serve, project_resume
 from services.supervisor import ChildAuth, supervisor
+from services.theme_manager import THEME_ID
 from starlette.background import BackgroundTask
 from starlette.datastructures import Headers
 from starlette.routing import get_route_path
@@ -316,9 +317,6 @@ MANAGER_SESSION_REQUIRED = "manager_session_required"
 # dot segment is what let a crafted URL walk out of the allowlisted subtree and
 # into the datasource passwords.
 _ONE = "*"
-# A theme id as ``services.theme_manager`` accepts one. ``_ONE`` would also
-# pass ``D:foo``, which a Windows child reads as a file on another drive.
-_THEME_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
 # The live view is the product's public face: an operator panel must come up on
 # a wall-mounted browser with no device-admin password. The project child mounts
@@ -336,7 +334,8 @@ _RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str | re.Pattern[str], ...], ...]]
         ("api", "config", "dictionaries"),
         ("api", "config", "translations"),
         ("api", "themes"),
-        ("api", "themes", _THEME_ID),
+        # Not ``_ONE``: it would pass ``D:foo``, a file on another drive to a Windows child.
+        ("api", "themes", THEME_ID),
         ("api", "default-theme"),
         ("api", "components"),
         ("api", "components", "folders"),
@@ -693,7 +692,7 @@ async def _auth_gate(request: Request, call_next):
         if int(raw_length) > max_zip_bytes() + 2 * 1024 * 1024:
             return JSONResponse({"detail": "Transfer body exceeds the configured limit"}, status_code=413)
         try:
-            async with asyncio.timeout(660):
+            async with asyncio.timeout(TRANSFER_DEADLINE_SECONDS):
                 return await call_next(request)
         except TimeoutError:
             return JSONResponse({"detail": "Transfer deadline exceeded"}, status_code=408)

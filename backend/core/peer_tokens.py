@@ -248,6 +248,10 @@ def _load_pairings() -> dict[str, Any]:
     return raw
 
 
+def _save_pairings(data: dict[str, Any]) -> None:
+    write_text_atomic(pairings_path(), json.dumps(data, indent=2))
+
+
 def remember(runtime_id: str, token: str, fingerprint: str) -> None:
     """Keep a token issued by the peer ``runtime_id``, bound to its certificate."""
     with _lock:
@@ -257,7 +261,7 @@ def remember(runtime_id: str, token: str, fingerprint: str) -> None:
             "fingerprint": fingerprint,
             "pairedAt": iso_now(),
         }
-        write_text_atomic(pairings_path(), json.dumps(data, indent=2))
+        _save_pairings(data)
 
 
 def forget_remembered(runtime_id: str) -> bool:
@@ -265,7 +269,7 @@ def forget_remembered(runtime_id: str) -> bool:
         data = _load_pairings()
         if data["pairings"].pop(runtime_id, None) is None:
             return False
-        write_text_atomic(pairings_path(), json.dumps(data, indent=2))
+        _save_pairings(data)
         return True
 
 

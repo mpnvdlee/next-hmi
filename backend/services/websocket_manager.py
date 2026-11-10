@@ -1543,6 +1543,17 @@ class _RuntimePages:
         return keys
 
 
+def _build_runtime_pages(config: dict) -> _RuntimePages:
+    """*config* in runtime shape, with its shared keys and page ids collected."""
+    shared_keys = ContextKeys()
+    _walk_components(config["header"], shared_keys)
+    _walk_components(config["footer"], shared_keys)
+    page_ids: set[str] = set()
+    for root in INDEX_ROOTS:
+        _collect_page_ids(config.get(root, []), page_ids)
+    return _RuntimePages(config, shared_keys, frozenset(page_ids))
+
+
 _runtime_pages_config_cache: _RuntimePages | None = None
 _runtime_pages_config_lock = threading.Lock()
 
@@ -1564,14 +1575,7 @@ def _get_runtime_pages() -> _RuntimePages | None:
     except Exception as exc:
         logger.warning("set_context: could not read config.json: %s", exc)
         return None
-    config = _to_runtime_pages_config(raw)
-    shared_keys = ContextKeys()
-    _walk_components(config["header"], shared_keys)
-    _walk_components(config["footer"], shared_keys)
-    page_ids: set[str] = set()
-    for root in INDEX_ROOTS:
-        _collect_page_ids(config.get(root, []), page_ids)
-    runtime = _RuntimePages(config, shared_keys, frozenset(page_ids))
+    runtime = _build_runtime_pages(_to_runtime_pages_config(raw))
     with _runtime_pages_config_lock:
         _runtime_pages_config_cache = runtime
     return runtime
@@ -1650,33 +1654,13 @@ def _collect_context_composite_keys(
     *,
     current_page_ids: list[str],
 ) -> set[str]:
-    """Collect all variable keys for the current runtime context (raw input)."""
-    return _collect_from_runtime_pages_config(
-        _to_runtime_pages_config(raw_pages_config),
-        current_page_ids=current_page_ids,
-    )
-
-
-def _collect_from_runtime_pages_config(
-    pages_config: dict,
-    *,
-    current_page_ids: list[str],
-) -> set[str]:
-    """Collect variable keys from a pages_config already in runtime shape.
+    """Collect all variable keys for the current runtime context (raw input).
 
     A current page id may name a page in either index root: the routed page
     lives under ``pages``, an open page overlay under either one."""
-    keys: set[str] = ContextKeys()
-
-    _walk_components(pages_config.get("header", []), keys)
-    _walk_components(pages_config.get("footer", []), keys)
-
-    for page_id in current_page_ids:
-        for root in INDEX_ROOTS:
-            if _collect_active_scope_composite_keys(pages_config.get(root, []), page_id, keys):
-                break
-
-    return keys
+    return _build_runtime_pages(_to_runtime_pages_config(raw_pages_config)).resolve(
+        current_page_ids
+    )
 
 
 def _collect_active_scope_composite_keys(nodes: list[dict], page_id: str, keys: set[str]) -> bool:

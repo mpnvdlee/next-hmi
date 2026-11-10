@@ -56,6 +56,7 @@ def describe_x509(raw: bytes) -> dict[str, Any]:
     expires_in_days = remaining.days
     return {
         "subject": certificate.subject.rfc4514_string(),
+        "issuer": certificate.issuer.rfc4514_string(),
         "fingerprint": hashlib.sha256(der).hexdigest(),
         "issuedAt": certificate.not_valid_before_utc.isoformat(),
         "expiresAt": certificate.not_valid_after_utc.isoformat(),

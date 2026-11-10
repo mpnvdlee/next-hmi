@@ -18,7 +18,6 @@ from core.exceptions import (
 from core.project_packer import safe_filename
 from core.storage import active_certs_dir, write_bytes_atomic
 from core.value_types import simplify_variable_tree
-from cryptography import x509
 from fastapi import (
     APIRouter,
     Body,
@@ -574,7 +573,7 @@ async def get_server_certificate(name: str) -> ServerCertificateInfo | None:
     return ServerCertificateInfo(
         status=certificate.status,
         subject=described["subject"],
-        issuer=x509.load_der_x509_certificate(certificate.der).issuer.rfc4514_string(),
+        issuer=described["issuer"],
         expiresAt=described["expiresAt"],
         fingerprint=certificate.fingerprint,
     )

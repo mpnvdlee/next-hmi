@@ -34,7 +34,7 @@ _PROJECT_KEY = "project"
 _DEFAULT_KEY = "defaultTheme"
 # The id becomes a file name. Anything wider can leave themes/ on Windows:
 # ``D:foo`` is a drive-relative path there and ``..\x`` climbs out.
-_THEME_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
+THEME_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 # Windows opens these as devices whatever the extension.
 _WINDOWS_DEVICE_NAMES = frozenset({
     "con", "prn", "aux", "nul",
@@ -45,7 +45,7 @@ _WINDOWS_DEVICE_NAMES = frozenset({
 
 def _valid_theme_id(theme_id: str) -> bool:
     return (
-        _THEME_ID.fullmatch(theme_id) is not None
+        THEME_ID.fullmatch(theme_id) is not None
         and theme_id.casefold() not in _WINDOWS_DEVICE_NAMES
     )
 

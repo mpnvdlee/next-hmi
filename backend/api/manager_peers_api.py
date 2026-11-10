@@ -67,7 +67,7 @@ from core.project_packer import (
 from core.storage import write_text_atomic
 from core.time_utils import iso_now
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from services import widget_compiler
 from services.supervisor import supervisor
@@ -84,9 +84,9 @@ manager_router = APIRouter(prefix="/api/manager", tags=["manager-peer"])
 logger = logging.getLogger(__name__)
 
 _HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=600.0, write=600.0, pool=10.0)
-# The whole archive download, not one read: the same budget the receiving side
-# gives an upload (`_auth_gate` in manager.py).
-_DOWNLOAD_DEADLINE_SECONDS = 660.0
+# The whole archive transfer, not one read: the download here, and the upload
+# the receiving side allows (`_auth_gate` in manager.py).
+TRANSFER_DEADLINE_SECONDS = 660.0
 # Any JSON reply from a peer. Generous for a project listing, and still what
 # this manager is prepared to hold in memory for one.
 _MAX_PEER_REPLY_BYTES = 4 * 1024 * 1024
@@ -127,10 +127,6 @@ class PeerPairingRefused(ConflictError):
             f"{host} no longer accepts this device: the pairing was revoked or has "
             "expired. Pair again with its device-admin password."
         )
-
-
-def _refused(exc: PeerPairingRefused) -> JSONResponse:
-    return JSONResponse(status_code=409, content={"detail": exc.message, "code": exc.code})
 
 
 def _require_private_client(request: Request) -> None:
@@ -1060,8 +1056,8 @@ class RemoteProjectsBody(BaseModel):
     runtimeId: str | None = Field(default=None, max_length=64)
 
 
-@manager_router.post("/peer-projects", response_model=None)
-async def list_remote_projects(body: RemoteProjectsBody) -> dict[str, Any] | JSONResponse:
+@manager_router.post("/peer-projects")
+async def list_remote_projects(body: RemoteProjectsBody) -> dict[str, Any]:
     peer = await _peer_endpoint(body.host, body.port, body.scheme)
     headers = _auth_headers(peer, body.token, body.runtimeId)
     try:
@@ -1072,7 +1068,7 @@ async def list_remote_projects(body: RemoteProjectsBody) -> dict[str, Any] | JSO
     except httpx.HTTPError as exc:
         raise await peer.unreachable(exc) from exc
     if reply.status_code == 401:
-        return _refused(PeerPairingRefused(peer.host))
+        raise PeerPairingRefused(peer.host)
     if reply.status_code >= 400:
         refusal = reply.refusal()
         raise ConflictError(
@@ -2194,7 +2190,7 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
         last_persisted_at = 0.0
         try:
             async with (
-                asyncio.timeout(_DOWNLOAD_DEADLINE_SECONDS),
+                asyncio.timeout(TRANSFER_DEADLINE_SECONDS),
                 peer.client(_HTTP_TIMEOUT) as client,
                 client.stream(
                     "GET",
@@ -2236,7 +2232,7 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
         except TimeoutError as exc:
             raise ConflictError(
                 f"Downloading from peer {peer.host}:{peer.port} took longer than "
-                f"{_DOWNLOAD_DEADLINE_SECONDS / 60:.0f} minutes; the download was stopped"
+                f"{TRANSFER_DEADLINE_SECONDS / 60:.0f} minutes; the download was stopped"
             ) from exc
         except httpx.HTTPError as exc:
             # Re-raising unwrapped reaches the operator as httpx's own "All

@@ -52,7 +52,7 @@ from core.project_packer import (
 from core.storage import repo_root
 from core.time_utils import iso_now
 from fastapi import APIRouter, File, Form, Query, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from services import widget_compiler
 
@@ -953,15 +953,10 @@ async def import_project(
             raise ConflictError(duplicate_message)
         if existing is not None:
             shutil.rmtree(target, ignore_errors=True)
-            return JSONResponse(
-                status_code=409,
-                content={
-                    "detail": _case_variant_message(existing),
-                    "code": PROJECT_ID_CASE_CONFLICT,
-                    "suggestedId": unique_slug(
-                        metadata.id, (entry.id for entry in manifest.projects)
-                    ),
-                },
+            raise ConflictError(
+                _case_variant_message(existing),
+                code=PROJECT_ID_CASE_CONFLICT,
+                suggestedId=unique_slug(metadata.id, (entry.id for entry in manifest.projects)),
             )
         # Read from what landed on disk, with the compiler's own discovery, so
         # the list is exactly what would run whatever the member names said.
@@ -974,17 +969,12 @@ async def import_project(
 
     if any(code.values()) and not trustCustomWidgets:
         shutil.rmtree(target, ignore_errors=True)
-        return JSONResponse(
-            status_code=409,
-            content={
-                "detail": (
-                    "This project contains code: "
-                    f"{widget_compiler.describe_project_code(code)}. "
-                    "Confirm that you trust the source of this project to import it."
-                ),
-                "code": CUSTOM_WIDGETS_UNCONFIRMED,
-                **code,
-            },
+        raise ConflictError(
+            "This project contains code: "
+            f"{widget_compiler.describe_project_code(code)}. "
+            "Confirm that you trust the source of this project to import it.",
+            code=CUSTOM_WIDGETS_UNCONFIRMED,
+            **code,
         )
 
     entry, _manifest = _register_imported_project(

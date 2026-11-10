@@ -3376,7 +3376,7 @@ def test_a_pull_that_outlasts_its_deadline_is_stopped(
     monkeypatch, tmp_path: Path, scratch: Path
 ):
     _configure_home(monkeypatch, tmp_path)
-    monkeypatch.setattr(manager_peers_api, "_DOWNLOAD_DEADLINE_SECONDS", 0.3)
+    monkeypatch.setattr(manager_peers_api, "TRANSFER_DEADLINE_SECONDS", 0.3)
     # Every read arrives well inside the per-read timeout; only the total is late.
     body = b"x" * (64 * 1024 * 100)
     response = _MeteredStreamResponse(body, delay=0.02)

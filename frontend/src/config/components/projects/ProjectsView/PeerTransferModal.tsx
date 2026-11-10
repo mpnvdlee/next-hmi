@@ -13,6 +13,7 @@ import {
   useProjectsStore,
 } from '@config/store/projectsStore';
 import { isApiError } from '@shared/utils/api';
+import { formatFingerprint } from '@shared/utils/formatFingerprint';
 import { basename } from '@shared/utils/paths';
 import { randomUuid } from '@shared/utils/id';
 import { explainFailure, phaseLabel } from './peerTransferMessages';
@@ -67,9 +68,11 @@ const RESOLUTIONS: ReadonlyArray<{ value: CollisionPolicy; label: string }> = [
 
 /** A SHA-256 hex digest as two lines of four-character groups, easy to compare by eye. */
 function fingerprintLines(fingerprint: string): [string, string] {
-  const group = (half: string) => half.match(/.{1,4}/g)?.join(' ') ?? half;
   const middle = Math.ceil(fingerprint.length / 2);
-  return [group(fingerprint.slice(0, middle)), group(fingerprint.slice(middle))];
+  return [
+    formatFingerprint(fingerprint.slice(0, middle)),
+    formatFingerprint(fingerprint.slice(middle)),
+  ];
 }
 
 export default function PeerTransferModal({
@@ -110,7 +113,7 @@ export default function PeerTransferModal({
   const [insecureAccepted, setInsecureAccepted] = useState(false);
   // Opt-in: a remembered key signs in to the other device without its password.
   const [remember, setRemember] = useState(false);
-  const [signedIn, setSignedIn] = useState(false);
+  const [paired, setPaired] = useState(false);
   // The device refused the remembered key when signing in with it; a transfer
   // refused the same way says so on its own status.
   const [keyRefused, setKeyRefused] = useState(false);
@@ -274,7 +277,6 @@ export default function PeerTransferModal({
     return () => window.clearInterval(timer);
   }, [getPeerPull, getPeerTransfer, isPull, onTransferred, transfer]);
 
-  const paired = signedIn;
   const deviceName = probe?.hostname ?? host.trim();
   // The operator's explicit word that this network is closed: pairing goes on
   // over plain HTTP, with nothing verified.
@@ -355,7 +357,7 @@ export default function PeerTransferModal({
           setRemoteProjects(
             await listPeerProjects(found.host, found.port, '', found.scheme, found.runtimeId),
           );
-          setSignedIn(true);
+          setPaired(true);
         } catch (reason) {
           // Revoked there, or expired unused: offered to pair again. Any
           // other failure leaves the password to sign in with.
@@ -379,22 +381,22 @@ export default function PeerTransferModal({
       // manager, so it stays in component state for this modal's lifetime —
       // never in web storage, where any script on this origin could read it.
       // "Remember this device" keeps it on the manager instead.
-      const paired = await pairPeer(host.trim(), port, password, probe.scheme, {
+      const pairing = await pairPeer(host.trim(), port, password, probe.scheme, {
         fingerprint: probe.fingerprint,
         allowInsecureHttp: probe.scheme === 'http' && insecureAccepted,
         remember: probe.scheme === 'https' && remember,
       });
-      setToken(paired.token);
+      setToken(pairing.token);
       setPassword('');
       const projects = await listPeerProjects(
         host.trim(),
         port,
-        paired.token,
+        pairing.token,
         probe.scheme,
         probe.runtimeId,
       );
       setRemoteProjects(projects);
-      setSignedIn(true);
+      setPaired(true);
     } catch (reason) {
       const text = describeError(reason);
       setError(text);
@@ -424,7 +426,7 @@ export default function PeerTransferModal({
       setTransfer(null);
       // The sign-in was for the forgotten certificate. Whatever the peer
       // shows now has to be compared before anything is sent to it again.
-      setSignedIn(false);
+      setPaired(false);
       setToken('');
       await verifyDevice();
     } catch (reason) {
@@ -443,7 +445,7 @@ export default function PeerTransferModal({
       if (probe?.runtimeId) await forgetPeerPairing(probe.runtimeId);
       setKeyRefused(false);
       setTransfer(null);
-      setSignedIn(false);
+      setPaired(false);
       setToken('');
       // The other device files a transfer under the pairing that sent it, so
       // the new pairing starts a transfer of its own.
@@ -520,8 +522,7 @@ export default function PeerTransferModal({
   const transferActive = transfer?.status === 'active';
   // A failed or cancelled transfer hands the form back so the resolution can
   // be amended in place; only a completed one is done with it.
-  const showForm =
-    paired && !pairingRefused && !transferActive && transfer?.status !== 'complete';
+  const showForm = paired && !pairingRefused && !transferActive && transfer?.status !== 'complete';
 
   // Replacement installs into the existing project's own folder, and that
   // folder has to be one in the target's projects root — a project registered
@@ -780,7 +781,10 @@ export default function PeerTransferModal({
           </p>
           <ol className="project-form__instructions">
             <li>{`On ${deviceName}, open Settings › HTTPS and choose HTTPS. It restarts on its HTTPS port, 8443 unless changed.`}</li>
-            <li>Back here, set the protocol to HTTPS and that port, or pick the device again from the list.</li>
+            <li>
+              Back here, set the protocol to HTTPS and that port, or pick the device again from the
+              list.
+            </li>
             <li>Verify the device again and compare its certificate.</li>
           </ol>
           <details className="project-form__disclosure">
@@ -834,11 +838,7 @@ export default function PeerTransferModal({
               </span>
             </div>
           )}
-          <Button
-            variant="primary"
-            onClick={() => void signIn()}
-            disabled={busy || !password}
-          >
+          <Button variant="primary" onClick={() => void signIn()} disabled={busy || !password}>
             {busy ? 'Signing in…' : 'Sign in'}
           </Button>
         </>
