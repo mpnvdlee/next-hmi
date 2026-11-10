@@ -33,17 +33,17 @@
   border-color: transparent;
 }
 
+/* A custom icon is the colour seen through the SVG as a mask: the file loads as
+   an image, so none of its markup reaches the page, and its own paint only
+   decides where the colour shows. Without `--hmi-icon-url` (a value that is no
+   custom icon path) the mask is fully transparent: an empty box of the icon's
+   size. */
 .hmi-icon__svg {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 0;
-}
-
-/* No `fill` rule here on purpose: CSS outranks the SVG presentation attributes
-   `useInlineSvg` writes, so filling shapes from the sheet would paint over the
-   `fill="none"` that makes an outline icon an outline. */
-.hmi-icon__svg svg {
-  width: 100%;
-  height: 100%;
+  display: block;
+  width: var(--hmi-icon-size);
+  height: var(--hmi-icon-size);
+  background-color: var(--hmi-icon-color, currentColor);
+  -webkit-mask: var(--hmi-icon-url, linear-gradient(transparent, transparent)) center / contain
+    no-repeat;
+  mask: var(--hmi-icon-url, linear-gradient(transparent, transparent)) center / contain no-repeat;
 }

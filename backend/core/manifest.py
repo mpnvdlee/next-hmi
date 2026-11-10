@@ -27,11 +27,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import tempfile
 import threading
 import unicodedata
+from collections import Counter
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -41,8 +43,11 @@ from typing import Any, BinaryIO, Literal
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
 from core import bootstrap, runtime_home
+from core.exceptions import ConflictError
 from core.runtime_home import manifest_path
 from core.time_utils import iso_now
+
+logger = logging.getLogger(__name__)
 
 _lock = threading.RLock()
 _held_file_locks: dict[Path, _HeldFileLock] = {}
@@ -126,6 +131,8 @@ class ManifestV1(BaseModel):
     peers: list[PeerEntry] = Field(default_factory=list)
     running: list[RunningEntry] = Field(default_factory=list)
     _source_revision: str | None = PrivateAttr(default=None)
+    # The project ids the file held when this model was read or last saved.
+    _source_ids: tuple[str, ...] = PrivateAttr(default=())
 
     @field_validator("defaultProjectId")
     @classmethod
@@ -256,6 +263,7 @@ def load_manifest(path: Path | None = None) -> ManifestV1:
                     "the file was preserved and must be repaired before startup"
                 ) from exc
         manifest._source_revision = _revision(raw)
+        manifest._source_ids = tuple(entry.id for entry in manifest.projects)
         return manifest
 
 
@@ -268,6 +276,9 @@ def migrate_invalid_project_ids(path: Path | None = None) -> dict[str, str]:
     rewrites the id in ``projects``, ``running``, ``defaultProjectId`` and each
     project's own ``config.json``, so no permanent compatibility path is
     needed. Returns ``{old: new}``.
+
+    Also warns about ids that differ only in case: ``save_manifest`` refuses a
+    new one, but an installation may hold a pair registered before it did.
     """
     if path is None:
         path = manifest_path()
@@ -314,6 +325,7 @@ def migrate_invalid_project_ids(path: Path | None = None) -> dict[str, str]:
             renames[identifier] = replacement
             rewrites.append((item, identifier, replacement))
             item["id"] = replacement
+        _warn_about_case_variants(item.get("id") for item in entries)
 
         changed = bool(rewrites)
         # Two entries can share one invalid id, so a single old->new map would
@@ -388,12 +400,51 @@ def migrate_invalid_project_ids(path: Path | None = None) -> dict[str, str]:
     return renames
 
 
+def _warn_about_case_variants(project_ids: Iterable[object]) -> None:
+    groups: dict[str, list[str]] = {}
+    for project_id in project_ids:
+        if isinstance(project_id, str):
+            groups.setdefault(project_id.casefold(), []).append(project_id)
+    for group in groups.values():
+        if len(group) > 1:
+            logger.warning(
+                "manifest: project ids %s differ only in upper and lower case; on "
+                "Windows and macOS they share one widget build, log and thumbnail "
+                "folder. Rename all but one of them.",
+                ", ".join(f"'{project_id}'" for project_id in group),
+            )
+
+
 def _is_valid_project_id(value: str) -> bool:
     try:
         validate_project_id(value)
     except ValueError:
         return False
     return True
+
+
+def _refuse_new_case_variant(manifest: ManifestV1) -> None:
+    """Refuse a project id that another entry already holds, ignoring case.
+
+    Every path that registers a project saves through here, the peer receive
+    and pull included. The id names folders under the runtime home
+    (``.widget-build/<id>``, ``.logs/instances/<id>``, ``.thumbnails/<id>.png``),
+    and on Windows and macOS ``Line3`` and ``line3`` are one folder. Only a
+    group that grew since the model was read is refused, so an installation
+    that registered such a pair before this check still saves.
+    """
+    before = Counter(project_id.casefold() for project_id in manifest._source_ids)
+    now = Counter(entry.id.casefold() for entry in manifest.projects)
+    for folded, count in now.items():
+        if count > 1 and count > before[folded]:
+            group = [entry.id for entry in manifest.projects if entry.id.casefold() == folded]
+            # Worded like the peer transfer's own collision refusal, which the
+            # transfer dialog keys its resolution choices on.
+            raise ConflictError(
+                f"Destination project id or folder already exists: '{group[-1]}' "
+                f"matches the registered project '{group[0]}', and project ids "
+                "ignore upper and lower case."
+            )
 
 
 def save_manifest(manifest: ManifestV1, path: Path | None = None) -> None:
@@ -409,6 +460,7 @@ def save_manifest(manifest: ManifestV1, path: Path | None = None) -> None:
             raise ManifestConflictError(
                 "Project manifest changed during update; retry with a fresh manifest",
             )
+        _refuse_new_case_variant(manifest)
         try:
             serialized = manifest.model_dump_json(indent=2)
             with tempfile.NamedTemporaryFile(
@@ -423,6 +475,7 @@ def save_manifest(manifest: ManifestV1, path: Path | None = None) -> None:
                 tmp_path = Path(f.name)
             os.replace(tmp_path, path)
             manifest._source_revision = _revision(_read_manifest_bytes(path))
+            manifest._source_ids = tuple(entry.id for entry in manifest.projects)
         except OSError:
             if tmp_path is not None and tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
@@ -461,15 +514,21 @@ def slugify(name: str) -> str:
 
 
 def unique_slug(name: str, taken: Iterable[str]) -> str:
-    """Suffix the slug with ``-2``, ``-3``, … until it doesn't collide with ``taken``."""
+    """Suffix the slug with ``-2``, ``-3``, … until no id in ``taken`` matches it.
+
+    Compared ignoring case, as ``save_manifest`` compares registered ids.
+    """
     base = slugify(name)
-    taken_set = set(taken)
-    if base not in taken_set:
+    taken_set = {project_id.casefold() for project_id in taken}
+    if base.casefold() not in taken_set:
         return base
     n = 2
-    while f"{base}-{n}" in taken_set:
+    while True:
+        suffix = f"-{n}"
+        candidate = base[: 128 - len(suffix)] + suffix
+        if candidate.casefold() not in taken_set:
+            return candidate
         n += 1
-    return f"{base}-{n}"
 
 
 def find_project(manifest: ManifestV1, project_id: str) -> ProjectEntry | None:
@@ -477,6 +536,14 @@ def find_project(manifest: ManifestV1, project_id: str) -> ProjectEntry | None:
         if entry.id == project_id:
             return entry
     return None
+
+
+def find_project_ignoring_case(manifest: ManifestV1, project_id: str) -> ProjectEntry | None:
+    """The entry whose id is ``project_id`` ignoring case, an exact match first."""
+    folded = project_id.casefold()
+    return find_project(manifest, project_id) or next(
+        (entry for entry in manifest.projects if entry.id.casefold() == folded), None
+    )
 
 
 def default_project(manifest: ManifestV1) -> ProjectEntry | None:

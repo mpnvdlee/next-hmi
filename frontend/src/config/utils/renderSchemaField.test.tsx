@@ -628,3 +628,33 @@ describe('renderSchemaField — default hint for a non-string option', () => {
     expect(screen.queryByTitle(/object Object/)).toBeNull();
   });
 });
+
+describe('renderSchemaField — icon validation', () => {
+  const INVALID = /^Not a valid icon\. The value must be an \.svg file inside \/assets\/icons\//;
+
+  it.each([
+    ['a custom icon that leaves the folder', { type: 'custom', path: '../../api/historian/query' }],
+    ['a custom icon with a query', { type: 'custom', path: 'icons/pump.svg?v=2' }],
+    ['a custom icon that is not an svg', { type: 'custom', path: 'icons/pump.png' }],
+    [
+      'a typed path with an encoded parent',
+      { type: 'builtin', name: '/assets/icons/%2e%2e/x.svg' },
+    ],
+    ['a typed file outside the folder', { type: 'builtin', name: '/assets/images/pump.svg' }],
+  ])('says so under %s', (_label, icon) => {
+    render(<>{renderSchemaField(ICON_SCHEMA, { $static: icon }, vi.fn())}</>);
+    expect(screen.getByRole('alert')).toHaveTextContent(INVALID);
+  });
+
+  it.each([
+    ['a custom icon', { type: 'custom', path: 'icons/pump.svg' }],
+    ['a custom icon in a subfolder', { type: 'custom', path: 'valves/gate.svg' }],
+    ['a typed icon path', { type: 'builtin', name: '/assets/icons/pump.svg' }],
+    ['a built-in', { type: 'builtin', name: 'gear' }],
+    // A Menu Toggle draws a value that is neither as text.
+    ['a text glyph', { type: 'builtin', name: '☰' }],
+  ])('stays quiet for %s', (_label, icon) => {
+    render(<>{renderSchemaField(ICON_SCHEMA, { $static: icon }, vi.fn())}</>);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

@@ -1356,7 +1356,13 @@ function StringFieldCards({
         label={label}
         value={values[key]}
         onChange={set}
-        onOpenBindingPicker={stringSlotPicker(ctx, `${action.type}-${key}`, label, values[key], set)}
+        onOpenBindingPicker={stringSlotPicker(
+          ctx,
+          `${action.type}-${key}`,
+          label,
+          values[key],
+          set,
+        )}
       />
     );
   });

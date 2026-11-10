@@ -33,6 +33,201 @@ heading.
   counts the same way: on an array that counts from 1, index `1` is now
   `A[2]`. The warnings pill judges a binding on the same element.
 
+- **Pages open fast on a large OPC-UA server.** Against a server with tens of
+  thousands of variables, a page opened while the background subscription was
+  still being built waited for all of it, every variable on a page cost its
+  own round trip, and a slow page open held up the next navigation, so
+  variables stayed on the fast subscription long after the operator had left
+  the page. The background subscription is now built in batches a page can
+  cut in on, a page's variables are promoted in one request, a navigation no
+  longer waits for the one before it, and one OPC-UA request may take 30 s
+  before it fails (`request_timeout_s`) instead of asyncua's 4 s, which on a
+  busy server fell back to one request per variable. A browser now also
+  receives only the values its own pages bind, instead of every change on
+  the server: no value snapshot on connect, and a page switch delivers the
+  page's values in one message. A struct array bound at a fixed index
+  (`Motors[3]`) puts only that element on the fast subscription, reads and
+  ships only that element, and a change inside a struct nested in an array
+  element patches the array value in place instead of rebuilding it. A
+  browser receives the shape metadata of its own pages' variables with each
+  page instead of the whole datasource on connect (13 MB for 100k
+  variables). The fast subscription samples at 50 ms by default (was 20),
+  and numeric variables carry an absolute deadband (**Deadband**, default
+  0.001) so a value jittering below it is never published; **Request
+  timeout** sits beside it in the datasource panel. The Admin page's
+  Connected Runtimes table shows per browser how many keys its context holds
+  and how much it has been sent.
+
+- **A translation key with `?` or `#` in it reached the instance cut off**, so
+  deleting the key `Start?` deleted `Start`.
+
+- **Starting a project from a source checkout used a different runtime home
+  than the manager.**
+
+### Changed
+
+- **First-run setup asks for a setup code.** On a new install the dashboard
+  asks for a one-time setup code before it accepts the device-admin password.
+  The device prints the code in its terminal and log at start-up; with Docker,
+  `docker logs nexthmi` shows it.
+
+- **Secured OPC-UA connections wait for a certificate you trust.** A datasource
+  that signs in with a username over a secured endpoint sends its credentials
+  only to a server certificate you trusted. After the update such a datasource
+  stays disconnected until you click **Trust certificate** once in its
+  properties. An anonymous secured connection keeps working and shows **Not
+  trusted** until then. A certificate that changes later stops the connection.
+
+- **The OPC-UA test server stays on the device.** It listens on `127.0.0.1`
+  unless **Reachable from the network** is on, and it accepts anonymous
+  sessions only, writing each node as its access level allows.
+
+- **Other sites can no longer show NEXT HMI in a frame.** List the sites that
+  may under **Settings › Sites that may embed NEXT HMI**, up to 32. Embedding
+  is meant for the runtime screens; open the dashboard and editor directly.
+
+- **Pairing with another device confirms its certificate first.** The transfer
+  dialog shows the other device's certificate fingerprint and sends the
+  password only after you confirm it. Pairing over plain HTTP is refused unless
+  you confirm the network is isolated. A certificate pinned before this release
+  is confirmed once. **Remember this device** keeps a pairing key so the
+  password is not needed next time.
+
+- **A project that carries code asks for trust before it is installed.**
+  Importing or fetching a project with custom widgets, JavaScript in
+  `external-libraries/` or an `external-modules.json` import map needs your
+  confirmation that you trust its source; the dialog lists what it found.
+  Import-map keys must be bare module names.
+
+- **Custom widgets bundle files from `custom-widgets/` and
+  `external-libraries/` only.** A widget that imports a file anywhere else
+  fails to build, and the error names the file.
+
+- **Writes to a disabled variable are refused.** A variable that is not enabled
+  in its datasource can no longer be written or read from a screen, and the
+  editor's Live column shows no value for it.
+
+- **Limits on what the open screens can ask for.** A historian query takes at
+  most 32 variables and 100 000 points, and a trend chart over the limit says
+  so. A request body sent to the open part of the device is capped at 1 MB,
+  64 MB in the editor.
+
+- **MCP asset uploads take image types only, and SVGs are rebuilt.**
+  `assets_upload` accepts `.svg` for icons and `.png`, `.jpg`, `.webp`, `.gif`
+  and `.svg` for images. An SVG is rebuilt from an allowlist: scripts, event
+  handlers, `<style>` and references to other files are removed, and the tool
+  reports what it removed.
+
+- **Sign-in locks only the address that keeps guessing.** Five wrong
+  device-admin passwords lock that address for a minute and the sign-in screen
+  counts down; other devices can still sign in. Only 100 failures a minute from
+  all addresses together lock everyone. On the screens, 60 wrong operator
+  passwords a minute refuse that address for 30 seconds, and only 300 from all
+  addresses together pause every sign-in. Behind a reverse proxy on another
+  host, list it in `NEXTHMI_FORWARDED_ALLOW_IPS`.
+
+- **Dashboard sign-ins can be ended.** Signing out ends the session on the
+  device. **Settings › Security › Sign out everywhere** ends every browser
+  session, a password change signs out every other browser, and turning HTTPS
+  on signs everyone out (Settings asks first). MCP, API and peer tokens keep
+  working. Upgrading signs every dashboard browser out once.
+
+- **A new device-admin password needs at least 8 characters.** An existing
+  shorter one still signs in.
+
+- **Settings › Tokens lists paired devices.** Every device that can send and
+  fetch projects without the device-admin password, with its runtime ID,
+  address, when it paired and was last used, and when its pairing expires: 90
+  days without use. **Revoke** cuts one off at once. When the other device no
+  longer accepts this one, the transfer dialog says so and offers **Pair
+  again**.
+
+- **Project ids ignore upper and lower case.** Importing a project whose id
+  differs from an existing one only in case is refused with a free id to use
+  instead (**Use <id> instead**), and a new project gets a free id.
+  `POST /api/projects/import` takes an optional `projectId`.
+
+- **A Web Frame keeps its messages to the site its URL names.** Outbound target
+  origin defaults to the URL's origin (it was `*`), and `*` or `null` in
+  Allowed inbound origins is ignored: list the sites instead. Project
+  validation reports both, and the properties panel warns when the URL comes
+  from a variable while the sandbox is off, with **Turn on sandbox**.
+
+- **The Docker image runs the app as the user `nexthmi` (uid 10001).** The
+  first start after the upgrade gives the `/data` volume to that user. A
+  project folder or `NEXTHMI_SSL_*` certificate you bind-mount yourself must be
+  usable by uid 10001. The enterprise image still runs as root.
+
+- **A project serves at most 500 open screens at once.** One more is turned
+  away (WebSocket close `1013`) and tries again every 10 seconds; the editor is
+  never turned away.
+
+- **A crashed project shows `starting` while it restarts**, and a restart that
+  never comes up is reported `crashed` instead of staying `starting`.
+
+### Security
+
+- **A disabled OPC-UA variable could be written and read from the network.**
+- **A text variable bound to an icon could run script on the dashboard's
+  address.** Custom icons are now drawn as a mask, never inserted as markup,
+  and their paths are checked after the address is resolved.
+- **A project's widget build could read files elsewhere on the device and
+  publish them.**
+- **An MCP write token could store a script in an asset, and a crafted SVG
+  could freeze the manager.**
+- **Pairing could send the other device's admin password to an impostor on
+  the network.**
+- **A website could claim a new install through DNS rebinding.**
+- **A website could frame the runtime screens and trick a click into a
+  write.** Files opened directly from a project's `assets` and
+  `custom-widgets` folders also run no script.
+- **The OPC-UA test server accepted an administrator with any password from
+  the network.**
+- **The OPC-UA client trusted any server certificate**, so a machine in the
+  middle could collect the PLC credentials.
+- **Large request bodies, WebSocket messages and historian queries could
+  exhaust the device's memory or stall it.**
+- **An MCP read token could read datasource passwords**, including a password
+  written into a server address.
+- **The `mcp` package moves to 2.2 or later** for four published advisories.
+  MCP sessions are capped and close after 30 idle minutes.
+- **Five wrong passwords from anyone locked every admin out for a minute**,
+  and wrong operator passwords sent in parallel were all checked, beyond the
+  limit of five a minute.
+- **A copied dashboard cookie kept working after signing out**, and after
+  HTTPS was turned on.
+- **A device-admin password could be one character long.** New hashes use
+  600 000 PBKDF2 iterations; an older hash is upgraded at the next sign-in.
+- **Any process on the device could call a project instance directly**, or
+  take its port before it started and receive the screens' traffic. An
+  instance now answers only the manager that started it, which proves itself
+  with a secret given at each start.
+- **A `.` or `..` segment in an editor path reached the instance's internal
+  reload hook.** The proxy now refuses such paths, encoded forms included.
+- **A paired device could fill the disk or memory with its replies**, its
+  pairing never expired, and it could read or cancel another device's
+  transfer and see paths on this device.
+- **A flood of mDNS announcements could grow the manager's memory without
+  limit.**
+- **Project ids that differ only in case shared folders on Windows and
+  macOS**, so a pushed `LINE3` could overwrite the widgets `line3` serves.
+- **On Windows, a theme id could read, write or delete `*.json` files outside
+  the project.**
+- **Reusing an MCP idempotency key on another project or token skipped the
+  write.**
+- **Another local user could freeze an instance through its translation lock
+  in the shared temp directory.** Locks now live in `<runtime_home>/.locks/`.
+- **A client could keep the PLC resubscribing and the live view busy**, and
+  `/api/device/info` lookups for addresses without reverse DNS could stall
+  sign-ins and alarm acknowledgements.
+- **A Web Frame sent its outbound value to whatever site it showed**, and `*`
+  in Allowed inbound origins let any framed site run On Message and write the
+  inbound variable.
+- **The Docker image ran the app as root.**
+- **Frontend dev dependencies are updated past npm audit findings:** vite
+  8.3.7, vitest 4.1.12, zod 4.6.7, undici 8.12.4, brace-expansion 5.0.12 and
+  source-map-js 1.2.2.
+
 ## [1.2.0] - 2026-11-08
 
 Opens the HMI to the systems around it and shuts out the ones that should not

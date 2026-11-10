@@ -4,6 +4,7 @@ import Button from '../Button';
 import ModalShell from '../ModalShell';
 
 interface Props {
+  title?: string;
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function ConfirmModal({
+  title,
   message,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
@@ -24,6 +26,7 @@ export default function ConfirmModal({
 
   return (
     <ModalShell onClose={onCancel} dialogClassName="name-modal" initialFocusRef={confirmRef}>
+      {title && <div className="name-modal__title">{title}</div>}
       <div className="name-modal__message">{message}</div>
       <div className="name-modal__actions">
         <Button variant="ghost" onClick={onCancel}>

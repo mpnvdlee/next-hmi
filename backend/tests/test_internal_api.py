@@ -275,3 +275,27 @@ def test_users_reload_drops_deleted_users_and_refreshes_groups(
     assert identities("bob") == [("guest", ["guest"])]
     assert identities("guest") == []
     assert list(manager._sessions) == [held["ann"]["session"]]
+
+
+def test_panel_login_passes_the_caller_s_address_to_the_throttle(
+    client: TestClient, monkeypatch
+) -> None:
+    from services import users_manager
+    from services.websocket_manager import WebSocketManager
+
+    manager = WebSocketManager()
+    manager._client_panels["c1"] = "line-a"
+    monkeypatch.setattr(internal_api, "websocket_manager", manager)
+    addresses: list[str | None] = []
+
+    async def authenticate(username, password, address):
+        addresses.append(address)
+        return None
+
+    monkeypatch.setattr(users_manager, "authenticate", authenticate)
+    resp = client.post(
+        "/api/internal/panels/login", json={"panel": "line-a", "username": "ann", "password": "x"}
+    )
+
+    assert resp.status_code == 401
+    assert addresses == ["testclient"]

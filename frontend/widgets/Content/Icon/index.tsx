@@ -39,9 +39,7 @@ export default function Icon({ properties, layout }: HmiWidgetProps) {
 
   const IconComp =
     iconValue && isBuiltinIconId(iconValue) ? getBuiltinIconComponent(iconValue) : null;
-  const isCustomIcon = iconValue ? isCustomIconAssetPath(iconValue) : false;
-
-  const svgContent = useInlineSvg(isCustomIcon ? iconValue : null);
+  const customIconUrl = isCustomIconAssetPath(iconValue) ? withBase(iconValue) : null;
 
   return (
     <div
@@ -55,11 +53,14 @@ export default function Icon({ properties, layout }: HmiWidgetProps) {
           </React.Suspense>
         </span>
       )}
-      {isCustomIcon && svgContent && (
+      {iconValue && !IconComp && (
         <span
           className="hmi-icon__svg"
-          style={{ ...(color ? { color } : {}), width: size, height: size }}
-          dangerouslySetInnerHTML={{ __html: svgContent }}
+          style={{
+            '--hmi-icon-size': `${size}px`,
+            '--hmi-icon-color': color,
+            '--hmi-icon-url': customIconUrl ? `url("${customIconUrl}")` : undefined,
+          }}
         />
       )}
     </div>

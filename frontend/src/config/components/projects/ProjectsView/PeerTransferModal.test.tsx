@@ -1,7 +1,34 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useProjectsStore, type PeerProject, type ProjectEntry } from '@config/store/projectsStore';
+import {
+  PEER_PAIRING_REFUSED,
+  useProjectsStore,
+  type PeerProbe,
+  type PeerProject,
+  type ProjectCode,
+  type ProjectEntry,
+} from '@config/store/projectsStore';
+import { apiErrorFrom } from '@shared/utils/api';
 import PeerTransferModal from './PeerTransferModal';
+
+const FINGERPRINT = '0123456789abcdef'.repeat(4);
+const NO_CODE: ProjectCode = { customWidgets: [], externalLibraries: [], importOverrides: [] };
+
+/** An HTTPS peer seen for the first time: its certificate still has to be compared. */
+function probed(overrides: Partial<PeerProbe> = {}): PeerProbe {
+  return {
+    host: '10.0.0.4',
+    port: 8443,
+    address: '10.0.0.4',
+    scheme: 'https',
+    hostname: 'line-2-panel',
+    runtimeId: 'rid-line-2',
+    fingerprint: FINGERPRINT,
+    trust: 'new',
+    remembered: false,
+    ...overrides,
+  };
+}
 
 function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
   return {
@@ -42,6 +69,7 @@ it('offers "forget pinned certificate" when a mid-transfer pin mismatch arrives 
 
   useProjectsStore.setState({
     loadPeers: vi.fn().mockResolvedValue({ discovered: [], manual: [] }),
+    probePeer: vi.fn().mockResolvedValue(probed()),
     pairPeer: vi.fn().mockResolvedValue({ token: 'tok', certificateFingerprint: 'abcd' }),
     listPeerProjects: vi.fn().mockResolvedValue([]),
     beginPeerTransfer: vi.fn().mockResolvedValue({
@@ -73,17 +101,16 @@ it('offers "forget pinned certificate" when a mid-transfer pin mismatch arrives 
     />,
   );
 
-  await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
-  await user.type(screen.getByLabelText(/device-admin password/i), 'secret');
-  await user.click(screen.getByRole('button', { name: 'Pair & continue' }));
+  await pairWith(user);
 
   await user.type(await screen.findByLabelText(/Destination folder/i), 'landing');
   await user.click(screen.getByRole('button', { name: 'Transfer' }));
 
-  expect(screen.queryByText('Forget pinned certificate and retry')).not.toBeInTheDocument();
+  expect(screen.queryByText('Forget pinned certificate and verify again')).not.toBeInTheDocument();
 
   await waitFor(
-    () => expect(screen.getByText('Forget pinned certificate and retry')).toBeInTheDocument(),
+    () =>
+      expect(screen.getByText('Forget pinned certificate and verify again')).toBeInTheDocument(),
     { timeout: 3000 },
   );
 });
@@ -91,8 +118,10 @@ it('offers "forget pinned certificate" when a mid-transfer pin mismatch arrives 
 it('clears the mismatch panel and button once the pinned certificate is forgotten', async () => {
   const user = userEvent.setup();
 
+  const forgetPeerCertificate = vi.fn().mockResolvedValue(undefined);
   useProjectsStore.setState({
     loadPeers: vi.fn().mockResolvedValue({ discovered: [], manual: [] }),
+    probePeer: vi.fn().mockResolvedValue(probed()),
     pairPeer: vi.fn().mockResolvedValue({ token: 'tok', certificateFingerprint: 'abcd' }),
     listPeerProjects: vi.fn().mockResolvedValue([]),
     beginPeerTransfer: vi.fn().mockResolvedValue({
@@ -110,7 +139,7 @@ it('clears the mismatch panel and button once the pinned certificate is forgotte
       bytesTotal: 100,
       message: 'Certificate for peer 10.0.0.4:8000 changed. Pinned abcd…, peer now presents ef01….',
     }),
-    forgetPeerCertificate: vi.fn().mockResolvedValue(undefined),
+    forgetPeerCertificate,
   });
 
   render(
@@ -122,16 +151,16 @@ it('clears the mismatch panel and button once the pinned certificate is forgotte
     />,
   );
 
-  await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
-  await user.type(screen.getByLabelText(/device-admin password/i), 'secret');
-  await user.click(screen.getByRole('button', { name: 'Pair & continue' }));
+  await pairWith(user);
 
   await user.type(await screen.findByLabelText(/Destination folder/i), 'landing');
   await user.click(screen.getByRole('button', { name: 'Transfer' }));
 
-  const forgetButton = await screen.findByRole('button', {
-    name: 'Forget pinned certificate and retry',
-  });
+  const forgetButton = await screen.findByRole(
+    'button',
+    { name: 'Forget pinned certificate and verify again' },
+    { timeout: 3000 },
+  );
   expect(screen.getByText(/Certificate for peer 10\.0\.0\.4:8000 changed/)).toBeInTheDocument();
 
   await user.click(forgetButton);
@@ -144,8 +173,12 @@ it('clears the mismatch panel and button once the pinned certificate is forgotte
     ).not.toBeInTheDocument(),
   );
   expect(
-    screen.queryByRole('button', { name: 'Forget pinned certificate and retry' }),
+    screen.queryByRole('button', { name: 'Forget pinned certificate and verify again' }),
   ).not.toBeInTheDocument();
+  expect(forgetPeerCertificate).toHaveBeenCalledWith('10.0.0.4', 8443, 'rid-line-2');
+  // Whatever the peer shows now is compared again before anything is sent.
+  expect(await screen.findByRole('button', { name: 'It matches, continue' })).toBeInTheDocument();
+  expect(screen.queryByLabelText(/device-admin password/i)).not.toBeInTheDocument();
 });
 
 interface BeginArgs {
@@ -166,7 +199,8 @@ function stubStore(remoteProjects: PeerProject[], overrides: Record<string, unkn
   }));
   useProjectsStore.setState({
     loadPeers: vi.fn().mockResolvedValue({ discovered: [], manual: [] }),
-    pairPeer: vi.fn().mockResolvedValue({ token: 'tok', certificateFingerprint: null }),
+    probePeer: vi.fn().mockResolvedValue(probed()),
+    pairPeer: vi.fn().mockResolvedValue({ token: 'tok', certificateFingerprint: FINGERPRINT }),
     listPeerProjects: vi.fn().mockResolvedValue(remoteProjects),
     beginPeerTransfer,
     ...overrides,
@@ -184,7 +218,8 @@ function stubPullStore(remoteProjects: PeerProject[], overrides: Record<string, 
   }));
   useProjectsStore.setState({
     loadPeers: vi.fn().mockResolvedValue({ discovered: [], manual: [] }),
-    pairPeer: vi.fn().mockResolvedValue({ token: 'tok', certificateFingerprint: null }),
+    probePeer: vi.fn().mockResolvedValue(probed()),
+    pairPeer: vi.fn().mockResolvedValue({ token: 'tok', certificateFingerprint: FINGERPRINT }),
     listPeerProjects: vi.fn().mockResolvedValue(remoteProjects),
     beginPeerPull,
     ...overrides,
@@ -192,10 +227,13 @@ function stubPullStore(remoteProjects: PeerProject[], overrides: Record<string, 
   return beginPeerPull;
 }
 
+/** Verify device → confirm the certificate → sign in. */
 async function pairWith(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
+  await user.click(screen.getByRole('button', { name: 'Verify device' }));
+  await user.click(await screen.findByRole('button', { name: 'It matches, continue' }));
   await user.type(screen.getByLabelText(/device-admin password/i), 'secret');
-  await user.click(screen.getByRole('button', { name: 'Pair & continue' }));
+  await user.click(screen.getByRole('button', { name: 'Sign in' }));
 }
 
 async function pick(user: ReturnType<typeof userEvent.setup>, combobox: string, option: RegExp) {
@@ -321,7 +359,9 @@ it('reopens the form after a failure and only mints a new id when parameters cha
     timeout: 3000,
   });
   expect(
-    screen.getByText('A project or folder of that name already exists on the target.'),
+    screen.getByText(
+      'A project or folder of that name already exists on the target. Project ids ignore upper and lower case.',
+    ),
   ).toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: 'Retry' }));
@@ -410,7 +450,9 @@ it('opens the resolutions when the backend refuses a collision the modal could n
     { timeout: 3000 },
   );
   expect(
-    screen.getByText('A project or folder of that name already exists on the target.'),
+    screen.getByText(
+      'A project or folder of that name already exists on the target. Project ids ignore upper and lower case.',
+    ),
   ).toBeInTheDocument();
   expect(
     screen.getByText('Choose a different destination folder, or pick a resolution below.'),
@@ -489,7 +531,7 @@ it('does not call a project registered outside the projects root a folder clash'
 it('names the local project in the way when it really is in the projects root', async () => {
   const user = userEvent.setup();
   const beginPeerPull = stubPullStore(
-    [{ id: 'remote-1', name: 'Landing', folder: 'landing', running: false }],
+    [{ id: 'remote-1', name: 'Landing', folder: 'landing', running: false, code: NO_CODE }],
     {
       projects: [
         project({
@@ -785,16 +827,19 @@ it('keeps the explanation of a terminal status the durable journal owns', async 
   // Pull, not push: only an installing client reaches `applied_pending_start`.
   // A sender's journal never leaves active/complete/error/cancelled.
   const user = userEvent.setup();
-  stubPullStore([{ id: 'remote-1', name: 'Landing', folder: 'landing', running: false }], {
-    getPeerPull: vi.fn(async (transferId: string) => ({
-      transferId,
-      phase: 'applied_pending_start',
-      status: 'applied_pending_start' as const,
-      bytesDone: 100,
-      bytesTotal: 100,
-      message: 'Project did not start: port 8001 is already in use',
-    })),
-  });
+  stubPullStore(
+    [{ id: 'remote-1', name: 'Landing', folder: 'landing', running: false, code: NO_CODE }],
+    {
+      getPeerPull: vi.fn(async (transferId: string) => ({
+        transferId,
+        phase: 'applied_pending_start',
+        status: 'applied_pending_start' as const,
+        bytesDone: 100,
+        bytesTotal: 100,
+        message: 'Project did not start: port 8001 is already in use',
+      })),
+    },
+  );
 
   render(<PeerTransferModal direction="pull" onClose={vi.fn()} onTransferred={vi.fn()} />);
 
@@ -985,4 +1030,355 @@ it('offers a peer that is both discovered and manually added only once', async (
     (option) => option.textContent,
   );
   expect(labels).toEqual(['http://10.0.0.4:8000', 'https://10.0.0.4:8443']);
+});
+
+function renderPush() {
+  return render(
+    <PeerTransferModal
+      direction="push"
+      source={project()}
+      onClose={vi.fn()}
+      onTransferred={vi.fn()}
+    />,
+  );
+}
+
+function currentStep(): string | null {
+  return document.querySelector('[aria-current="step"]')?.textContent ?? null;
+}
+
+it('shows the certificate before it asks for the password, and pairs with what was confirmed', async () => {
+  const user = userEvent.setup();
+  const pairPeer = vi.fn().mockResolvedValue({ token: 'tok', remembered: true });
+  stubStore([], { pairPeer });
+
+  renderPush();
+  expect(currentStep()).toBe('Verify device');
+  await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
+  await user.click(screen.getByRole('button', { name: 'Verify device' }));
+
+  // Step 1: the device card and the fingerprint, and no password field yet.
+  expect(await screen.findByText('line-2-panel')).toBeInTheDocument();
+  expect(screen.getByText('10.0.0.4:8443')).toBeInTheDocument();
+  expect(screen.getByText('rid-line-2')).toBeInTheDocument();
+  const lines = within(screen.getByLabelText('Certificate SHA-256')).getAllByText(/[0-9a-f]{4}/);
+  expect(lines.map((line) => line.textContent)).toEqual([
+    '0123 4567 89ab cdef 0123 4567 89ab cdef',
+    '0123 4567 89ab cdef 0123 4567 89ab cdef',
+  ]);
+  expect(
+    screen.getByText(
+      'On line-2-panel, open Settings › HTTPS and compare it with SHA-256. Your password is sent only after you confirm.',
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByLabelText(/device-admin password/i)).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'It matches, continue' }));
+
+  // Step 2: verified, then the password.
+  expect(currentStep()).toBe('Sign in');
+  // Nothing is pinned until the sign-in, so this says no more than "verified".
+  expect(screen.getByText('line-2-panel verified')).toBeInTheDocument();
+  // Opt-in: a remembered key signs in to the other device without its password.
+  expect(screen.getByRole('checkbox', { name: 'Remember this device' })).not.toBeChecked();
+  expect(
+    screen.getByText('Keeps a pairing key so you don’t need the password next time.'),
+  ).toBeInTheDocument();
+  await user.type(screen.getByLabelText(/device-admin password/i), 'secret');
+  await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+  expect(pairPeer).toHaveBeenCalledWith('10.0.0.4', 8443, 'secret', 'https', {
+    fingerprint: FINGERPRINT,
+    allowInsecureHttp: false,
+    remember: false,
+  });
+  await waitFor(() => expect(currentStep()).toBe('Send'));
+});
+
+it('stops without sending anything when the operator says the certificate does not match', async () => {
+  const user = userEvent.setup();
+  const pairPeer = vi.fn();
+  stubStore([], { pairPeer });
+
+  renderPush();
+  await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
+  await user.click(screen.getByRole('button', { name: 'Verify device' }));
+  await user.click(await screen.findByRole('button', { name: 'It doesn’t match' }));
+
+  expect(
+    screen.getByText(
+      'Pairing stopped. No password was sent. Check that you picked the right device.',
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByLabelText(/device-admin password/i)).not.toBeInTheDocument();
+  expect(pairPeer).not.toHaveBeenCalled();
+});
+
+it('stops hard when a pinned device now shows another certificate', async () => {
+  const user = userEvent.setup();
+  const pairPeer = vi.fn();
+  stubStore([], { pairPeer, probePeer: vi.fn().mockResolvedValue(probed({ trust: 'changed' })) });
+
+  renderPush();
+  await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
+  await user.click(screen.getByRole('button', { name: 'Verify device' }));
+
+  expect(
+    await screen.findByText(
+      'Certificate changed: pairing stopped. line-2-panel shows a different certificate than when you paired. Someone may be intercepting the connection. No password was sent.',
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'It matches, continue' })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/device-admin password/i)).not.toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Forget pinned certificate and verify again' }),
+  ).toBeInTheDocument();
+  expect(pairPeer).not.toHaveBeenCalled();
+});
+
+it('asks for HTTPS on a plain-HTTP peer and pairs only behind the explicit override', async () => {
+  const user = userEvent.setup();
+  const pairPeer = vi.fn().mockResolvedValue({ token: 'tok', remembered: false });
+  stubStore([], {
+    pairPeer,
+    probePeer: vi
+      .fn()
+      .mockResolvedValue(probed({ scheme: 'http', fingerprint: null, trust: 'none' })),
+  });
+
+  renderPush();
+  await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
+  await user.click(screen.getByRole('button', { name: 'Verify device' }));
+
+  expect(await screen.findByText('Pairing needs HTTPS on the other device')).toBeInTheDocument();
+  expect(
+    screen.getByText(/On line-2-panel, open Settings › HTTPS and choose HTTPS/),
+  ).toBeInTheDocument();
+  expect(screen.queryByLabelText(/device-admin password/i)).not.toBeInTheDocument();
+
+  await user.click(screen.getByText('Isolated network without HTTPS?'));
+  await user.click(
+    screen.getByRole('checkbox', {
+      name: 'I understand the password is sent unencrypted, and this network is closed to other devices.',
+    }),
+  );
+
+  // Nothing was verified: no refusal left standing, and step 1 is not "done".
+  expect(screen.queryByText('Pairing needs HTTPS on the other device')).not.toBeInTheDocument();
+  expect(
+    screen.getByText('Unencrypted connection: the certificate cannot be verified.'),
+  ).toBeInTheDocument();
+  const skipped = screen.getByText('Not verified (HTTP)');
+  expect(skipped).toHaveClass('project-form__step--skipped');
+  expect(skipped).not.toHaveClass('project-form__step--done');
+  expect(currentStep()).toBe('Sign in');
+
+  // A pairing key is never remembered for a peer it would travel to in the clear.
+  expect(screen.queryByRole('checkbox', { name: 'Remember this device' })).not.toBeInTheDocument();
+  await user.type(screen.getByLabelText(/device-admin password/i), 'secret');
+  await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+  expect(pairPeer).toHaveBeenCalledWith('10.0.0.4', 8443, 'secret', 'http', {
+    fingerprint: null,
+    allowInsecureHttp: true,
+    remember: false,
+  });
+});
+
+it('sends to a remembered device without asking for its password', async () => {
+  const user = userEvent.setup();
+  const pairPeer = vi.fn();
+  const listPeerProjects = vi.fn().mockResolvedValue([]);
+  const beginPeerTransfer = stubStore([], {
+    pairPeer,
+    listPeerProjects,
+    probePeer: vi.fn().mockResolvedValue(probed({ trust: 'pinned', remembered: true })),
+  });
+
+  renderPush();
+  await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
+  await user.click(screen.getByRole('button', { name: 'Verify device' }));
+
+  await user.type(await screen.findByLabelText(/Destination folder/i), 'landing');
+  expect(currentStep()).toBe('Send');
+  expect(screen.getByText('line-2-panel verified')).toBeInTheDocument();
+  expect(screen.queryByLabelText(/device-admin password/i)).not.toBeInTheDocument();
+  expect(listPeerProjects).toHaveBeenCalledWith('10.0.0.4', 8443, '', 'https', 'rid-line-2');
+
+  await user.click(screen.getByRole('button', { name: 'Transfer' }));
+  expect(pairPeer).not.toHaveBeenCalled();
+  expect(beginPeerTransfer.mock.calls[0][0]).toMatchObject({
+    token: undefined,
+    peerRuntimeId: 'rid-line-2',
+  });
+});
+
+it('keeps a pairing key only once "Remember this device" is ticked', async () => {
+  const user = userEvent.setup();
+  const pairPeer = vi.fn().mockResolvedValue({ token: 'tok', remembered: true });
+  stubStore([], { pairPeer });
+
+  renderPush();
+  await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
+  await user.click(screen.getByRole('button', { name: 'Verify device' }));
+  await user.click(await screen.findByRole('button', { name: 'It matches, continue' }));
+  await user.click(screen.getByRole('checkbox', { name: 'Remember this device' }));
+  await user.type(screen.getByLabelText(/device-admin password/i), 'secret');
+  await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+  expect(pairPeer.mock.calls[0][4]).toMatchObject({ remember: true });
+});
+
+const CODE_WARNING_TAIL =
+  'It runs in the browser of everyone who opens the project, with the same access as this dashboard. Only fetch projects from a device you trust.';
+
+it.each([
+  [
+    { customWidgets: ['Dials/Needle', 'Gauge'], externalLibraries: ['three'], importOverrides: [] },
+    'This project contains code: 2 custom widgets, 1 external library.',
+  ],
+  [undefined, 'line-2-panel does not say whether this project contains code.'],
+])('makes a pull of code (%j) wait for the operator to trust the source', async (code, lead) => {
+  const user = userEvent.setup();
+  const beginPeerPull = stubPullStore([
+    { id: 'remote-1', name: 'Landing', folder: 'landing', running: false, code },
+  ]);
+
+  render(<PeerTransferModal direction="pull" onClose={vi.fn()} onTransferred={vi.fn()} />);
+  await pairWith(user);
+  await pick(user, 'Source project on peer', /Landing \(landing\)/);
+
+  expect(currentStep()).toBe('Fetch');
+  expect(screen.getByText(`${lead} ${CODE_WARNING_TAIL}`)).toBeInTheDocument();
+  for (const item of code ? ['Dials/Needle', 'Gauge', 'external-libraries/three'] : []) {
+    expect(screen.getByText(item)).toBeInTheDocument();
+  }
+  const pull = screen.getByRole('button', { name: 'Pull' });
+  expect(pull).toBeDisabled();
+
+  await user.click(
+    screen.getByRole('checkbox', {
+      name: 'I trust the source of this project and want to run its code',
+    }),
+  );
+  await user.click(pull);
+  expect(beginPeerPull.mock.calls[0][0]).toMatchObject({ trustCustomWidgets: true });
+});
+
+it('pulls a project its source says has no code without the warning', async () => {
+  const user = userEvent.setup();
+  const beginPeerPull = stubPullStore([
+    { id: 'remote-1', name: 'Landing', folder: 'landing', running: false, code: NO_CODE },
+  ]);
+
+  render(<PeerTransferModal direction="pull" onClose={vi.fn()} onTransferred={vi.fn()} />);
+  await pairWith(user);
+  await pick(user, 'Source project on peer', /Landing \(landing\)/);
+
+  expect(screen.queryByText(new RegExp(CODE_WARNING_TAIL.slice(0, 30)))).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Pull' }));
+  expect(beginPeerPull.mock.calls[0][0]).toMatchObject({ trustCustomWidgets: false });
+});
+
+it('starts on HTTPS and port 8443, the only way pairing goes ahead', async () => {
+  stubStore([]);
+  renderPush();
+  // Let the peer list it loads on open settle.
+  await act(async () => {});
+
+  expect(screen.getByRole('spinbutton')).toHaveValue(8443);
+  const protocol = screen.getByText('Protocol', { selector: '.project-form__label' });
+  expect(
+    within(protocol.closest('.project-form__field') as HTMLElement).getByRole('combobox'),
+  ).toHaveTextContent('HTTPS');
+});
+
+const REFUSED_HEADLINE = 'line-2-panel no longer accepts this device';
+const REFUSED_DETAIL =
+  'The pairing was revoked or has expired. Pair again with the device-admin password of line-2-panel to send or fetch projects.';
+
+it('offers to pair again when a remembered device refuses its pairing key', async () => {
+  const user = userEvent.setup();
+  const forgetPeerPairing = vi.fn().mockResolvedValue(undefined);
+  const refusal = await apiErrorFrom(
+    new Response(
+      JSON.stringify({
+        detail: '10.0.0.4 no longer accepts this device',
+        code: PEER_PAIRING_REFUSED,
+      }),
+      { status: 409 },
+    ),
+  );
+  stubStore([], {
+    forgetPeerPairing,
+    probePeer: vi.fn().mockResolvedValue(probed({ trust: 'pinned', remembered: true })),
+    listPeerProjects: vi.fn().mockRejectedValue(refusal),
+  });
+
+  renderPush();
+  await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
+  await user.click(screen.getByRole('button', { name: 'Verify device' }));
+
+  const alert = await screen.findByRole('alert');
+  expect(within(alert).getByText(REFUSED_HEADLINE)).toBeInTheDocument();
+  expect(within(alert).getByText(REFUSED_DETAIL)).toBeInTheDocument();
+  // Nothing else competes with it: no raw error, no password yet.
+  expect(screen.queryByText('10.0.0.4 no longer accepts this device')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/device-admin password/i)).not.toBeInTheDocument();
+
+  await user.click(within(alert).getByRole('button', { name: 'Pair again' }));
+
+  expect(forgetPeerPairing).toHaveBeenCalledWith('rid-line-2');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(currentStep()).toBe('Sign in');
+  expect(screen.getByLabelText(/device-admin password/i)).toBeInTheDocument();
+});
+
+it('offers to pair again when a transfer is refused for its pairing', async () => {
+  const user = userEvent.setup();
+  const forgetPeerPairing = vi.fn().mockResolvedValue(undefined);
+  const pairPeer = vi
+    .fn()
+    .mockResolvedValueOnce({ token: 'tok', remembered: false })
+    .mockResolvedValueOnce({ token: 'tok-2', remembered: false });
+  const beginPeerTransfer = stubStore([], {
+    forgetPeerPairing,
+    pairPeer,
+    getPeerTransfer: vi.fn(async (transferId: string) => ({
+      transferId,
+      phase: 'error',
+      failedPhase: 'uploading',
+      status: 'error' as const,
+      code: PEER_PAIRING_REFUSED,
+      bytesDone: 0,
+      bytesTotal: 100,
+      message: '10.0.0.4 no longer accepts this device: the pairing was revoked or has expired.',
+    })),
+  });
+
+  renderPush();
+  await pairWith(user);
+  await user.type(await screen.findByLabelText(/Destination folder/i), 'landing');
+  await user.click(screen.getByRole('button', { name: 'Transfer' }));
+
+  const alert = await screen.findByRole('alert', {}, { timeout: 3000 });
+  expect(within(alert).getByText(REFUSED_HEADLINE)).toBeInTheDocument();
+  // A retry with the refused key cannot succeed, so none is offered.
+  expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+
+  await user.click(within(alert).getByRole('button', { name: 'Pair again' }));
+  expect(forgetPeerPairing).toHaveBeenCalledWith('rid-line-2');
+  expect(currentStep()).toBe('Sign in');
+
+  await user.type(screen.getByLabelText(/device-admin password/i), 'secret');
+  await user.click(screen.getByRole('button', { name: 'Sign in' }));
+  // The form comes back as it was left.
+  expect(await screen.findByLabelText(/Destination folder/i)).toHaveValue('Line 1landing');
+  await user.click(screen.getByRole('button', { name: 'Transfer' }));
+
+  // The new pairing sends a transfer of its own, with its own key.
+  const [first, second] = beginPeerTransfer.mock.calls.map(([args]) => args);
+  expect(first).toMatchObject({ token: 'tok' });
+  expect(second).toMatchObject({ token: 'tok-2' });
+  expect(second.transferId).not.toBe(first.transferId);
 });

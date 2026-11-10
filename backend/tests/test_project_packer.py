@@ -57,6 +57,22 @@ def test_pack_then_unpack_round_trips(tmp_path: Path) -> None:
     assert manifest_mod.read_project_metadata(dest).id == pid
 
 
+def test_unpack_accepts_directory_members(tmp_path: Path) -> None:
+    """Zip tools other than ``pack_project`` write ``folder/`` entries."""
+    src = tmp_path / "src"
+    _make_project(src)
+    buf = io.BytesIO()
+    pack_project(src, buf)
+    with zipfile.ZipFile(buf, "a") as zf:
+        zf.writestr("custom-widgets/", "")
+        zf.writestr("custom-widgets/Gauge/", "")
+    buf.seek(0)
+
+    dest = tmp_path / "dest"
+    unpack_project(buf, dest)
+    assert (dest / "users.json").is_file()
+
+
 def test_unpack_rejects_recursive_component_var_binding_with_exact_source(tmp_path: Path) -> None:
     src = tmp_path / "src"
     _make_project(src)
@@ -282,6 +298,31 @@ def test_unpack_rejects_path_traversal(tmp_path: Path) -> None:
     with bad.open("rb") as fp, pytest.raises(UnsafeArchiveError):
         unpack_project(fp, dest)
     assert not (tmp_path / "escape.txt").exists()
+
+
+@pytest.mark.parametrize(
+    "member",
+    [
+        "x/../custom-widgets/Gauge/index.tsx",
+        "custom-widgets/a/../Gauge/index.tsx",
+        "custom-widgets\\a\\..\\Gauge\\index.tsx",
+        "./custom-widgets/Gauge/index.tsx",
+        "custom-widgets//Gauge/index.tsx",
+    ],
+)
+def test_unpack_rejects_a_member_that_does_not_name_its_path_plainly(
+    tmp_path: Path, member: str
+) -> None:
+    """Each stays inside the destination, but not where its name says."""
+    bad = tmp_path / "bad.zip"
+    with zipfile.ZipFile(bad, "w") as zf:
+        zf.writestr("custom-widgets/", "")
+        zf.writestr(member, "export default () => null;")
+
+    dest = tmp_path / "dest"
+    with bad.open("rb") as fp, pytest.raises(UnsafeArchiveError, match="path segment"):
+        unpack_project(fp, dest)
+    assert not (dest / "custom-widgets" / "Gauge").exists()
 
 
 def test_unpack_rejects_absolute_path(tmp_path: Path) -> None:

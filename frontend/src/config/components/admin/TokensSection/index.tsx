@@ -4,6 +4,7 @@ import Button from '../../ui/Button';
 import AccessBadge from '../../ui/AccessBadge';
 import { describeError } from '@config/store/projectsStore';
 import CreateTokenModal from './CreateTokenModal';
+import PairedDevices from './PairedDevices';
 import { listTokens, revokeToken, type ListedToken } from './tokensApi';
 import './style.css';
 
@@ -11,7 +12,8 @@ import './style.css';
  * The installation's bearer tokens on the manager's Settings page: MCP tokens
  * for AI agents and API tokens for API v1 integrations, each covering every
  * project. Listed and revoked here; created and shown once in
- * {@link CreateTokenModal}.
+ * {@link CreateTokenModal}. Below them, the devices paired for project
+ * transfer ({@link PairedDevices}).
  */
 export default function TokensSection() {
   const [tokens, setTokens] = useState<ListedToken[]>([]);
@@ -106,6 +108,8 @@ export default function TokensSection() {
           </tbody>
         </table>
       )}
+
+      <PairedDevices />
 
       {creating && (
         <CreateTokenModal onCreated={() => void refresh()} onClose={() => setCreating(false)} />

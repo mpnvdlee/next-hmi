@@ -1353,3 +1353,25 @@ describe('propertySourceEval', () => {
     });
   });
 });
+
+describe('evaluateVar with resolveElement', () => {
+  it('reads an indexed element through resolveElement and slices the whole value without it', () => {
+    const whole: EvaluationContext = {
+      resolveVariable: () => [10, 20, 30] as unknown as ResolvedValue,
+    };
+    expect(evaluatePropertyValue({ $var: { path: 'PLC:Arr', index: 1 } }, whole)).toBe(20);
+
+    const perElement: EvaluationContext = {
+      resolveVariable: () => [{ Speed: 1 }, { Speed: 2 }] as unknown as ResolvedValue,
+      resolveElement: (_ds, _path, index) => ({ Speed: 100 + index }) as unknown as ResolvedValue,
+    };
+    expect(evaluatePropertyValue({ $var: { path: 'PLC:Motors', index: 1 } }, perElement)).toEqual({
+      Speed: 101,
+    });
+    // No index: the whole value, element resolver untouched.
+    expect(evaluatePropertyValue({ $var: { path: 'PLC:Motors' } }, perElement)).toEqual([
+      { Speed: 1 },
+      { Speed: 2 },
+    ]);
+  });
+});

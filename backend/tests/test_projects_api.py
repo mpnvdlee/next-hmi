@@ -1042,6 +1042,285 @@ def test_import_rejects_invalid_zip(
     assert not destination.exists()
 
 
+def _widget_project_zip(tmp_path: Path) -> bytes:
+    source = tmp_path / "widget-source"
+    _make_project_folder(source, name="Widgets")
+    for key in ("Leak", "Gauges/Dial"):
+        widget = source / "custom-widgets" / key
+        widget.mkdir(parents=True)
+        (widget / "index.tsx").write_text("export default function W() { return null; }")
+    return _build_zip(source)
+
+
+def test_import_of_custom_widgets_needs_trust_confirmation(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    destination = tmp_path / "imported-widgets"
+
+    resp = client.post(
+        "/api/projects/import",
+        files={"file": ("w.zip", _widget_project_zip(tmp_path), "application/zip")},
+        data={"destinationPath": str(destination)},
+    )
+
+    assert resp.status_code == 409, resp.text
+    body = resp.json()
+    assert body["code"] == "custom_widgets_unconfirmed"
+    assert body["customWidgets"] == ["Gauges/Dial", "Leak"]
+    assert body["externalLibraries"] == []
+    assert body["importOverrides"] == []
+    assert "This project contains code: 2 custom widgets (Gauges/Dial, Leak)." in body["detail"]
+    assert not destination.exists()
+    assert manifest_mod.load_manifest(home / "projects.json").projects == []
+
+
+def test_import_reports_an_id_clash_before_asking_for_trust(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    """Trusting an archive that can never be imported here would be a dead end."""
+    source = tmp_path / "widget-source"
+    _make_project_folder(source, name="Widgets")
+    (source / "custom-widgets" / "Leak").mkdir(parents=True)
+    (source / "custom-widgets" / "Leak" / "index.tsx").write_text("export default 1")
+    payload = _build_zip(source)
+    first = client.post(
+        "/api/projects/import",
+        files={"file": ("w.zip", payload, "application/zip")},
+        data={"destinationPath": str(tmp_path / "first"), "trustCustomWidgets": "true"},
+    )
+    assert first.status_code == 201, first.text
+
+    again = client.post(
+        "/api/projects/import",
+        files={"file": ("w.zip", payload, "application/zip")},
+        data={"destinationPath": str(tmp_path / "second")},
+    )
+
+    assert again.status_code == 409, again.text
+    assert "code" not in again.json()
+    assert again.json()["detail"].startswith("A project with id ")
+    assert not (tmp_path / "second").exists()
+
+
+# ── project ids that differ only in case ─────────────────────────────────────
+# On Windows and macOS `line3` and `LINE3` share `.widget-build/<id>`,
+# `.logs/instances/<id>` and `.thumbnails/<id>.png` under the runtime home.
+
+
+def _register_ids(home: Path, tmp_path: Path, *project_ids: str) -> None:
+    manifest = manifest_mod.ManifestV1(
+        projects=[
+            manifest_mod.ProjectEntry(
+                id=project_id, name=project_id, path=str(tmp_path / project_id),
+                addedAt="2026-05-24T10:00:00Z",
+            )
+            for project_id in project_ids
+        ],
+    )
+    manifest_mod.save_manifest(manifest, home / "projects.json")
+
+
+def _archive_with_id(tmp_path: Path, project_id: str) -> bytes:
+    source = tmp_path / f"archive-{project_id}"
+    source.mkdir()
+    (source / "users.json").write_text('{"users":[]}')
+    manifest_mod.write_project_metadata(
+        source, manifest_mod.ProjectMetadata(id=project_id, name="Line 3"),
+    )
+    return _build_zip(source)
+
+
+def _import(client: TestClient, payload: bytes, destination: Path, **data: str):
+    return client.post(
+        "/api/projects/import",
+        files={"file": ("line3.zip", payload, "application/zip")},
+        data={"destinationPath": str(destination), **data},
+    )
+
+
+def test_import_refuses_a_case_variant_and_suggests_a_free_id(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    _register_ids(home, tmp_path, "line3", "Line3-2")
+    destination = tmp_path / "imported"
+
+    resp = _import(client, _archive_with_id(tmp_path, "LINE3"), destination)
+
+    assert resp.status_code == 409, resp.text
+    body = resp.json()
+    assert body["code"] == "project_id_case_conflict"
+    assert body["detail"] == (
+        "The project 'line3' already exists. Project ids ignore upper and lower case, "
+        "because on Windows and macOS they share one folder."
+    )
+    assert body["suggestedId"] == "LINE3-3"
+    assert not destination.exists()
+    assert [p.id for p in manifest_mod.load_manifest(home / "projects.json").projects] == [
+        "line3", "Line3-2",
+    ]
+
+
+def test_import_registers_the_archive_under_the_suggested_id(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    _register_ids(home, tmp_path, "line3")
+    destination = tmp_path / "imported"
+
+    resp = _import(client, _archive_with_id(tmp_path, "LINE3"), destination, projectId="LINE3-2")
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["id"] == "LINE3-2"
+    metadata = manifest_mod.read_project_metadata(destination)
+    assert metadata is not None
+    assert metadata.id == "LINE3-2"
+    assert [p.id for p in manifest_mod.load_manifest(home / "projects.json").projects] == [
+        "line3", "LINE3-2",
+    ]
+
+
+def test_import_refuses_an_invalid_project_id(client: TestClient, tmp_path: Path) -> None:
+    destination = tmp_path / "imported"
+
+    resp = _import(client, _archive_with_id(tmp_path, "line3"), destination, projectId="../x")
+
+    assert resp.status_code == 422, resp.text
+    assert not destination.exists()
+
+
+def test_create_gives_a_case_variant_name_a_free_id(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    _register_ids(home, tmp_path, "line3")
+
+    resp = client.post("/api/projects", json={"name": "LINE3", "path": str(tmp_path / "new")})
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["id"] == "LINE3-2"
+
+
+def test_register_refuses_a_case_variant(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    _register_ids(home, tmp_path, "line3")
+    folder = tmp_path / "copied"
+    folder.mkdir()
+    manifest_mod.write_project_metadata(folder, manifest_mod.ProjectMetadata(id="LINE3"))
+
+    resp = client.post("/api/projects/register", json={"path": str(folder)})
+
+    assert resp.status_code == 409, resp.text
+    assert "The project 'line3' already exists" in resp.json()["detail"]
+    assert "ignore upper and lower case" in resp.json()["detail"]
+    assert [p.id for p in manifest_mod.load_manifest(home / "projects.json").projects] == [
+        "line3",
+    ]
+
+
+def test_import_of_external_code_needs_trust_confirmation(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    """No custom widget, but a library and an import map: code all the same."""
+    source = tmp_path / "library-source"
+    _make_project_folder(source, name="Libraries")
+    (source / "external-libraries" / "three").mkdir(parents=True)
+    (source / "external-libraries" / "three" / "three.js").write_text("export {}")
+    (source / "external-libraries" / "README.txt").write_text("not code")
+    (source / "external-modules.json").write_text(
+        '{"imports": {"lodash": "/external-libraries/three/three.js"}}'
+    )
+    destination = tmp_path / "imported-libraries"
+
+    resp = client.post(
+        "/api/projects/import",
+        files={"file": ("l.zip", _build_zip(source), "application/zip")},
+        data={"destinationPath": str(destination)},
+    )
+
+    assert resp.status_code == 409, resp.text
+    body = resp.json()
+    assert body["code"] == "custom_widgets_unconfirmed"
+    assert (body["customWidgets"], body["externalLibraries"], body["importOverrides"]) == (
+        [],
+        ["three"],
+        ["lodash"],
+    )
+    assert (
+        "This project contains code: 1 external library (three), "
+        "1 import-map override (lodash)."
+    ) in body["detail"]
+    assert not destination.exists()
+
+    trusted = client.post(
+        "/api/projects/import",
+        files={"file": ("l.zip", _build_zip(source), "application/zip")},
+        data={"destinationPath": str(destination), "trustCustomWidgets": "true"},
+    )
+    assert trusted.status_code == 201, trusted.text
+
+
+@pytest.mark.parametrize(
+    "member",
+    ["x/../custom-widgets/Gauge/index.tsx", "custom-widgets/a/../Gauge/index.tsx"],
+)
+def test_import_refuses_a_member_whose_name_does_not_say_where_it_lands(
+    client: TestClient, tmp_path: Path, home: Path, member: str,
+) -> None:
+    """Both land in custom-widgets/Gauge/ while their names say otherwise."""
+    source = tmp_path / "trick-source"
+    _make_project_folder(source, name="Trick")
+    payload = io.BytesIO(_build_zip(source))
+    with zipfile.ZipFile(payload, "a") as archive:
+        archive.writestr(member, "export default () => null;")
+    destination = tmp_path / "imported-trick"
+
+    for trust in ("false", "true"):
+        resp = client.post(
+            "/api/projects/import",
+            files={"file": ("t.zip", payload.getvalue(), "application/zip")},
+            data={"destinationPath": str(destination), "trustCustomWidgets": trust},
+        )
+        assert resp.status_code == 422, resp.text
+        assert "'..' path segment" in resp.json()["detail"]
+        assert not destination.exists()
+    assert manifest_mod.load_manifest(home / "projects.json").projects == []
+
+
+def test_import_of_custom_widgets_with_trust_confirmation(
+    client: TestClient, tmp_path: Path, home: Path,
+) -> None:
+    destination = tmp_path / "imported-widgets"
+
+    resp = client.post(
+        "/api/projects/import",
+        files={"file": ("w.zip", _widget_project_zip(tmp_path), "application/zip")},
+        data={"destinationPath": str(destination), "trustCustomWidgets": "true"},
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert (destination / "custom-widgets" / "Leak" / "index.tsx").is_file()
+    assert [p.name for p in manifest_mod.load_manifest(home / "projects.json").projects] == [
+        "Widgets"
+    ]
+
+
+def test_import_without_custom_widgets_needs_no_confirmation(
+    client: TestClient, tmp_path: Path,
+) -> None:
+    source = tmp_path / "plain-source"
+    _make_project_folder(source, name="Plain")
+    # A folder the compiler ignores is not a widget.
+    (source / "custom-widgets" / "_template").mkdir(parents=True)
+    (source / "custom-widgets" / "_template" / "index.tsx").write_text("export default 1")
+
+    resp = client.post(
+        "/api/projects/import",
+        files={"file": ("p.zip", _build_zip(source), "application/zip")},
+        data={"destinationPath": str(tmp_path / "imported-plain")},
+    )
+
+    assert resp.status_code == 201, resp.text
+
+
 def test_import_rejects_component_direct_binding_and_cleans_destination(
     client: TestClient, tmp_path: Path,
 ) -> None:

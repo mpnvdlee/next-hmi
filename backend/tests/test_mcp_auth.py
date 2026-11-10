@@ -177,7 +177,10 @@ def test_mcp_rejects_invalid_bearer_token(manager_client: TestClient):
 def test_mcp_without_trailing_slash_is_not_a_redirect(manager_client: TestClient):
     """Clients that don't follow redirects still reach the transport at ``/mcp``:
     the path is rewritten to ``/mcp/`` before routing instead of 307-ing there."""
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+    )
     resp = manager_client.post(
         "/mcp",
         json=_INITIALIZE,
@@ -200,16 +203,22 @@ def test_mcp_forged_forwarded_headers_do_not_bypass_auth(manager_client: TestCli
 
 
 def test_mcp_accepts_valid_session_cookie(manager_client: TestClient):
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+    )
     _initialize(manager_client)
 
 
 def test_mcp_accepts_valid_bearer_token(manager_client: TestClient):
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     pair = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "access": "read"},
+        json={"password": "secret-pw", "access": "read"},
     )
     assert pair.status_code == 201
     token = pair.json()["token"]
@@ -220,14 +229,45 @@ def test_mcp_accepts_valid_bearer_token(manager_client: TestClient):
 def test_mcp_answers_a_client_on_the_lan(manager_client: TestClient):
     """A client on another machine sends the manager's LAN address as Host; the
     SDK's loopback-only Host check would answer that 421."""
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     token = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "access": "read"},
+        json={"password": "secret-pw", "access": "read"},
     ).json()["token"]
     _drop_session_cookie(manager_client)
     _initialize(manager_client, Authorization=f"Bearer {token}", Host="192.168.1.5:8000")
+
+
+@pytest.fixture
+def _two_session_cap(monkeypatch):
+    from mcp_server import server as mcp_server
+
+    monkeypatch.setattr(mcp_server, "MCP_MAX_SESSIONS", 2)
+
+
+def test_mcp_caps_open_sessions(_two_session_cap, manager_client: TestClient):
+    """CVE-2026-59951: stateful sessions were never reclaimed or capped. Past
+    the cap a new session is refused while the open ones keep working."""
+    from mcp_server import server as mcp_server
+
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+    )
+    _initialize(manager_client)
+    _initialize(manager_client)
+    refused = manager_client.post(
+        "/mcp",
+        json=_INITIALIZE,
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert refused.status_code == 503
+    session_manager = mcp_server.mcp_app.session_manager
+    assert session_manager.session_idle_timeout == mcp_server.MCP_SESSION_IDLE_TIMEOUT_S
 
 
 def _drop_session_cookie(client: TestClient) -> None:
@@ -254,7 +294,10 @@ def _seed_project(client: TestClient) -> str:
 
 
 def test_pair_requires_correct_password_and_takes_no_project(manager_client: TestClient):
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
 
     wrong = manager_client.post(
@@ -266,13 +309,13 @@ def test_pair_requires_correct_password_and_takes_no_project(manager_client: Tes
     # A 1.x script naming a project is refused, not handed a token for every project.
     one_project = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "projectId": "P1", "access": "read"},
+        json={"password": "secret-pw", "projectId": "P1", "access": "read"},
     )
     assert one_project.status_code == 422
 
     ok = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "access": "write"},
+        json={"password": "secret-pw", "access": "write"},
     )
     assert ok.status_code == 201
     body = ok.json()
@@ -284,11 +327,14 @@ def test_mcp_token_list_and_revoke_require_manager_session(manager_client: TestC
     assert manager_client.get("/api/manager/mcp-tokens").status_code == 401
     assert manager_client.delete("/api/manager/mcp-tokens/anything").status_code == 401
 
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     pair = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "access": "read"},
+        json={"password": "secret-pw", "access": "read"},
     )
     token_id = pair.json()["tokenId"]
 
@@ -304,13 +350,16 @@ def test_mcp_token_list_and_revoke_require_manager_session(manager_client: TestC
 def test_dashboard_create_needs_session_not_password(manager_client: TestClient):
     """The dashboard's create route takes the manager session as its proof: no
     password in the body, and nothing minted without the session."""
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     _drop_session_cookie(manager_client)
     body = {"access": "write", "name": "Laptop"}
     assert manager_client.post("/api/manager/mcp-tokens", json=body).status_code == 401
 
-    manager_client.post("/api/manager/auth/login", json={"password": "secret"})
+    manager_client.post("/api/manager/auth/login", json={"password": "secret-pw"})
     one_project = manager_client.post(
         "/api/manager/mcp-tokens", json={"projectId": "P1", "access": "read"}
     )
@@ -339,11 +388,14 @@ def test_dashboard_create_needs_session_not_password(manager_client: TestClient)
 
 
 def test_password_change_revokes_mcp_tokens(manager_client: TestClient):
-    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    manager_client.post(
+        "/api/manager/auth/setup",
+        json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+    )
     _seed_project(manager_client)
     pair = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "access": "write"},
+        json={"password": "secret-pw", "access": "write"},
     )
     token = pair.json()["token"]
     _drop_session_cookie(manager_client)
@@ -355,7 +407,7 @@ def test_password_change_revokes_mcp_tokens(manager_client: TestClient):
     # second /mcp call still exercises only the (now revoked) bearer token.
     changed = manager_client.post(
         "/api/manager/auth/change-password",
-        json={"currentPassword": "secret", "newPassword": "new-secret"},
+        json={"currentPassword": "secret-pw", "newPassword": "new-secret"},
     )
     assert changed.status_code == 200
     _drop_session_cookie(manager_client)

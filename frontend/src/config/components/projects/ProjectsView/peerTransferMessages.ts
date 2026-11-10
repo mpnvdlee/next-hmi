@@ -60,6 +60,13 @@ export function explainFailure(text: string, canResolve: boolean): FailureExplan
         : 'Wait for the countdown the peer reported, then pair again.',
     };
   }
+  if (text.includes('Invalid or revoked peer token')) {
+    return {
+      cause: 'The pairing key for this device is no longer valid.',
+      action:
+        'Changing its device-admin password revokes every pairing. Sign in with the new password.',
+    };
+  }
   if (text.includes('Could not resolve peer host')) {
     return {
       cause: 'That host name did not resolve.',
@@ -131,7 +138,8 @@ export function explainFailure(text: string, canResolve: boolean): FailureExplan
   }
   if (text.includes('project id or folder already exists')) {
     return {
-      cause: 'A project or folder of that name already exists on the target.',
+      cause:
+        'A project or folder of that name already exists on the target. Project ids ignore upper and lower case.',
       action: canResolve
         ? 'Choose a different destination folder, or pick a resolution below.'
         : 'Choose a different destination folder.',

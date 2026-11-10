@@ -8,7 +8,12 @@ import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useComponentStore } from '@shared/store/componentStore';
 import { useHmiStore } from '../store/hmiStore';
-import { sendWsMessage, setBackendRestartHandler } from '../hooks/useWebSocket';
+import {
+  sendWsMessage,
+  setBackendRestartHandler,
+  setContextProducer,
+  clearContextProducer,
+} from '../hooks/useWebSocket';
 import { useVariableStore } from '../store/variableStore';
 import { resolveMainStyle, resolvePageContext } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
@@ -148,7 +153,7 @@ export default function HmiView() {
       ...extractVarKeys(onVariableChanged),
     ];
 
-    sendWsMessage({ type: 'set_context', currentPageIds, priorityKeys });
+    setContextProducer('page', { currentPageIds, priorityKeys });
     // page, header, footer, openPageOverlays are intentionally
     // omitted from deps: page?.id already re-triggers on navigation, and we
     // do NOT want to re-send set_context on every component edit in the
@@ -166,7 +171,7 @@ export default function HmiView() {
   // page navigation or overlay toggle.
   useEffect(() => {
     return () => {
-      sendWsMessage({ type: 'set_context', currentPageIds: [] });
+      clearContextProducer('page');
     };
   }, []);
 

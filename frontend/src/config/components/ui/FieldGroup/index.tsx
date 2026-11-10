@@ -113,6 +113,9 @@ interface Props {
    *  rule: the box that actually owns the empty/wrong value gets the full
    *  mark, its ancestors just a dot. */
   diagnostic?: { level: 'error' | 'warning'; message: string; nested?: boolean };
+  /** A message the widget raises about this field's value, shown under the box
+   *  whatever its tier — a collapsed composite source included. */
+  notice?: ReactNode;
   /** Forces the selected accent even without an exact `selection` match — e.g. an
    *  action row whose currently-selected param is a descendant field, not itself. */
   forceSelected?: boolean;
@@ -148,6 +151,7 @@ export default function FieldGroup({
   hideClear,
   headerActions,
   diagnostic,
+  notice,
   forceSelected,
   block,
   summary,
@@ -390,6 +394,7 @@ export default function FieldGroup({
                   <div className="cfg-field-group__nest">{drawerOpen ? summary : children}</div>
                 )}
               </div>
+              {notice}
               {/* `display: contents` — a row portalled here lays out as the box's
               next item, at the field's own gap. */}
               <div className="cfg-field-group__below" ref={setBelowEl} />

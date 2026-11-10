@@ -19,11 +19,12 @@ from api.theme_api import router as theme_router
 from api.thumbnail_api import instance_router as thumbnail_router
 from api.users_api import router as users_router
 from api.widgets_api import router as widgets_router
-from core import audit, project_bootstrap
+from core import audit, instance_secret, project_bootstrap
 from core.exceptions import register_exception_handlers
 from core.logging_setup import configure_logging
 from core.origin_check import OriginCheckMiddleware
 from core.project_migrations import run_baseline_migration
+from core.security_headers import FrameAncestorsMiddleware, UserContentFiles
 from core.storage import (
     WIDGET_BUILD_DIR,
     active_assets_dir,
@@ -264,10 +265,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NEXT HMI", lifespan=lifespan)
 register_exception_handlers(app)
-# An instance binds loopback with no auth of its own, and a page in the
-# panel's browser can find that port, or rebind a name to it; see
+# A standalone instance has no auth of its own, and a page in the panel's
+# browser can find its loopback port, or rebind a name to it; see
 # ``core.origin_check``.
 app.add_middleware(OriginCheckMiddleware, loopback_only=True)
+app.add_middleware(FrameAncestorsMiddleware)
+# Outermost: a process that found the port but not the secret the supervisor
+# spawned this instance with gets nothing. Popped so nothing this process
+# starts inherits it.
+app.add_middleware(
+    instance_secret.RequireInstanceSecret,
+    secret=os.environ.pop(instance_secret.ENV_VAR, None),
+)
 
 
 # NOTE: every top-level route lives under one of /api/, /ws, /mcp, or a
@@ -287,10 +296,10 @@ app.include_router(theme_router)
 app.include_router(component_router)
 # Projects are the manager's business: a running instance has no reason to list,
 # create, rename, delete or export the projects beside it, and browse-dir walks
-# the whole host filesystem. Instances bind loopback with no auth of their own,
-# so anything on the box could reach it directly — not serving it is stronger
-# than gating it at the proxy. A standalone ``uvicorn main:app`` has no manager
-# to ask, so there it stays mounted.
+# the whole host filesystem. Instances bind loopback, beside every other process
+# on the box — not serving it is stronger than gating it at the proxy. A
+# standalone ``uvicorn main:app`` has no manager to ask, so there it stays
+# mounted.
 if not _INSTANCE_MODE:
     app.include_router(projects_router)
 # Loopback-only reload hook the manager calls after a workspace MCP write.
@@ -313,11 +322,11 @@ if not _INSTANCE_MODE and not os.environ.get("NEXTHMI_ACTIVE_PROJECT_PATH"):
     os.environ["NEXTHMI_ACTIVE_PROJECT_PATH"] = _default_entry.path
 _widgets_dir = active_custom_widgets_dir()
 _widgets_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/widgets", StaticFiles(directory=str(_widgets_dir), follow_symlink=False), name="widgets")
+app.mount("/widgets", UserContentFiles(directory=str(_widgets_dir), follow_symlink=False, sandbox=True), name="widgets")
 
 _widget_build_dir = WIDGET_BUILD_DIR
 _widget_build_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/widget-js", StaticFiles(directory=str(_widget_build_dir), follow_symlink=False), name="widget-js")
+app.mount("/widget-js", UserContentFiles(directory=str(_widget_build_dir), follow_symlink=False, sandbox=False), name="widget-js")
 
 # Product built-in widgets: compiled at build time and shipped with the
 # frontend, unlike /widget-js which is project content compiled on load. Served
@@ -345,11 +354,11 @@ app.mount(
 
 _external_libraries_dir = active_external_libraries_dir()
 _external_libraries_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/external-libraries", StaticFiles(directory=str(_external_libraries_dir), follow_symlink=False), name="external-libraries")
+app.mount("/external-libraries", UserContentFiles(directory=str(_external_libraries_dir), follow_symlink=False, sandbox=False), name="external-libraries")
 
 _assets_dir = active_assets_dir()
 _assets_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/assets", StaticFiles(directory=str(_assets_dir), follow_symlink=False), name="assets")
+app.mount("/assets", UserContentFiles(directory=str(_assets_dir), follow_symlink=False, sandbox=True), name="assets")
 
 
 @app.get("/api/health")

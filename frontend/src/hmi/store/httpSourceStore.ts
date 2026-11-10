@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { apiJson, errorMessage } from '@shared/utils/api';
+import { apiJson, errorMessage, isApiError } from '@shared/utils/api';
+import { useHmiStore } from './hmiStore';
 
 /**
  * Response cache behind the `$http` property source.
@@ -55,6 +56,30 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>();
  * poll, but bounded so navigating away eventually stops the traffic.
  */
 const IDLE_GRACE_MS = 60_000;
+
+const TOO_LARGE_TOAST_ID = 'http-request-too-large';
+// A full sentence, read off a panel: twice the 4 s of a refused write.
+const TOO_LARGE_TOAST_MS = 8000;
+
+/**
+ * A 413 is the device's own cap on what the live view may send it
+ * (backend/manager.py), not the plant server's answer, and nothing on the
+ * screen would otherwise say why the value never arrives. Said once when the
+ * request starts failing rather than on every poll, and deduped against
+ * `pendingToasts` so several sources failing together share one toast.
+ */
+function reportTooLarge(): void {
+  const { pendingToasts, showToast } = useHmiStore.getState();
+  if (pendingToasts.some((t) => t.id === TOO_LARGE_TOAST_ID)) return;
+  showToast({
+    id: TOO_LARGE_TOAST_ID,
+    message:
+      'Request not sent. The data for this request is larger than 1 MB, so the device refused to send it.',
+    severity: 'error',
+    discard: 'auto',
+    duration: TOO_LARGE_TOAST_MS,
+  });
+}
 
 export function httpRequestKey(spec: HttpRequestSpec): string {
   return JSON.stringify([spec.method, spec.url, spec.headers, spec.body ?? null, spec.refreshMs]);
@@ -112,10 +137,12 @@ async function runFetch(key: string): Promise<void> {
       });
     }
   } catch (err) {
+    const error = errorMessage(err);
+    if (isApiError(err) && err.status === 413 && previous?.error !== error) reportTooLarge();
     setEntry(key, {
       status: 'error',
       data: previous?.data,
-      error: errorMessage(err),
+      error,
       fetchedAt: Date.now(),
     });
   } finally {

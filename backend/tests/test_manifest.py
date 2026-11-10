@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from core import runtime_home
+from core.exceptions import ConflictError
 from core.manifest import (
     ManifestV1,
     PeerEntry,
@@ -21,6 +22,7 @@ from core.manifest import (
     default_projects_root,
     drop_auto_seeded_projects_root,
     find_project,
+    find_project_ignoring_case,
     load_manifest,
     migrate_invalid_project_ids,
     read_project_metadata,
@@ -330,6 +332,85 @@ def test_unique_slug_suffixes_on_collision() -> None:
     assert unique_slug("Plant A", {"Plant-A"}) == "Plant-A-2"
     assert unique_slug("Plant A", {"Plant-A", "Plant-A-2"}) == "Plant-A-3"
     assert unique_slug("Plant A", {"Plant-A", "Plant-A-3"}) == "Plant-A-2"
+
+
+def test_unique_slug_ignores_case_and_stays_a_valid_id() -> None:
+    assert unique_slug("LINE3", {"line3"}) == "LINE3-2"
+    assert unique_slug("LINE3", {"line3", "Line3-2"}) == "LINE3-3"
+    long_slug = unique_slug("x" * 300, {"X" * 128})
+    assert validate_project_id(long_slug) == long_slug
+
+
+# ── project ids that differ only in case ────────────────────────────────────
+
+
+def _case_variant_pair_on_disk(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "projects": [
+                    _make_project("Line 3", project_id="line3").model_dump(),
+                    _make_project("LINE 3", project_id="LINE3").model_dump(),
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_save_refuses_to_register_a_case_variant(tmp_path: Path) -> None:
+    f = tmp_path / "projects.json"
+    save_manifest(ManifestV1(projects=[_make_project("Line 3", project_id="line3")]), f)
+    manifest = load_manifest(f)
+    manifest.projects.append(_make_project("LINE 3", project_id="LINE3"))
+
+    with pytest.raises(ConflictError) as refused:
+        save_manifest(manifest, f)
+
+    assert "'LINE3' matches the registered project 'line3'" in refused.value.message
+    assert "project ids ignore upper and lower case" in refused.value.message
+    assert "project id or folder already exists" in refused.value.message
+    assert [p.id for p in load_manifest(f).projects] == ["line3"]
+
+
+def test_an_installation_holding_a_case_variant_pair_still_loads_and_saves(
+    tmp_path: Path,
+) -> None:
+    f = tmp_path / "projects.json"
+    _case_variant_pair_on_disk(f)
+
+    manifest = load_manifest(f)
+    manifest.defaultProjectId = "LINE3"
+    save_manifest(manifest, f)
+    assert load_manifest(f).defaultProjectId == "LINE3"
+
+    manifest.projects.append(_make_project("Line 3 again", project_id="Line3"))
+    with pytest.raises(ConflictError):
+        save_manifest(manifest, f)
+
+
+def test_startup_warns_about_case_variant_ids(tmp_path: Path, caplog) -> None:
+    f = tmp_path / "projects.json"
+    _case_variant_pair_on_disk(f)
+
+    with caplog.at_level("WARNING", logger="core.manifest"):
+        assert migrate_invalid_project_ids(f) == {}
+
+    assert "project ids 'line3', 'LINE3' differ only in upper and lower case" in caplog.text
+    assert [p.id for p in load_manifest(f).projects] == ["line3", "LINE3"]
+
+
+def test_find_project_ignoring_case_prefers_the_exact_id() -> None:
+    manifest = ManifestV1(
+        projects=[
+            _make_project("Line 3", project_id="line3"),
+            _make_project("LINE 3", project_id="LINE3"),
+        ]
+    )
+    assert find_project_ignoring_case(manifest, "LINE3").name == "LINE 3"
+    assert find_project_ignoring_case(manifest, "Line3").name == "Line 3"
+    assert find_project_ignoring_case(manifest, "line4") is None
 
 
 # ── lookup helpers ──────────────────────────────────────────────────────────

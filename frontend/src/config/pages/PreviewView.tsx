@@ -40,7 +40,7 @@ import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { useComponentStore } from '@shared/store/componentStore';
-import { sendWsMessage } from '@hmi/hooks/useWebSocket';
+import { clearContextProducer, sendWsMessage, setContextProducer } from '@hmi/hooks/useWebSocket';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { HmiScopeContext } from '@hmi/context/HmiScopeContext';
@@ -397,7 +397,7 @@ export default function PreviewView() {
       ? [currentPageId, ...openPageOverlayIds]
       : [...openPageOverlayIds];
 
-    sendWsMessage({ type: 'set_context', currentPageIds, priorityKeys: previewPriorityKeys });
+    setContextProducer('page', { currentPageIds, priorityKeys: previewPriorityKeys });
 
     // Component-tree references are intentionally omitted. The sorted binding-key
     // signature below re-sends context for binding edits without doing so for
@@ -410,7 +410,7 @@ export default function PreviewView() {
   // before a binding edit sends its replacement context.
   useEffect(() => {
     return () => {
-      sendWsMessage({ type: 'set_context', currentPageIds: [] });
+      clearContextProducer('page');
     };
   }, []);
 

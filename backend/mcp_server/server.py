@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import functools
 import logging
-from collections.abc import Callable
-from contextlib import asynccontextmanager
+from collections.abc import Callable, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+from core.exceptions import NextHmiError
+from core.storage import ProjectNotFoundError
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import agent_label
+from .pagination import CursorError
 
 
 def _build_mcp_app() -> MCPServer:
@@ -123,6 +128,21 @@ def expose_read_tool(payload_fn: F, *, name: str, description: str) -> F:  # noq
     return payload_fn
 
 
+@contextmanager
+def agent_facing_errors() -> Iterator[None]:
+    """Re-raise the errors an agent can act on as ``ToolError``.
+
+    Since mcp 2.2 the SDK answers any other exception with a bare ``Error
+    executing tool <name>``, which would hide why a call was refused (a bad
+    argument, a missing page, an unknown project). The errors this package
+    defines for tool calls already derive from ``ToolError``.
+    """
+    try:
+        yield
+    except (NextHmiError, ProjectNotFoundError, CursorError) as exc:
+        raise ToolError(str(exc)) from exc
+
+
 def expose_workspace_tool(payload_fn: F, *, name: str, description: str) -> F:  # noqa: UP047 -- PEP 695 type-param syntax is a manual rewrite (module-level TypeVar `F` also used elsewhere), not mechanical
     """Register *payload_fn* directly, with no project-scoping wrapper.
 
@@ -130,7 +150,13 @@ def expose_workspace_tool(payload_fn: F, *, name: str, description: str) -> F:  
     (``projects_list`` / ``projects_get``) — a plain, immediate call to the
     public ``MCPServer.tool()`` decorator, bypassing the pending-tool queue.
     """
-    mcp_app.tool(name=name, description=description)(payload_fn)
+
+    @functools.wraps(payload_fn)
+    def tool(*args: Any, **kwargs: Any) -> Any:
+        with agent_facing_errors():
+            return payload_fn(*args, **kwargs)
+
+    mcp_app.tool(name=name, description=description)(tool)
     return payload_fn
 
 
@@ -188,6 +214,14 @@ class _McpSlashMiddleware:
         await self._app(scope, receive, send)
 
 
+# An idle session holds about 50 KiB, so the SDK's default ceiling of 10 000
+# sessions would let one token pin half a gigabyte on an HMI device. A thousand
+# still fits a client that opens a session per call and never closes it, at one
+# every two seconds across the idle window. Past the cap a new session is 503.
+MCP_MAX_SESSIONS = 1000
+MCP_SESSION_IDLE_TIMEOUT_S = 30 * 60
+
+
 def build_mcp_asgi_app() -> ASGIApp:
     """The ``/mcp`` ASGI app: auth gate, then agent-label capture, then MCPServer.
 
@@ -201,6 +235,8 @@ def build_mcp_asgi_app() -> ASGIApp:
     inner = mcp_app.streamable_http_app(
         stateless_http=False,
         streamable_http_path="/",
+        session_idle_timeout=MCP_SESSION_IDLE_TIMEOUT_S,
+        max_sessions=MCP_MAX_SESSIONS,
         # The SDK's default Host allowlist answers 421 to every non-loopback Host,
         # i.e. to every client on the LAN. Rebinding needs no guard here: /mcp
         # takes a bearer token or the manager session, OriginCheckMiddleware

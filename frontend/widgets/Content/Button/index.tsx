@@ -194,8 +194,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   const IconComp = iconName && isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
   // An empty label is the icon-only button; without an icon it stays an empty text button.
   const iconOnly = !!iconName && !label.trim();
-  const iconIsCustomAsset = iconName ? isCustomIconAssetPath(iconName) : false;
-  const customSvgContent = useInlineSvg(iconIsCustomAsset ? iconName : null);
+  const customIconUrl = isCustomIconAssetPath(iconName) ? withBase(iconName) : null;
 
   const momentary = usePropBoolean(properties, 'momentary', false);
   const pressHandlers = usePress(
@@ -224,12 +223,14 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
               <React.Suspense fallback={null}>
                 <IconComp size={18} weight="regular" />
               </React.Suspense>
-            ) : iconIsCustomAsset && customSvgContent ? (
+            ) : (
               <span
                 className="hmi-button__icon-svg"
-                dangerouslySetInnerHTML={{ __html: customSvgContent }}
+                style={
+                  customIconUrl ? { '--hmi-btn-icon-url': `url("${customIconUrl}")` } : undefined
+                }
               />
-            ) : null}
+            )}
           </span>
         )}
         {!iconOnly && (

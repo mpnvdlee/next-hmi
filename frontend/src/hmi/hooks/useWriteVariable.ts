@@ -59,6 +59,7 @@ const TOAST_DURATION_MS = 4000;
 
 const FAILURE_MESSAGES: Record<string, string> = {
   read_only: 'Variable is read-only',
+  disabled: 'Variable is disabled in its datasource',
   value_out_of_range: 'Value is outside the allowed range',
   integer_out_of_range: 'Value is outside the allowed range',
   float_out_of_range: 'Value is outside the allowed range',

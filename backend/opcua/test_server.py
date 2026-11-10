@@ -201,9 +201,18 @@ class TestServerInstance:
         self._error = None
         server = Server()
         await server.init()
-        endpoint = f"opc.tcp://0.0.0.0:{port}{endpoint_path}"
+        # Loopback unless the datasource opts in: its nodes are writable by
+        # design, so nothing beyond this computer reaches it unasked.
+        host = "0.0.0.0" if settings.get("reachable_from_network") is True else "127.0.0.1"
+        endpoint = f"opc.tcp://{host}:{port}{endpoint_path}"
         server.set_endpoint(endpoint)
         server.set_server_name(f"NEXT HMI Test Server - {self.name}")
+        # asyncua's default user manager makes any client that signs in as
+        # "admin" an Admin, whatever the password, and an Admin writes past
+        # AccessLevel and may add or delete nodes. Anonymous only, and never
+        # Admin: a client writes exactly what each node's access level allows.
+        server.set_identity_tokens([ua.AnonymousIdentityToken])
+        server.allow_remote_admin(False)
 
         security_policies = _resolve_security_policies(settings.get("security_policies"))
         server.set_security_policy(security_policies)
@@ -490,7 +499,9 @@ class TestServerPool:
             port = settings.get("port", 4855)
             endpoint_path = settings.get("endpoint_path", "/nexthmi/test/")
             client_settings = {
-                "server_url": f"opc.tcp://localhost:{port}{endpoint_path}",
+                # Loopback is bound whatever the network setting, and naming it
+                # keeps the pairing off a resolver that may answer ::1 first.
+                "server_url": f"opc.tcp://127.0.0.1:{port}{endpoint_path}",
                 "security_policy": "NoSecurity",
                 "reconnect_interval_s": 3,
             }

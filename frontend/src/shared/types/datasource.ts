@@ -32,6 +32,10 @@ export interface OpcuaClientSettings {
   client_private_key_password: string;
   server_certificate: string;
   reconnect_interval_s: number;
+  /** Seconds one OPC-UA request may take before it fails; default 30. */
+  request_timeout_s?: number;
+  /** Absolute deadband on numeric scalars: a change below it is not published; 0 = off. */
+  deadband_abs?: number;
   bg_publish_interval_ms?: number;
   priority_publish_interval_ms?: number;
   priority_sampling_interval_ms?: number;
@@ -50,6 +54,8 @@ export interface TestServerSettings {
   // Extra secured endpoints, on top of the always-available NoSecurity one.
   // Each entry is "<Policy>/<Mode>", e.g. "Basic256Sha256/SignAndEncrypt".
   security_policies?: string[];
+  // true binds every interface; absent/false binds 127.0.0.1 only.
+  reachable_from_network?: boolean;
 }
 
 export type DatasourceSettings = OpcuaClientSettings | StaticSettings | TestServerSettings;
@@ -69,6 +75,22 @@ export interface CertificateInfo {
   expiring: boolean;
   selfSigned: boolean;
   names: string[];
+}
+
+/** Whether a secured OPC-UA endpoint's certificate is the one pinned in
+ *  `server_certificate`: `untrusted` when none is pinned, `changed` when a
+ *  different one is. */
+export type ServerCertificateStatus = 'trusted' | 'untrusted' | 'changed';
+
+/** GET /api/datasources/{name}/server-certificate — what the secured endpoint
+ *  presented on the last connect attempt; `null` before there was one. */
+export interface ServerCertificateInfo {
+  status: ServerCertificateStatus;
+  subject: string;
+  issuer: string;
+  expiresAt: string;
+  /** SHA-256 of the DER certificate, lowercase hex. */
+  fingerprint: string;
 }
 
 /** POST /api/datasources/certs/generate — the generated pair's project-relative
@@ -133,6 +155,8 @@ export interface DatasourceListItem {
   variable_count: number;
   enabled_count: number;
   error?: string | null;
+  /** Set for a secured `opcua-client` once its endpoint presented a certificate. */
+  server_certificate_status?: ServerCertificateStatus | null;
 }
 
 // ── Connection-wizard discovery / probe (POST /discover, /test-connection) ────
@@ -208,9 +232,11 @@ function defaultSettings(type: DatasourceType): DatasourceSettings {
         client_private_key_password: '',
         server_certificate: '',
         reconnect_interval_s: 5,
+        request_timeout_s: 30,
+        deadband_abs: 0.001,
         bg_publish_interval_ms: 1000,
         priority_publish_interval_ms: 50,
-        priority_sampling_interval_ms: 20,
+        priority_sampling_interval_ms: 50,
         priority_ws_batch_ms: 10,
       };
     case 'static':

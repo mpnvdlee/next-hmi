@@ -41,6 +41,9 @@ interface VariablesViewState {
   deleteDatasource(name: string): Promise<void>;
   saveSettings(config: DatasourceConfig): Promise<void>;
   refreshSelected(): Promise<void>;
+  /** Record a server certificate the backend just pinned, in the loaded config
+   *  and in any unsaved settings draft, so a later save does not unpin it. */
+  pinServerCertificate(name: string, path: string): void;
 }
 
 interface DatasourceDraftState {
@@ -232,6 +235,21 @@ export const useVariablesDomainStore = create<VariablesDomainStore>((set, get) =
       const selectedName = get().selectedName;
       if (selectedName) await get().loadConfig(selectedName);
     },
+
+    pinServerCertificate: (name, path) =>
+      set((state) => {
+        const draft = state.propsDrafts[name];
+        const selected = state.selectedConfig;
+        return {
+          selectedConfig:
+            selected?.name === name
+              ? { ...selected, settings: { ...selected.settings, server_certificate: path } }
+              : selected,
+          propsDrafts: draft
+            ? { ...state.propsDrafts, [name]: { ...draft, server_certificate: path } }
+            : state.propsDrafts,
+        };
+      }),
 
     setPropsDraft: (name, settings) =>
       set((state) => ({

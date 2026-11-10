@@ -231,6 +231,45 @@ function writeLocalInput(msg: unknown): boolean {
   return true;
 }
 
+// ── Context producers ────────────────────────────────────────────────────────
+// One socket carries one context, but several surfaces contribute to it: the
+// page (its ids), a variable table's visible rows, a recipe's parameters, the
+// binding picker's arrays. Each registers under its own name and the union is
+// what `set_context` sends, so none of them clobbers another's keys.
+interface ContextProducer {
+  currentPageIds?: readonly string[];
+  priorityKeys?: readonly string[];
+}
+const _contextProducers = new Map<string, ContextProducer>();
+
+function sendMergedContext(): void {
+  const currentPageIds: string[] = [];
+  const priorityKeys = new Set<string>();
+  for (const producer of _contextProducers.values()) {
+    for (const id of producer.currentPageIds ?? [])
+      if (!currentPageIds.includes(id)) currentPageIds.push(id);
+    for (const key of producer.priorityKeys ?? []) priorityKeys.add(key);
+  }
+  // Dropped while the socket is down; `onopen` sends the merged context again.
+  sendWsMessage({ type: 'set_context', currentPageIds, priorityKeys: [...priorityKeys] });
+}
+
+/** Register (or replace) what `owner` wants in this socket's context, and send
+ *  the merged context. A producer with nothing in it is dropped. */
+export function setContextProducer(owner: string, producer: ContextProducer): void {
+  if (producer.currentPageIds?.length || producer.priorityKeys?.length) {
+    _contextProducers.set(owner, producer);
+    sendMergedContext();
+  } else {
+    clearContextProducer(owner);
+  }
+}
+
+/** Drop `owner`'s contribution and send the merged context. */
+export function clearContextProducer(owner: string): void {
+  if (_contextProducers.delete(owner)) sendMergedContext();
+}
+
 /**
  * Send any JSON-serialisable message. Safe to call before the socket opens:
  * the message is dropped then, and the call returns `false`.
@@ -343,8 +382,9 @@ export function useWebSocket(): void {
       _ws = ws;
 
       ws.onopen = () => {
-        backoff = 500; // reset backoff on successful connect
         setWsConnectedRef.current(true);
+        // A fresh backend client knows no context: send the merged one again.
+        if (_contextProducers.size) sendMergedContext();
       };
 
       ws.onmessage = (event: MessageEvent) => {
@@ -353,6 +393,10 @@ export function useWebSocket(): void {
 
         switch (msg.type) {
           case 'var_snapshot':
+            // The backend's first message, not `onopen`, resets the backoff:
+            // the manager's proxy opens the socket before the project does,
+            // so one that refuses it (full, `1013`) still fires `onopen`.
+            backoff = 500;
             if (msg.bootId) {
               if (_bootId && msg.bootId !== _bootId) _onBackendRestart?.();
               _bootId = msg.bootId;

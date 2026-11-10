@@ -42,7 +42,6 @@ from core import audit, manager_auth, mcp_tokens, users_document
 from core.exceptions import (
     ConflictError,
     NotFoundError,
-    RateLimitError,
     ValidationError,
 )
 from core.manifest import find_project, load_manifest
@@ -72,7 +71,6 @@ ALARMS_MAX_LIMIT = 500
 # Bearer, not Basic: a Basic challenge makes a browser prompt for and then
 # cache the password, and a cached password rides along on cross-site requests.
 _CHALLENGE = {"WWW-Authenticate": 'Bearer realm="NEXT HMI API"'}
-_basic_lock = asyncio.Lock()
 # Per project id: a user write reads, edits and saves the whole users.json, so
 # two in parallel would each save their own copy and one change would vanish.
 # The editor's own save runs in the project's process and is not covered.
@@ -106,21 +104,17 @@ async def _authenticate(request: Request) -> Caller:
             raise _unauthorized("Invalid or revoked API token")
         return Caller(label=token.name, token=token)
     if scheme == "basic":
-        # One check at a time, lockout read inside: checked outside, every
-        # guess already in flight passed it before the first failure counted.
-        async with _basic_lock:
-            remaining = manager_auth.lockout_remaining()
-            if remaining > 0:
-                raise RateLimitError(f"Too many failed attempts. Try again in {int(remaining) + 1}s.")
-            password = _basic_password(value.strip())
-            if password is None or not await asyncio.to_thread(manager_auth.verify_password, password):
-                manager_auth.register_login_failure()
-                raise _unauthorized(
-                    f"Basic auth needs username '{ADMIN_USERNAME}' and the device-admin password"
-                )
-        # No register_login_success(): a polling script's good password says
-        # nothing about who sent the failures, and clearing the count on every
-        # poll would let a guesser slip four tries in between each one.
+        # A wrong username checks an empty password, so it is throttled like a
+        # wrong password. count_success=False: a polling script's good password
+        # says nothing about who sent the failures, and clearing the count on
+        # every poll would let a guesser slip four tries in between each one.
+        password = _basic_password(value.strip()) or ""
+        if not await manager_auth.check_password(
+            manager_auth.client_address(request), password, count_success=False
+        ):
+            raise _unauthorized(
+                f"Basic auth needs username '{ADMIN_USERNAME}' and the device-admin password"
+            )
         return Caller(label=ADMIN_USERNAME)
     raise _unauthorized("API v1 needs an API token (Bearer) or the device-admin password (Basic)")
 

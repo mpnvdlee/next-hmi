@@ -712,6 +712,9 @@ exports) is skipped, never guessed.
 | `value-invalid` | error | A malformed source payload inside an action's field (`{ "$loc": 5 }`) — rejected elsewhere, reported here |
 | `alarm-value-not-var` | error | An entry of an alarm's `values` list that is not a `$var` binding — the backend can only store a variable's value when the alarm fires ([Alarm Files](data-formats.md#alarm-files)) |
 | `repeat-placement` | warning | An element of a Repeater's typed-in Items, with **Place copies** at item x / y, whose `x` or `y` is not a number from 0 to 1, or whose `side` is not `top`, `bottom`, `left` or `right` |
+| `webframe-inbound-any` | error | A Web Frame's fixed **Allowed inbound origins** listing `*` or `null`. The widget accepts neither: every accepted message runs On Message and writes the inbound variable, and `*` would hand both to whatever site the frame shows. `null` is as wide, being the origin of any page in a sandbox without allow-same-origin. With no other entry, every message is ignored |
+| `webframe-outbound-any` | warning | A Web Frame's fixed **Outbound target origin** of `*`, which the widget reads as the origin of the URL, as it does an empty one. A URL without an origin (empty, relative, `about:blank`, opaque) gets nothing |
+| `webframe-url-unsandboxed` | warning | A Web Frame whose URL any source but a fixed value supplies (`$var`, `$urlParam`, …) while **Enable sandbox** is a fixed `false`: whoever can change that source picks the site the panel shows, with full access to its messages. The properties panel shows the same warning with a **Turn on sandbox** button |
 | `action-page-unknown` | error | An action naming a page that does not exist, inside a component instance's property that only its declaration types as `actions`. The same action in a widget's `actions` field is a rejected write |
 
 **Values inside actions are values.** Every field of every action type is

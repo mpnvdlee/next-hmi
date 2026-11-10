@@ -2,6 +2,7 @@ import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -131,8 +132,19 @@ class FakeDatasourceManager:
     def seed_cached_values(self, updates: dict[str, Any]) -> None:
         self.seeded.update(updates)
 
-    def set_client_page(self, client_id: str, keys: set[str]) -> None:
+    def known_keys(self, keys: set[str]) -> set[str]:
+        return {key for key in keys if key.partition(":")[0] in self.datasources}
+
+    def set_client_page(self, client_id: str, keys: set[str]) -> bool:
+        changed = self._client_keys != set(keys)
         self._client_keys = set(keys)
+        return changed
+
+    def client_page_keys(self, client_id: str) -> set[str]:
+        return set(self._client_keys)
+
+    def element_keys(self, key: str, positions=None) -> set[str]:
+        return set()
 
     def get_priority_keys(self) -> set[str]:
         return set(self._client_keys)
@@ -143,21 +155,31 @@ class FakeDatasourceManager:
     def snapshot(self) -> dict[str, Any]:
         return dict(self.snapshot_values)
 
-    def variable_metadata(self) -> dict[str, dict[str, Any]]:
-        return dict(self.metadata)
+    def variable_metadata(self, keys: set[str] | None = None) -> dict[str, dict[str, Any]]:
+        if keys is None:
+            return dict(self.metadata)
+        return {key: meta for key, meta in self.metadata.items() if key in keys}
 
-    def clear_client(self, client_id: str) -> None:
+    def clear_client(self, client_id: str) -> bool:
         self.cleared_clients.append(client_id)
+        changed = bool(self._client_keys)
+        self._client_keys = set()
+        return changed
 
 
 class FakeWebSocket:
-    def __init__(self, *, fail_after: int | None = None) -> None:
+    def __init__(self, *, fail_after: int | None = None, host: str | None = None) -> None:
         self.messages: list[dict[str, Any]] = []
         self.accepted = False
+        self.closed: tuple[int, str | None] | None = None
         self._fail_after = fail_after
+        self.client = SimpleNamespace(host=host, port=0) if host is not None else None
 
     async def accept(self) -> None:
         self.accepted = True
+
+    async def close(self, code: int = 1000, reason: str | None = None) -> None:
+        self.closed = (code, reason)
 
     async def send_text(self, message: str) -> None:
         if self._fail_after is not None and len(self.messages) >= self._fail_after:

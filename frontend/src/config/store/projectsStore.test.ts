@@ -1,4 +1,10 @@
-import { useProjectsStore, describeError, type ProjectEntry } from './projectsStore';
+import {
+  ProjectCodeUnconfirmedError,
+  ProjectIdCaseConflictError,
+  useProjectsStore,
+  describeError,
+  type ProjectEntry,
+} from './projectsStore';
 
 interface Call {
   url: string;
@@ -248,6 +254,88 @@ describe('peer discovery', () => {
     ]);
   });
 
+  it('forgetPeerCertificate drops every pin of the device when its runtime ID is known', async () => {
+    const calls = stubFetch({});
+
+    await useProjectsStore.getState().forgetPeerCertificate('10.0.0.4', 8443, 'rid-1');
+
+    expect(calls[0].url).toBe('/api/manager/peers/trust?host=10.0.0.4&port=8443&runtimeId=rid-1');
+  });
+
+  it('forgetPeerPairing drops only the pairing key kept for the device', async () => {
+    const calls = stubFetch({});
+
+    await useProjectsStore.getState().forgetPeerPairing('rid-1');
+
+    expect(calls).toEqual([{ url: '/api/manager/peer-pairings/rid-1', method: 'DELETE' }]);
+  });
+
+  it('probePeer sends the address only, never a password', async () => {
+    const calls = stubFetchWithBodies();
+
+    await useProjectsStore.getState().probePeer('10.0.0.4', 8443, 'https');
+
+    expect(calls).toEqual([
+      {
+        url: '/api/manager/peer-probe',
+        method: 'POST',
+        body: { host: '10.0.0.4', port: 8443, scheme: 'https' },
+      },
+    ]);
+  });
+
+  it('pairPeer carries the confirmed fingerprint and the operator’s choices', async () => {
+    const calls = stubFetchWithBodies();
+
+    await useProjectsStore.getState().pairPeer('10.0.0.4', 8443, 'pw', 'https', {
+      fingerprint: 'ab'.repeat(32),
+      allowInsecureHttp: false,
+      remember: true,
+    });
+
+    expect(calls[0].body).toEqual({
+      host: '10.0.0.4',
+      port: 8443,
+      password: 'pw',
+      scheme: 'https',
+      fingerprint: 'ab'.repeat(32),
+      allowInsecureHttp: false,
+      remember: true,
+    });
+  });
+
+  it('listPeerProjects without a token asks for the remembered key of that device', async () => {
+    const calls = stubFetchWithBodies();
+
+    await useProjectsStore.getState().listPeerProjects('10.0.0.4', 8443, '', 'https', 'rid-1');
+
+    expect(calls[0].body).toEqual({
+      host: '10.0.0.4',
+      port: 8443,
+      scheme: 'https',
+      runtimeId: 'rid-1',
+    });
+  });
+
+  it('listPeerProjects reads a malformed code listing as unknown, never as none', async () => {
+    const code = { customWidgets: ['Gauge'], externalLibraries: [], importOverrides: [] };
+    stubFetch({
+      'POST /api/manager/peer-projects': {
+        projects: [
+          { id: 'a', name: 'A', folder: 'a', running: false, code },
+          { id: 'b', name: 'B', folder: 'b', running: false, code: { customWidgets: 'x' } },
+          { id: 'c', name: 'C', folder: 'c', running: false, customWidgets: 0 },
+        ],
+      },
+    });
+
+    const projects = await useProjectsStore
+      .getState()
+      .listPeerProjects('10.0.0.4', 8443, 'tok', 'https');
+
+    expect(projects.map((project) => project.code)).toEqual([code, undefined, undefined]);
+  });
+
   it('removeManualPeer deletes by host and port query params', async () => {
     const calls = stubFetch({});
 
@@ -256,6 +344,113 @@ describe('peer discovery', () => {
     expect(calls).toEqual([
       { url: '/api/manager/peers/manual?host=10.0.0.4&port=8000', method: 'DELETE' },
     ]);
+  });
+});
+
+describe('importProject', () => {
+  const zip = new File(['zip'], 'plant.zip');
+
+  function stubImport(status: number, body: unknown) {
+    const forms: FormData[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        forms.push(init?.body as FormData);
+        return new Response(JSON.stringify(body), { status });
+      }),
+    );
+    return forms;
+  }
+
+  it('names the code the server wants confirmed', async () => {
+    const forms = stubImport(409, {
+      detail: 'This project contains code: 1 custom widget (Leak), 1 external library (three).',
+      code: 'custom_widgets_unconfirmed',
+      customWidgets: ['Leak'],
+      externalLibraries: ['three'],
+      importOverrides: [],
+    });
+
+    const error = await useProjectsStore
+      .getState()
+      .importProject(zip, '/projects/plant')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ProjectCodeUnconfirmedError);
+    expect((error as ProjectCodeUnconfirmedError).projectCode).toEqual({
+      customWidgets: ['Leak'],
+      externalLibraries: ['three'],
+      importOverrides: [],
+    });
+    expect(forms[0].has('trustCustomWidgets')).toBe(false);
+  });
+
+  it('reads a server that names only custom widgets', async () => {
+    stubImport(409, {
+      detail: 'This project contains 1 custom widget (Leak).',
+      code: 'custom_widgets_unconfirmed',
+      customWidgets: ['Leak'],
+    });
+
+    const error = await useProjectsStore
+      .getState()
+      .importProject(zip, '/projects/plant')
+      .catch((e: unknown) => e);
+
+    expect((error as ProjectCodeUnconfirmedError).projectCode).toEqual({
+      customWidgets: ['Leak'],
+      externalLibraries: [],
+      importOverrides: [],
+    });
+  });
+
+  it('sends the confirmation when the caller trusts the widgets', async () => {
+    const forms = stubImport(201, project());
+    vi.spyOn(useProjectsStore.getState(), 'load').mockResolvedValue();
+
+    await useProjectsStore.getState().importProject(zip, '/projects/plant', true);
+
+    expect(forms[0].get('trustCustomWidgets')).toBe('true');
+  });
+
+  it('carries the free id the server suggests for a case variant', async () => {
+    stubImport(409, {
+      detail: "The project 'line3' already exists. Project ids ignore upper and lower case.",
+      code: 'project_id_case_conflict',
+      suggestedId: 'LINE3-2',
+    });
+
+    const error = await useProjectsStore
+      .getState()
+      .importProject(zip, '/projects/plant')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ProjectIdCaseConflictError);
+    expect((error as ProjectIdCaseConflictError).suggestedId).toBe('LINE3-2');
+    expect(describeError(error)).toBe(
+      "The project 'line3' already exists. Project ids ignore upper and lower case.",
+    );
+  });
+
+  it('sends the id the caller picked', async () => {
+    const forms = stubImport(201, project());
+    vi.spyOn(useProjectsStore.getState(), 'load').mockResolvedValue();
+
+    await useProjectsStore.getState().importProject(zip, '/projects/plant', false, 'LINE3-2');
+
+    expect(forms[0].get('projectId')).toBe('LINE3-2');
+  });
+
+  it('keeps any other conflict an ordinary error', async () => {
+    stubImport(409, { detail: 'A project with id p1 is already registered.' });
+
+    const error = await useProjectsStore
+      .getState()
+      .importProject(zip, '/projects/plant')
+      .catch((e: unknown) => e);
+
+    expect(error).not.toBeInstanceOf(ProjectCodeUnconfirmedError);
+    expect(describeError(error)).toBe('A project with id p1 is already registered.');
   });
 });
 

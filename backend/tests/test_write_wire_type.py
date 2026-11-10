@@ -66,7 +66,7 @@ class _Pool:
 
 
 def _tag(data_type: str) -> dict[str, Any]:
-    return {"node_id": "ns=2;s=Tag", "data_type": data_type, "writable": True}
+    return {"node_id": "ns=2;s=Tag", "data_type": data_type, "enabled": True, "writable": True}
 
 
 async def _write(configured: str, wire: ua.VariantType | None, value: Any):
@@ -134,7 +134,7 @@ async def test_an_untyped_read_only_tag_is_refused_before_its_value_is_judged(va
     """The wire type stands in for the missing data_type, but only for a
     write that could land: read_only comes before any value error."""
     engine = _WireEngine(ua.VariantType.Int16)
-    dm = _DM({"Tag": {"node_id": "ns=2;s=Tag", "writable": False}})
+    dm = _DM({"Tag": {"node_id": "ns=2;s=Tag", "enabled": True, "writable": False}})
     outcome = await write_service.write_value(dm, _Pool(engine), "PLC", "Tag", value)
 
     assert outcome == write_service.WriteOutcome(False, write_service.REASON_READ_ONLY)
@@ -144,7 +144,7 @@ async def test_an_untyped_read_only_tag_is_refused_before_its_value_is_judged(va
 @pytest.mark.asyncio
 async def test_an_untyped_writable_tag_is_written_with_the_servers_type():
     engine = _WireEngine(ua.VariantType.Int16)
-    dm = _DM({"Tag": {"node_id": "ns=2;s=Tag", "writable": True}})
+    dm = _DM({"Tag": {"node_id": "ns=2;s=Tag", "enabled": True, "writable": True}})
     refused = await write_service.write_value(dm, _Pool(engine), "PLC", "Tag", 70000)
     outcome = await write_service.write_value(dm, _Pool(engine), "PLC", "Tag", 5)
 
@@ -176,7 +176,7 @@ async def test_a_static_datasource_never_consults_an_engine():
         async def wire_variant_type(self, node_id: str) -> Any:
             raise AssertionError("static writes must not look up a wire type")
 
-    dm = _DM({"Tag": {"data_type": "Float", "writable": True}}, ds_type="static")
+    dm = _DM({"Tag": {"data_type": "Float", "enabled": True, "writable": True}}, ds_type="static")
     dm.update_static_value = lambda *a, **k: None  # type: ignore[attr-defined]
     outcome = await write_service.write_value(dm, _Pool(_Exploding()), "DS", "Tag", "1.5")
 
@@ -235,6 +235,7 @@ async def test_a_mislabelled_tag_is_really_written_on_a_live_server():
                     "bAlarm": {
                         "node_id": alarm.nodeid.to_string(),
                         "data_type": "String",
+                        "enabled": True,
                         "writable": True,
                     }
                 }

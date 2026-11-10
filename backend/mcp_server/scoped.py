@@ -36,13 +36,20 @@ from core import telemetry
 from core.manifest import project_mcp_enabled
 from core.storage import active_project_root, use_project
 from mcp.server.mcpserver import Context
+from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
 
 from . import auth as mcp_auth
-from .server import _PENDING_TOOLS, PendingTool, _current_mcp_session, mcp_app
+from .server import (
+    _PENDING_TOOLS,
+    PendingTool,
+    _current_mcp_session,
+    agent_facing_errors,
+    mcp_app,
+)
 
 
-class McpWriteDisabledError(Exception):
+class McpWriteDisabledError(ToolError):
     """Raised when a write tool targets a project whose ``mcpEnabled`` is off."""
 
     code = "mcp_write_disabled"
@@ -91,7 +98,7 @@ def _make_scoped_wrapper(pending: PendingTool) -> Any:
             session = None
         token = _current_mcp_session.set(session)
         try:
-            with use_project(project_id):
+            with agent_facing_errors(), use_project(project_id):
                 mcp_auth.require_mcp_access(need_write=pending.is_write)
                 if pending.is_write:
                     _require_write_allowed(project_id)

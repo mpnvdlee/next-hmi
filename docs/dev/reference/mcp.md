@@ -34,7 +34,7 @@ dashboard.
 | Aspect | Value |
 |---|---|
 | Path | `/mcp/` (on the manager origin, not `/runtime/<slug>/mcp`). A `Mount` only matches paths under its prefix, so bare `/mcp` would fall through to `redirect_slashes` and answer `307` — which MCP clients generally don't follow. `_McpSlashMiddleware` (`mcp_server/server.py`) rewrites `/mcp` to `/mcp/` before routing, so both spellings hit the transport. |
-| Transport | MCP Streamable HTTP |
+| Transport | MCP Streamable HTTP, stateful. A session with no request in flight and no open `GET` stream for 30 minutes is closed, and its id then answers `404`, so the client initializes a new one. At most 1 000 sessions are open at once (`MCP_MAX_SESSIONS` in `mcp_server/server.py`, about 50 KiB each); past that, opening another answers `503` until one ends or expires. |
 | Front door | Gated by the manager session. Headless clients send a **bearer token**: `Authorization: Bearer <token>` |
 | Host header | Any. `build_mcp_asgi_app` turns off the SDK's DNS-rebinding protection (`TransportSecuritySettings(enable_dns_rebinding_protection=False)`), whose loopback-only `Host` allowlist would answer `421` to every client on another machine. A rebound page carries neither the session cookie nor a token, and `OriginCheckMiddleware` refuses a cross-origin page ([rest-api.md](rest-api.md#authentication)). |
 | Tokens | Created under **Settings › Tokens** on the manager with the manager session, or paired by a script with the device-admin password; stored as SHA-256 digests in `<runtime_home>/.mcp-tokens.json` beside API v1 tokens. Routes, response shapes and revocation: [rest-api.md](rest-api.md#mcp-bearer-tokens). |
@@ -76,6 +76,12 @@ All tool names use underscore namespacing. Every write tool
 accepts an optional `idempotency_key` (≤128 chars). Destructive ops are
 two-step: call once for a dry-run diff, then again with `confirm: true` to
 apply. Tool return shape is uniform `{ summary, result, diff?, ... }`.
+A refused call is an `isError` result whose text carries the reason (an
+invalid argument, a missing artifact, an unknown project, a write the
+project or token does not allow): `agent_facing_errors` in
+`mcp_server/server.py` re-raises those errors as the SDK's `ToolError`,
+which since mcp 2.2 is the only kind whose message reaches the client.
+Any other exception reads as a bare `Error executing tool <name>`.
 
 Page-mutation tools (`pages_add_widget`, `pages_set_widget_property`,
 `pages_set_metadata`, `pages_delete_widget`) additionally include a
@@ -106,11 +112,11 @@ max 500). MCP resources are not exposed; clients that only surface tools
 
 ### Datasources (read-only over MCP)
 - `datasources_list(cursor?, limit?)` — datasource summaries
-- `datasources_get(name)` — full datasource config (settings + variable tree)
+- `datasources_get(name)` — full datasource config (settings + variable tree). Credentials in `settings` — `password`, any `*_password` and `client_private_key` — read as `"<redacted>"` when set and `""` when not, and the password in a URL setting reads the same way (`opc.tcp://user:<redacted>@plc:4840`; the user and host stay), so a read-scoped token never carries PLC credentials away. No MCP tool writes `settings`, so the marker cannot be written back; the variable tools rewrite the file from disk and leave the stored secrets as they are.
 - Datasource lifecycle (create / update settings / delete) is intentionally **not** exposed — manage from the UI editor or the REST API.
 
 ### Variables (semantic helpers only, no full-tree PUT)
-- `variables_list(datasource?, path_pattern?, data_type?, enabled?, cursor?, limit?)` — flat list across all datasources; each item carries `{ datasource, path, data_type, enabled }` with `data_type` as a simple type in canonical case (`Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration`, plus `[]` for arrays) and `path` as a `/`-separated tree-walk. Filters combine with AND: `datasource` is an exact match, `path_pattern` an fnmatch glob against the path (`*` crosses `/`), `data_type` a simple or OPC-UA type compared case-insensitively on its simple type, `enabled` a boolean.
+- `variables_list(datasource?, path_pattern?, data_type?, enabled?, cursor?, limit?)` — flat list across all datasources; each item carries `{ datasource, path, data_type, enabled }` with `data_type` as a simple type in canonical case (`Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration`, plus `[]` for arrays) and `path` as a `/`-separated tree-walk. Filters combine with AND: `datasource` is an exact match, `path_pattern` an fnmatch glob against the path (`*` crosses `/`), `data_type` a simple or OPC-UA type compared case-insensitively on its simple type, `enabled` a boolean. A variable stored without an `enabled` flag reports `false`, as the runtime treats it.
 - `variables_add(datasource, name, data_type, parent_path?, settings?)` — `data_type` is a simple type, persisted as its representative OPC-UA type (`integer`→`Int32`, `float`→`Double`, …). `name` becomes the variable's `display_name`; `parent_path` must address an existing folder (omit for root). The new entry is `writable` by default on a static datasource only. `settings` may override defaults for the new entry — recognised keys: `writable` (bool), `value` (any), `node_id` (str, for OPC-UA sources), `is_array` (bool) with optional `array_length` (positive int, only with `is_array`), `enabled` (bool, default `true`), `min`/`max` (numeric range, numeric variables only), `fields`. Anything else goes under an `extensions` object; other top-level keys, and the server-derived `present_on_server`, are rejected.
 - `variables_delete(datasource, path, confirm?)` *destructive* — `path` is the tree-walk.
 - `variables_set_property(datasource, path, patch)` — JSON Merge Patch over the writable fields `node_id`, `is_array`, `array_length`, `enabled`, `writable`, `value`, `min`, `max`, `fields` and the `extensions` object (e.g. `patch={"enabled": false}`, `patch={"writable": true}`). The structural keys `kind`, `display_name`, and `data_type`, and `present_on_server`, must not appear in `patch`.
@@ -134,9 +140,10 @@ max 500). MCP resources are not exposed; clients that only surface tools
 
 ### Assets
 - `assets_list(cursor?, limit?)` — metadata only (fetch binaries via `GET /assets/<path>`); each item is `{ name, path, type, mime, size }` with `type` one of `icon` | `image` | `video`
-- `assets_upload(name, group, content, encoding, mime?, overwrite?)` — `group` is `"icons"` or `"images"`; `name` must match `[A-Za-z0-9_\-.]+`. `encoding` selects the payload format:
-  - `"svg"` — `content` is UTF-8 SVG markup; `mime` defaults to `image/svg+xml`. Sanitized before write: `<script>` and `<foreignObject>` tags are stripped, `on*` event-handler attributes are removed, and `href`/`xlink:href` values starting with `javascript:` are cleared.
+- `assets_upload(name, group, content, encoding, mime?, overwrite?)` — `group` is `"icons"` or `"images"`; `name` must match `[A-Za-z0-9_\-.]+` and end in an extension the group's asset picker lists (`api/widgets_api.py`): `.svg` for icons; `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif` or `.svg` for images. `encoding` selects the payload format:
+  - `"svg"` — `content` is UTF-8 SVG markup; `mime` defaults to `image/svg+xml`.
   - `"base64"` — `content` is base64-encoded binary; `mime` is required (e.g. `image/png`, `image/webp`).
+  A raster file must start with its format's signature. Every `.svg`, in either encoding, is parsed with expat (in a worker thread, linear in its size) and rebuilt from an allowlist (`_sanitize_svg`): the elements `svg`, `g`, `path`, `circle`, `ellipse`, `rect`, `line`, `polyline`, `polygon`, `defs`, `linearGradient`, `radialGradient`, `stop`, `clipPath`, `mask`, `symbol`, `use`, `title`, `desc`, `text`, `tspan` in the SVG namespace (or none); any other element is dropped with its subtree, including `script`, `foreignObject`, `style`, `a`, `image` and animation. Dropped attributes: `on*`, namespaced ones other than `xlink:href` (which becomes `href`), an `href` that is not a `#fragment`, and any value — `style` and presentation attributes such as `fill`, `mask` or `cursor` alike — holding a reference out of the file: a `url()` that is not a `#fragment`, `image()`, `image-set()`, `src()`, `@import`, `expression` or a backslash (a CSS escape can spell `url(` unseen). The rule is the frontend's `OUTSIDE_REF` (`useInlineSvg.ts`) plus `expression`. A DOCTYPE without an internal subset and processing instructions are dropped; an internal subset (entity declarations), an undefined entity, a root other than `<svg>` or malformed XML is refused. Each removal comes back as a `warnings` entry with code `svg-sanitized`, and the summary ends in `(sanitized)`.
   Both encodings enforce a **5 MB** payload limit. `group` rejects anything but `icons` and `images` outright, so there is no video upload path at all — raising the cap would not add one. The reasoning behind that is the cap: a clip does not fit a 5 MB base64 payload. `assets/videos/` is filled by copying files in or by a project import; `assets_list` and `assets_delete` cover them either way.
 - `assets_delete(path, confirm?)` *destructive — refuses (in both dry-run and confirmed paths) if any page or component references the asset*
 
@@ -225,7 +232,7 @@ a transaction.
   stale browser caches.
 - **Idempotency keys are process-local with a 5-minute TTL**. A request
   whose key survives a backend restart re-executes. Cache holds only applied
-  responses (not dry-runs). Keys are scoped by `(agent_label, idempotency_key)` — not by project; reusing the same key across two different projects in one session will return the first project's cached response. LRU eviction kicks in at 1 024 entries or 4 MB total size, whichever comes first.
+  responses (not dry-runs). Keys are scoped by the project the call names, the credential that authenticated it (the bearer token's id, or the manager session) and the key itself — all but the key from the request's auth context, so the same key on another project or from another token is a separate write. The agent label is caller-supplied (`x-mcp-agent`) and only names the caller in the log line a replay writes. LRU eviction kicks in at 1 024 entries or 4 MB total size, whichever comes first.
 - **Tool names use underscores** (`pages_add_widget`); dotted aliases are
   not provided.
 - **Widget-schema manifest may lag by one save cycle** during dev; validation

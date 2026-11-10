@@ -116,6 +116,59 @@ export interface PeerProject {
    * folder nor can be replaced by one. Absent from a peer predating the field.
    */
   inProjectsRoot?: boolean;
+  /** The code the project carries, by the peer's own account. Absent from a
+   * peer predating the field: unknown, never "none". */
+  code?: ProjectCode;
+}
+
+/** What in a project runs as code in the browser of everyone who opens it
+ *  (backend `widget_compiler.project_code`). */
+export interface ProjectCode {
+  /** Widget keys: `<Name>` or `<Group>/<Name>`. */
+  customWidgets: string[];
+  /** Top-level entries of `external-libraries/` holding a `.js`/`.mjs` file. */
+  externalLibraries: string[];
+  /** Keys of the project's `external-modules.json` import map. */
+  importOverrides: string[];
+}
+
+/**
+ * - `new`: a certificate never confirmed here; the operator compares it.
+ * - `pinned`: the certificate already confirmed for this address or device.
+ * - `changed`: a pin names another certificate (or the device dropped to
+ *   plain HTTP); pairing is refused.
+ * - `none`: the peer answers over plain HTTP.
+ */
+export type PeerTrust = 'new' | 'pinned' | 'changed' | 'none';
+
+/** What a peer shows before anything is sent to it. */
+export interface PeerProbe {
+  host: string;
+  port: number;
+  /** The resolved address the manager actually connects to. */
+  address: string;
+  scheme: PeerScheme;
+  hostname: string | null;
+  runtimeId: string | null;
+  fingerprint: string | null;
+  trust: PeerTrust;
+  /** This manager holds a pairing key for the device, bound to this certificate. */
+  remembered: boolean;
+}
+
+export interface PeerPairing {
+  token: string;
+  certificateFingerprint?: string;
+  runtimeId?: string | null;
+  remembered?: boolean;
+}
+
+export interface PeerPairOptions {
+  /** The SHA-256 the operator confirmed; required over HTTPS. */
+  fingerprint?: string | null;
+  /** The operator's explicit "isolated network" consent; required over HTTP. */
+  allowInsecureHttp?: boolean;
+  remember?: boolean;
 }
 
 export interface PeerTransferStatus {
@@ -131,7 +184,14 @@ export interface PeerTransferStatus {
   bytesDone: number;
   bytesTotal: number;
   message?: string | null;
+  /** `PEER_PAIRING_REFUSED` when the peer no longer accepts this device's token. */
+  code?: string | null;
 }
+
+/** The `code` of a peer refusing this device's pairing: revoked, or expired
+ *  after 90 days without use (backend `manager_peers_api.PEER_PAIRING_REFUSED`).
+ *  On a failed request's error, and on a failed transfer's status. */
+export const PEER_PAIRING_REFUSED = 'peer_pairing_refused';
 
 interface ProjectsStore {
   projects: ProjectEntry[];
@@ -158,22 +218,39 @@ interface ProjectsStore {
   renameProject(id: string, patch: { name?: string; id?: string }): Promise<ProjectEntry>;
   removeProject(id: string, deleteFolder: boolean): Promise<void>;
   exportProject(id: string): void;
-  importProject(file: File, destinationPath: string): Promise<ProjectEntry>;
+  /** Throws `ProjectCodeUnconfirmedError` when the archive carries code and
+   *  `trustCustomWidgets` is not set, and `ProjectIdCaseConflictError` when its
+   *  id differs from a registered one only in case. `projectId` registers the
+   *  archive under that id instead of its own. */
+  importProject(
+    file: File,
+    destinationPath: string,
+    trustCustomWidgets?: boolean,
+    projectId?: string,
+  ): Promise<ProjectEntry>;
   loadPeers(): Promise<PeerListResponse | null>;
   addManualPeer(host: string, port: number, name?: string, scheme?: PeerScheme): Promise<void>;
   removeManualPeer(host: string, port: number): Promise<void>;
-  forgetPeerCertificate(host: string, port: number): Promise<void>;
+  /** Drops the pin for this address, and every pin of the device `runtimeId` names. */
+  forgetPeerCertificate(host: string, port: number, runtimeId?: string | null): Promise<void>;
+  /** Drops the pairing key this manager kept for the device; its pinned certificate stays. */
+  forgetPeerPairing(runtimeId: string): Promise<void>;
+  /** Reads the peer's certificate and identity. Sends no password. */
+  probePeer(host: string, port: number, scheme: PeerScheme): Promise<PeerProbe>;
   pairPeer(
     host: string,
     port: number,
     password: string,
     scheme?: PeerScheme,
-  ): Promise<{ token: string; certificateFingerprint?: string }>;
+    options?: PeerPairOptions,
+  ): Promise<PeerPairing>;
+  /** An empty `token` uses the pairing key remembered for `runtimeId`. */
   listPeerProjects(
     host: string,
     port: number,
     token: string,
     scheme?: PeerScheme,
+    runtimeId?: string | null,
   ): Promise<PeerProject[]>;
   beginPeerTransfer(args: {
     sourceProjectId: string;
@@ -182,7 +259,9 @@ interface ProjectsStore {
     peerHost: string;
     peerPort: number;
     peerScheme: PeerScheme;
-    token: string;
+    /** Omitted: the pairing key remembered for `peerRuntimeId` is used. */
+    token?: string;
+    peerRuntimeId?: string | null;
     collisionPolicy: 'reject' | 'replace' | 'copy';
     confirmReplace: boolean;
     keepUsers: boolean;
@@ -198,16 +277,57 @@ interface ProjectsStore {
     peerHost: string;
     peerPort: number;
     peerScheme: PeerScheme;
-    token: string;
+    token?: string;
+    peerRuntimeId?: string | null;
     collisionPolicy: 'reject' | 'replace' | 'copy';
     confirmReplace: boolean;
     keepUsers: boolean;
     start: boolean;
     transferId: string;
+    /** The operator trusts the source to run the project's code here. */
+    trustCustomWidgets?: boolean;
   }): Promise<PeerTransferStatus>;
   getPeerPull(transferId: string): Promise<PeerTransferStatus>;
   cancelPeerPull(transferId: string): Promise<PeerTransferStatus>;
   clearError(): void;
+}
+
+/** The import 409's `code` for an archive with code sent without
+ *  `trustCustomWidgets` (backend/api/projects_api.py). */
+const CUSTOM_WIDGETS_UNCONFIRMED = 'custom_widgets_unconfirmed';
+
+function isProjectCode(value: unknown): value is ProjectCode {
+  if (!value || typeof value !== 'object') return false;
+  const lists = value as Record<string, unknown>;
+  return (['customWidgets', 'externalLibraries', 'importOverrides'] as const).every((kind) => {
+    const names = lists[kind];
+    return Array.isArray(names) && names.every((name) => typeof name === 'string');
+  });
+}
+
+/** The import 409's `code` for an archive whose project id differs from a
+ *  registered one only in upper and lower case (backend/api/projects_api.py). */
+const PROJECT_ID_CASE_CONFLICT = 'project_id_case_conflict';
+
+export class ProjectIdCaseConflictError extends Error {
+  /** A free id the server offers to import the archive under instead. */
+  readonly suggestedId: string;
+
+  constructor(message: string, suggestedId: string) {
+    super(message);
+    this.name = 'ProjectIdCaseConflictError';
+    this.suggestedId = suggestedId;
+  }
+}
+
+export class ProjectCodeUnconfirmedError extends Error {
+  readonly projectCode: ProjectCode;
+
+  constructor(message: string, projectCode: ProjectCode) {
+    super(message);
+    this.name = 'ProjectCodeUnconfirmedError';
+    this.projectCode = projectCode;
+  }
 }
 
 export function describeError(e: unknown): string {
@@ -334,12 +454,32 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     document.body.removeChild(a);
   },
 
-  importProject: async (file: File, destinationPath: string) => {
+  importProject: async (
+    file: File,
+    destinationPath: string,
+    trustCustomWidgets = false,
+    projectId?: string,
+  ) => {
     const form = new FormData();
     form.append('file', file);
     form.append('destinationPath', destinationPath);
+    if (trustCustomWidgets) form.append('trustCustomWidgets', 'true');
+    if (projectId) form.append('projectId', projectId);
     const res = await fetch(withBase('/api/projects/import'), { method: 'POST', body: form });
-    if (!res.ok) throw await apiErrorFrom(res);
+    if (!res.ok) {
+      const error = await apiErrorFrom(res.clone());
+      if (error.code === PROJECT_ID_CASE_CONFLICT) {
+        const body = (await res.json()) as { suggestedId: string };
+        throw new ProjectIdCaseConflictError(error.message, body.suggestedId);
+      }
+      if (error.code !== CUSTOM_WIDGETS_UNCONFIRMED) throw error;
+      const body = (await res.json()) as Partial<ProjectCode>;
+      throw new ProjectCodeUnconfirmedError(error.message, {
+        customWidgets: body.customWidgets ?? [],
+        externalLibraries: body.externalLibraries ?? [],
+        importOverrides: body.importOverrides ?? [],
+      });
+    }
     const entry = (await res.json()) as ProjectEntry;
     await get().load();
     return entry;
@@ -383,24 +523,42 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     );
   },
 
-  forgetPeerCertificate: async (host: string, port: number) => {
-    await managerApiJson(`/api/manager/peers/trust?host=${encodeURIComponent(host)}&port=${port}`, {
+  forgetPeerCertificate: async (host: string, port: number, runtimeId?: string | null) => {
+    const device = runtimeId ? `&runtimeId=${encodeURIComponent(runtimeId)}` : '';
+    await managerApiJson(
+      `/api/manager/peers/trust?host=${encodeURIComponent(host)}&port=${port}${device}`,
+      { method: 'DELETE' },
+    );
+  },
+
+  forgetPeerPairing: async (runtimeId) => {
+    await managerApiJson(`/api/manager/peer-pairings/${encodeURIComponent(runtimeId)}`, {
       method: 'DELETE',
     });
   },
 
-  pairPeer: async (host, port, password, scheme: PeerScheme = 'http') =>
-    managerApiJson<{ token: string; certificateFingerprint?: string }>('/api/manager/peer-pair', {
+  probePeer: async (host, port, scheme) =>
+    managerApiJson<PeerProbe>('/api/manager/peer-probe', {
       method: 'POST',
-      body: { host, port, password, scheme },
+      body: { host, port, scheme },
     }),
 
-  listPeerProjects: async (host, port, token, scheme: PeerScheme = 'http') => {
+  pairPeer: async (host, port, password, scheme: PeerScheme = 'http', options = {}) =>
+    managerApiJson<PeerPairing>('/api/manager/peer-pair', {
+      method: 'POST',
+      body: { host, port, password, scheme, ...options },
+    }),
+
+  listPeerProjects: async (host, port, token, scheme: PeerScheme = 'http', runtimeId = null) => {
     const result = await managerApiJson<{ projects: PeerProject[] }>('/api/manager/peer-projects', {
       method: 'POST',
-      body: { host, port, token, scheme },
+      body: { host, port, token: token || undefined, scheme, runtimeId: runtimeId ?? undefined },
     });
-    return result.projects;
+    // `code` drives a trust prompt: anything but three lists of names reads as
+    // "the source does not say", never as "no code".
+    return (result.projects ?? []).map((project) =>
+      isProjectCode(project.code) ? project : { ...project, code: undefined },
+    );
   },
 
   beginPeerTransfer: async (args) =>

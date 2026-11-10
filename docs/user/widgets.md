@@ -48,3 +48,24 @@ The six that cross the wire carry `onSuccess` / `onFailed` / `onSettled` handler
 
 > [!TIP]
 > **Showing who is signed in.** A Label bound to `$user` names the current user, and two Buttons gated on the guest sign in and out — see [Sign in and out on a screen](users.md#sign-in-and-out-on-a-screen).
+
+## Show another site: the Web Frame
+
+A **Web Frame** shows a web page inside the panel — a supplier portal, a camera's own page, a device's diagnostics. Its **sandbox** is on unless you turn it off; allow only what the page needs.
+
+The frame and the page it shows can exchange messages:
+
+- **Outbound variable** — each new value is posted to the page, and only to the **Outbound target origin**. Left empty (**Same as the URL**, the default) that is the origin of the URL: `https://portal.example.com` for `https://portal.example.com/orders`. The panel shows it under the field. A URL with no origin of its own — empty, a relative path, `about:blank`, a `data:` URL — gets nothing.
+- **Allowed inbound origins** — the sites whose messages the frame accepts, comma-separated. Each accepted message runs **On Message** and is written to the **Inbound variable**, so list only sites you trust to write that variable. `*` is not allowed: the frame ignores it, so with no site listed it ignores every message. Neither is `null`, the origin a sandboxed page sends from unless **Allow same-origin** is on, since every site the frame could show shares it. To take messages from a page in the sandbox, turn on **Allow scripts** and **Allow same-origin** and list its site.
+
+When the URL comes from a variable, a URL parameter or any other source and the sandbox is off, the properties panel warns: whoever can change that source decides which site the panel shows, with full access to its messages. **Turn on sandbox** in the warning switches it back on.
+
+> [!IMPORTANT]
+> **What changed for existing Web Frames.** A fixed URL with its site listed keeps working as before. The rest now behaves like this, and the [warnings pill](diagnostics.md#the-warnings-pill) reports each case:
+>
+> | Setting | Before | Now |
+> |---|---|---|
+> | Outbound target origin, empty | `*` | The origin of the URL |
+> | Outbound target origin, `*` | Sent to any site | Treated as the origin of the URL; a warning |
+> | Allowed inbound origins, `*` or `null` | Every message accepted | Every message ignored until sites are listed; an error |
+> | URL from a variable, sandbox off | No notice | A warning in the panel |

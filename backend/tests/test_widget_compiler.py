@@ -273,6 +273,144 @@ async def test_compile_entry_bundles_sibling_relative_import(widget_workspace):
     assert "from \"./helper\"" not in body
 
 
+# Stands in for <runtime_home>/.manager-auth.json: a file next to the project
+# that a widget must not be able to bundle into its public build.
+SECRET = '{"secret": "manager-hmac-secret"}'
+LEAK_EXPORT = "\nexport default function Leak() { return null; }\n"
+
+
+def _plant_secret(widget_workspace) -> Path:
+    secret = widget_workspace["src"].parent / "secret.json"
+    secret.write_text(SECRET, encoding="utf-8")
+    return secret
+
+
+def _leaked(build: Path) -> bool:
+    return any(
+        "manager-hmac-secret" in path.read_text(encoding="utf-8")
+        for path in build.rglob("*")
+        if path.is_file()
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source",
+    [
+        'import s from "../../secret.json";\nexport const leak = s;',
+        'const s = require("{secret}");\nexport const leak = s;',
+        'export {{ default as leak }} from "../../secret.json";',
+        'export const leak = import("../../secret.json");',
+        'export * from "{secret}";',
+    ],
+    ids=["import-dotdot", "require-absolute", "export-from", "dynamic-import", "export-star"],
+)
+async def test_compile_entry_refuses_a_file_outside_custom_widgets(widget_workspace, source):
+    src, build = widget_workspace["src"], widget_workspace["build"]
+    secret = _plant_secret(widget_workspace)
+    entry = _write_widget(
+        src, "Leak", source.format(secret=secret.as_posix()) + LEAK_EXPORT
+    )
+
+    ok = await widget_compiler.compile_entry(entry)
+
+    assert ok is False
+    assert not (build / "Leak" / "index.js").exists()
+    assert not _leaked(build)
+    status = json.loads((build / ".build-status.json").read_text(encoding="utf-8"))
+    assert status["widgets"]["Leak"]["error"] == (
+        "Widget “Leak” imports ../../secret.json, which is outside the custom-widgets folder"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_refused_build_does_not_keep_serving_the_last_one(widget_workspace):
+    """The last build may come from before this check and carry the very file
+    the source now reaches for, so a refusal removes it rather than keeping
+    the previous module serving the way an ordinary compile error does."""
+    src, build = widget_workspace["src"], widget_workspace["build"]
+    _plant_secret(widget_workspace)
+    entry = _write_widget(src, "Leak", "export const leak = 1;" + LEAK_EXPORT)
+    assert await widget_compiler.compile_entry(entry) is True
+    assert (build / "Leak" / "index.js").is_file()
+
+    entry.write_text(
+        'import s from "../../secret.json";\nexport const leak = s;' + LEAK_EXPORT,
+        encoding="utf-8",
+    )
+
+    assert await widget_compiler.compile_entry(entry) is False
+    assert not (build / "Leak" / "index.js").exists()
+    assert not _leaked(build)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("helper", "specifier"),
+    [("_shared/scale.ts", "../../_shared/scale"), ("Group/Other/helper.ts", "../Other/helper")],
+    ids=["shared-folder", "another-widget"],
+)
+async def test_compile_entry_bundles_a_helper_shared_across_custom_widgets(
+    widget_workspace, helper, specifier
+):
+    """Everything under custom-widgets/ is served as-is anyway; a widget that
+    shares a helper with its neighbours keeps building."""
+    src, build = widget_workspace["src"], widget_workspace["build"]
+    (src / helper).parent.mkdir(parents=True, exist_ok=True)
+    (src / helper).write_text(SIBLING_HELPER, encoding="utf-8")
+    entry = _write_widget(src, "Group/Foo", SIBLING_IMPORT_WIDGET.replace("./helper", specifier))
+
+    assert await widget_compiler.compile_entry(entry) is True
+    assert "hello from helper" in (build / "Group" / "Foo" / "index.js").read_text(
+        encoding="utf-8"
+    )
+
+
+@pytest.mark.asyncio
+async def test_compile_entry_refuses_a_symlink_out_of_the_widget_folder(
+    widget_workspace, require_symlinks
+):
+    src, build = widget_workspace["src"], widget_workspace["build"]
+    secret = _plant_secret(widget_workspace)
+    entry = _write_widget(
+        src, "Leak", 'import s from "./data.json";\nexport const leak = s;' + LEAK_EXPORT
+    )
+    (entry.parent / "data.json").symlink_to(secret)
+
+    assert await widget_compiler.compile_entry(entry) is False
+    assert not _leaked(build)
+
+
+@pytest.mark.asyncio
+async def test_compile_entry_bundles_a_file_from_external_libraries(widget_workspace):
+    src, build = widget_workspace["src"], widget_workspace["build"]
+    library = src.parent / "external-libraries" / "helper.js"
+    library.parent.mkdir()
+    library.write_text(SIBLING_HELPER, encoding="utf-8")
+    entry = _write_widget(
+        src, "Foo", SIBLING_IMPORT_WIDGET.replace("./helper", "../../external-libraries/helper.js")
+    )
+
+    assert await widget_compiler.compile_entry(entry) is True
+    assert "hello from helper" in (build / "Foo" / "index.js").read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_builtin_build_bundles_helpers_shared_across_the_tree(widget_workspace, tmp_path):
+    """The product's widgets import ``usePress.ts`` from the tree's root."""
+    src = tmp_path / "widgets"
+    _write_widget(
+        src, "Content/Button", SIBLING_IMPORT_WIDGET.replace("./helper", "../../usePress")
+    )
+    (src / "usePress.ts").write_text(SIBLING_HELPER, encoding="utf-8")
+
+    assert await widget_compiler.compile_all(src, tmp_path / "builtin-build")
+    body = (tmp_path / "builtin-build" / "Content" / "Button" / "index.js").read_text(
+        encoding="utf-8"
+    )
+    assert "hello from helper" in body
+
+
 @pytest.mark.asyncio
 async def test_compile_all_isolates_failures(widget_workspace):
     src, build = widget_workspace["src"], widget_workspace["build"]

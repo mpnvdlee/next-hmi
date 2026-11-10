@@ -242,3 +242,46 @@ def test_internal_hook_is_refused_through_the_proxy_even_with_a_session(
     refusal is the only thing standing between an authenticated editor tab and
     the internal API — and it has to read the form the child will route."""
     assert _raw_status(server, "GET", target, cookie=server.session_cookie) == 404
+
+
+# Literal forms only get here over a raw socket: every HTTP client collapses
+# them before sending. ``httpx`` collapses them too, when the proxy builds the
+# upstream URL, which is how each of these reached the child's
+# ``/api/internal/reload``.
+_DOT_SEGMENT_BYPASSES = [
+    "api/./internal/reload",
+    "api/foo/../internal/reload",
+    "api/%2e/internal/reload",
+    "api/%2E/internal/reload",
+    "api/foo/%2e%2e/internal/reload",
+    "api/foo/%2E%2E/internal/reload",
+    "api/foo/.%2e/internal/reload",
+    "api/%252e/internal/reload",
+    "api/foo%252f..%252finternal/reload",
+    "api/config/pages/../../datasources/Machine",
+]
+
+
+@pytest.mark.parametrize("prefix", ["editor", "runtime"])
+@pytest.mark.parametrize("sub_path", _DOT_SEGMENT_BYPASSES)
+def test_dot_segments_are_refused_before_the_proxy_forwards_anything(
+    server: _Server, monkeypatch, prefix: str, sub_path: str
+) -> None:
+    """With a session, so the gate lets them by: the proxy itself must refuse,
+    and the child must see nothing at all."""
+    import httpx
+    import manager
+
+    forwarded: list[bytes] = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        forwarded.append(request.url.raw_path)
+        return httpx.Response(200)
+
+    monkeypatch.setattr(manager.supervisor, "port_for", lambda pid: 65000)
+    monkeypatch.setattr(
+        manager, "_proxy_client", httpx.AsyncClient(transport=httpx.MockTransport(upstream))
+    )
+    target = f"/{prefix}/ghost/{sub_path}"
+    assert _raw_status(server, "POST", target, cookie=server.session_cookie) == 400
+    assert forwarded == []

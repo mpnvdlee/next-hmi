@@ -77,6 +77,15 @@ describe('apiErrorFrom', () => {
   it('falls back to the HTTP code when the body is not JSON', async () => {
     const err = await apiErrorFrom(new Response('boom', { status: 500 }));
     expect(err.message).toBe('HTTP 500');
+    expect(err.retryAfter).toBeNull();
+  });
+
+  it('carries the seconds a lockout has left and the address it holds', async () => {
+    const err = await apiErrorFrom(
+      jsonResponse(429, { detail: 'Locked', retryAfter: 42, clientAddress: '192.168.1.77' }),
+    );
+    expect(err.retryAfter).toBe(42);
+    expect(err.clientAddress).toBe('192.168.1.77');
   });
 
   it('signals a lost manager session on the gate 401', async () => {

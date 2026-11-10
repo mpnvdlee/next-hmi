@@ -19,7 +19,7 @@ import logging
 import os
 from typing import Literal
 
-from core import runtime_home, tls_settings
+from core import manager_auth, runtime_home, tls_settings
 from core.exceptions import ConflictError, NextHmiError, ValidationError
 from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
@@ -160,12 +160,18 @@ async def restart_for_tls() -> dict:
     socket is rebound. Running projects come back on their own — the replacement
     process resumes the persisted running set on startup.
     """
-    if not _status()["restartRequired"]:
+    status = _status()
+    if not status["restartRequired"]:
         raise ConflictError("The manager is already serving the configured protocol.")
     try:
         write_restart_sentinel("tls")
     except OSError as exc:
         raise NextHmiError("Could not write the restart marker; the protocol is unchanged.") from exc
+    if status["enabled"] and not tls_settings.served()[0]:
+        # A cookie minted over plain HTTP is not Secure: it has crossed the
+        # network in the clear and the browser keeps sending it to the HTTP
+        # port. Everyone signs in again over HTTPS instead.
+        manager_auth.revoke_all_sessions()
     logger.info("tls: restarting manager to apply protocol change")
     task = asyncio.create_task(shutdown_after_response("tls"))
     _deferred_tasks.add(task)

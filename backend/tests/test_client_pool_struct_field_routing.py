@@ -123,6 +123,29 @@ def test_struct_field_routes_array_of_struct():
     assert "Scalar" not in routes
 
 
+def test_struct_field_routes_nested_struct_inside_array_element():
+    """A sub-struct inside an array element patches the aggregate in place
+    like a direct field, instead of rebuilding the whole array per change."""
+    config = _array_of_struct_config()
+    config["variables"][1]["children"][0]["children"].append(
+        _make_folder("detail", [_make_var("code", "ns=2;s=Alarm0Code")]),
+    )
+    entry = DatasourceEntry(config)
+    routes = _struct_field_routes(entry)
+
+    assert routes["aAlarms/[0]/detail/code"] == ("aAlarms", "0:detail/code")
+
+    dm = DatasourceManager()
+    dm.datasources["DS"] = entry
+    dm.set_client_page("c1", {build_var_key("DS", "aAlarms")})
+    broadcasts: list[Any] = []
+    dm.set_enqueue_callback(lambda key, value, priority=False: broadcasts.append((key, value)))
+    folder_path, field_name = routes["aAlarms/[0]/detail/code"]
+    dm.update_struct_field("DS", folder_path, field_name, 42, leaf_path="aAlarms/[0]/detail/code")
+
+    assert dict(broadcasts)[build_var_key("DS", "aAlarms")][0] == {"detail": {"code": 42}}
+
+
 def test_struct_field_routes_nested_struct_uses_dotted_path():
     entry = DatasourceEntry(_nested_struct_config())
     routes = _struct_field_routes(entry)
@@ -157,6 +180,13 @@ class _FakeSub:
     async def delete(self) -> None:
         pass
 
+    # Iterator mode (engine drains events itself); nothing to deliver here.
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
 
 class _FakeNode:
     def __init__(self, node_id: str) -> None:
@@ -171,7 +201,7 @@ class _FakeClient:
     def get_node(self, node_id: str) -> _FakeNode:
         return _FakeNode(node_id)
 
-    async def create_subscription(self, params: Any, handler: Any):
+    async def create_subscription(self, params: Any, handler: Any = None, **_kw: Any):
         return self.priority_sub if params.Priority == 200 else self.bg_sub
 
     async def read_values(self, nodes: list[_FakeNode]) -> list[Any]:

@@ -919,6 +919,34 @@ def test_request_identity_missing_scope_is_ignored(ws_manager, users_tmp):
     assert len(fake_ws.messages) == 0
 
 
+def test_an_overlong_scope_is_ignored_and_never_stored(ws_manager, users_tmp):
+    users_tmp.write_text(json.dumps(copy.deepcopy(_DEFAULT_DOCUMENT)))
+    fake_ws = FakeWebSocket()
+    ws_manager._connections["c1"] = fake_ws
+    ws_manager._client_users["c1"] = {}
+    scope = "runtime:" + "x" * 60_000
+
+    for msg_type in ("request_identity", "logout", "login"):
+        asyncio.run(ws_manager.handle_message("c1", json.dumps({"type": msg_type, "scope": scope})))
+
+    assert fake_ws.messages == []
+    assert ws_manager._client_users["c1"] == {}
+
+
+def test_a_connection_keeps_only_its_most_recent_scopes(ws_manager, users_tmp):
+    # A socket looping fresh scopes must not grow the identity store without
+    # bound; the scope it used last is the live view and always stays.
+    users_tmp.write_text(json.dumps(copy.deepcopy(_DEFAULT_DOCUMENT)))
+    ws_manager._connections["c1"] = FakeWebSocket()
+    ws_manager._client_users["c1"] = {}
+
+    for i in range(100):
+        msg_type = "request_identity" if i % 2 else "logout"
+        asyncio.run(ws_manager.handle_message("c1", json.dumps({"type": msg_type, "scope": f"runtime:{i}"})))
+
+    assert list(ws_manager._client_users["c1"]) == [f"runtime:{i}" for i in range(84, 100)]
+
+
 def test_request_identity_fallback_when_user_not_found(ws_manager, users_tmp):
     """If autoLoginName user doesn't exist, falls back to bare guest identity."""
     doc = copy.deepcopy(_DEFAULT_DOCUMENT)
@@ -1099,9 +1127,15 @@ def test_request_identity_does_not_echo_request_id(ws_manager, users_tmp):
 # ─── passwordless accounts, throttling, and the timing oracle ───────────────
 
 
-def _login(ws_manager, username: str, password: str, *, client_id: str = "c1"):
+def _authenticate(username: str, password: str, address: str = "10.0.0.5"):
+    return asyncio.run(users_manager_module.authenticate(username, password, address))
+
+
+def _login(
+    ws_manager, username: str, password: str, *, client_id: str = "c1", host: str = "10.0.0.5"
+):
     """Run one WebSocket login and return the messages it sent back."""
-    ws = FakeWebSocket()
+    ws = FakeWebSocket(host=host)
     ws_manager._connections[client_id] = ws
     ws_manager._client_users[client_id] = {}
     asyncio.run(
@@ -1121,20 +1155,20 @@ def _login(ws_manager, username: str, password: str, *, client_id: str = "c1"):
 def test_authenticate_refuses_an_account_with_no_password(auth_users):
     """`Basic bGluZWJvc3M6` — a known username and an empty password — signed in
     as any account the editor had created and an admin had given groups to."""
-    assert asyncio.run(users_manager_module.authenticate("nopass", "")) is None
-    assert asyncio.run(users_manager_module.authenticate("nopass", "guess")) is None
+    assert _authenticate("nopass", "") is None
+    assert _authenticate("nopass", "guess") is None
 
 
 def test_authenticate_refuses_guest_sign_in(auth_users):
     """``guest`` is the anonymous identity, never a login."""
-    assert asyncio.run(users_manager_module.authenticate("guest", "")) is None
-    assert asyncio.run(users_manager_module.authenticate("guest", "guest")) is None
+    assert _authenticate("guest", "") is None
+    assert _authenticate("guest", "guest") is None
 
 
 def test_authenticate_still_accepts_real_credentials(auth_users):
-    identity, _doc = asyncio.run(users_manager_module.authenticate("hashed", "hashed-pass"))
+    identity, _doc = _authenticate("hashed", "hashed-pass")
     assert identity["username"] == "hashed"
-    legacy, _doc = asyncio.run(users_manager_module.authenticate("operator1", "op1pass"))
+    legacy, _doc = _authenticate("operator1", "op1pass")
     assert legacy["groups"] == ["operator", "guest"]
 
 
@@ -1185,11 +1219,11 @@ def test_unknown_username_costs_the_same_as_a_wrong_password(auth_users, monkeyp
 
     monkeypatch.setattr(passwords_module.hashlib, "pbkdf2_hmac", counting)
 
-    assert asyncio.run(users_manager_module.authenticate("hashed", "wrong")) is None
+    assert _authenticate("hashed", "wrong") is None
     known_user = len(derivations)
     derivations.clear()
 
-    assert asyncio.run(users_manager_module.authenticate("nobody-at-all", "wrong")) is None
+    assert _authenticate("nobody-at-all", "wrong") is None
     unknown_user = len(derivations)
 
     assert (known_user, unknown_user) == (1, 1)
@@ -1230,21 +1264,98 @@ def test_authenticate_raises_rate_limit_so_rest_callers_answer_429(auth_users):
     """``datasource_api`` and ``recipe_api`` both funnel through here; the
     registered ``RateLimitError`` handler turns this into HTTP 429."""
     for _ in range(5):
-        assert asyncio.run(users_manager_module.authenticate("hashed", "wrong")) is None
+        assert _authenticate("hashed", "wrong") is None
 
     with pytest.raises(RateLimitError):
-        asyncio.run(users_manager_module.authenticate("hashed", "hashed-pass"))
+        _authenticate("hashed", "hashed-pass")
 
 
-def test_a_username_flood_trips_the_global_cooldown():
-    """A guess that rotates usernames never meets the per-name counter, so the
-    ceiling across all names is what bounds the hashing an anonymous flood can
-    buy on a panel PC."""
-    for attempt in range(60):
-        assert user_auth_throttle.lockout_remaining(f"ghost{attempt}") == 0.0
-        user_auth_throttle.register_login_failure(f"ghost{attempt}")
+def _count_derivations(monkeypatch) -> list[int]:
+    derivations: list[int] = []
+    real = passwords_module.hashlib.pbkdf2_hmac
 
-    assert user_auth_throttle.lockout_remaining("operator1") > 0.0
+    def counting(*args, **kwargs):
+        derivations.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(passwords_module.hashlib, "pbkdf2_hmac", counting)
+    return derivations
+
+
+async def _in_parallel(attempts: int, username: str, password: str, address: str = "10.0.0.5"):
+    return await asyncio.gather(
+        *(users_manager_module.authenticate(username, password, address) for _ in range(attempts)),
+        return_exceptions=True,
+    )
+
+
+def test_parallel_guesses_get_no_more_than_five_verifications(auth_users, monkeypatch):
+    """Checked before an awaited verification and counted after it, every guess
+    already in flight passed the lockout: twenty sockets sending ``login`` at
+    once were twenty guesses, not five."""
+    derivations = _count_derivations(monkeypatch)
+
+    results = asyncio.run(_in_parallel(20, "hashed", "wrong"))
+
+    assert len(derivations) == 5
+    assert results.count(None) == 5
+    assert all(isinstance(r, RateLimitError) for r in results if r is not None)
+    assert users_manager_module._checks == {}
+
+
+def test_parallel_right_passwords_all_sign_in(auth_users):
+    """Each admitted check counts as a failure until it succeeds, so the checks
+    of one name queue rather than trip the lockout on each other."""
+    results = asyncio.run(_in_parallel(8, "hashed", "hashed-pass"))
+
+    assert [identity["username"] for identity, _doc in results] == ["hashed"] * 8
+
+
+def _flood(address: str, failures: int) -> None:
+    for attempt in range(failures):
+        assert user_auth_throttle.begin_attempt(f"ghost{address}-{attempt}", address) == 0.0
+
+
+def test_a_flood_from_one_address_locks_out_only_that_address(ws_manager):
+    """A guess that rotates usernames never meets the per-name counter. Counted
+    across every name, its 60 failures locked every operator out for 30 s."""
+    _flood("10.0.0.66", 60)
+
+    assert _login(ws_manager, "operator1", "op1pass", host="10.0.0.66")[0]["reason"] == "rate_limited"
+    assert _login(ws_manager, "operator1", "op1pass", host="10.0.0.7")[0]["type"] == "user_identity"
+
+
+def test_a_flood_from_many_addresses_trips_the_global_ceiling(auth_users):
+    for host in range(10):
+        _flood(f"10.0.1.{host}", 30)
+
+    with pytest.raises(RateLimitError):
+        _authenticate("operator1", "op1pass", "10.0.0.7")
+
+
+def test_a_success_takes_its_own_attempt_back_from_the_address():
+    """A script signing in with the right password from one address, request
+    after request, never meets that address's ceiling."""
+    for _ in range(70):
+        assert user_auth_throttle.begin_attempt("operator1", "10.0.0.8") == 0.0
+        user_auth_throttle.register_login_success("operator1", "10.0.0.8")
+
+
+def test_throttle_tables_stay_bounded(monkeypatch):
+    monkeypatch.setattr(user_auth_throttle, "_MAX_TRACKED", 16)
+    monkeypatch.setattr(user_auth_throttle, "_GLOBAL_CEILING", 10_000)
+
+    for attempt in range(100):
+        user_auth_throttle.begin_attempt(f"name{attempt}", f"10.0.2.{attempt}")
+
+    assert len(user_auth_throttle._names) <= 16
+    assert len(user_auth_throttle._addresses) <= 16
+
+
+def test_an_oversized_username_is_tracked_by_its_cut(auth_users):
+    _authenticate("x" * 60_000, "wrong")
+
+    assert [len(name) for name in user_auth_throttle._names] == [65]
 
 
 def test_editor_user_writes_refresh_held_identities(api_client, monkeypatch):

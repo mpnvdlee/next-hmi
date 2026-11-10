@@ -28,6 +28,9 @@ export type ResolvedValue = string | number | boolean | null | undefined;
 
 export interface EvaluationContext {
   resolveVariable?: (datasource: string, path: string) => ResolvedValue;
+  /** One element of an array variable: a struct array's element under its own
+   *  key when the store holds it, else the whole value sliced. */
+  resolveElement?: (datasource: string, path: string, index: number) => ResolvedValue;
   resolveTranslation?: (key: string) => string;
   /** The project value map `id`, for `$map`. */
   resolveValueMap?: (id: string) => ValueMap | undefined;
@@ -290,8 +293,13 @@ function evaluateVar(varObj: unknown, context: EvaluationContext, depth: number)
     return null;
   }
 
-  const value = context.resolveVariable(datasource, path);
-  const element = index !== undefined && Array.isArray(value) ? (value[index] ?? null) : value;
+  let element: ResolvedValue;
+  if (index !== undefined && context.resolveElement) {
+    element = context.resolveElement(datasource, path, index);
+  } else {
+    const value = context.resolveVariable(datasource, path);
+    element = index !== undefined && Array.isArray(value) ? (value[index] ?? null) : value;
+  }
   if (typeof v.bit === 'number' && element !== undefined) return readBit(element, v.bit);
   return element as ResolvedValue;
 }

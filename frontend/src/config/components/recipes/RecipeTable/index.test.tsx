@@ -4,10 +4,14 @@ import RecipeTable from './index';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useVariableStore } from '@hmi/store/variableStore';
-import { sendWsMessage } from '@hmi/hooks/useWebSocket';
+import { clearContextProducer, setContextProducer } from '@hmi/hooks/useWebSocket';
 import type { RecipeConfig } from '@shared/types/recipe';
 
-vi.mock('@hmi/hooks/useWebSocket', () => ({ sendWsMessage: vi.fn() }));
+vi.mock('@hmi/hooks/useWebSocket', () => ({
+  sendWsMessage: vi.fn(),
+  setContextProducer: vi.fn(),
+  clearContextProducer: vi.fn(),
+}));
 
 const CONFIG: RecipeConfig = {
   version: 1,
@@ -61,7 +65,8 @@ function paramRow(label: string): HTMLElement {
 beforeEach(() => {
   useRecipeConfigStore.setState({ config: structuredClone(CONFIG), loaded: true, loadError: null });
   useEditorDomainStore.setState({ bindingPickerOpen: false, bindingPickerTarget: null });
-  vi.mocked(sendWsMessage).mockClear();
+  vi.mocked(setContextProducer).mockClear();
+  vi.mocked(clearContextProducer).mockClear();
 });
 
 afterEach(() => {
@@ -310,15 +315,13 @@ describe('RecipeTable — live values', () => {
       <RecipeTable config={config()} selection={{ type: 'type', id: 'brew' }} filter="" showLive />,
     );
 
-    expect(sendWsMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'set_context', priorityKeys: ['plc:Boiler/Temp'] }),
-    );
+    expect(setContextProducer).toHaveBeenCalledWith('recipe-table', {
+      priorityKeys: ['plc:Boiler/Temp'],
+    });
 
     unmount();
 
-    expect(sendWsMessage).toHaveBeenLastCalledWith(
-      expect.objectContaining({ type: 'set_context', priorityKeys: [] }),
-    );
+    expect(clearContextProducer).toHaveBeenCalledWith('recipe-table');
   });
 
   it('asks for nothing while the live column is off', () => {
@@ -331,7 +334,7 @@ describe('RecipeTable — live values', () => {
       />,
     );
 
-    expect(sendWsMessage).not.toHaveBeenCalled();
+    expect(setContextProducer).not.toHaveBeenCalled();
   });
 });
 

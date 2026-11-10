@@ -23,6 +23,43 @@ would trust to run code on the server and in operators' browsers, and keep the
 whole deployment on a trusted network (see
 [deploy.md](../operations/deploy.md#network-placement-and-threat-model)).
 
+A project brings its code with it, so **importing, pulling or receiving a
+project runs that code too**. A project's code is
+(`widget_compiler.project_code`, read from the extracted files):
+
+- its **custom widgets**, as the compiler discovers them — they build when the
+  project starts and run in the browser of everyone who opens it;
+- every `.js`/`.mjs` file under `external-libraries/`, named by its top-level
+  entry there;
+- every key of `external-modules.json`, the project's import-map overrides.
+
+A project with no custom widgets is not code-free: a library or an override
+loads into every page of the project. `POST /api/projects/import` therefore
+refuses an archive that carries any of these with a `409`
+(`code: "custom_widgets_unconfirmed"`, plus `customWidgets`,
+`externalLibraries` and `importOverrides` lists) until the caller sets
+`trustCustomWidgets`, which the import dialog does only once the operator ticks
+*I trust the source of this project and want to run its code*. A pull is
+refused the same way, checked in the staging folder before anything is
+installed; the source's project listing names the same three lists (`code`) so
+the dialog can ask first. Both checks read what landed on disk, and an archive
+member with a `.`, `..` or empty path segment is refused outright on every
+unpack (import, pull, receive), so a member name cannot say one thing and land
+in `custom-widgets/` anyway.
+
+What the build itself may read is bounded: **a widget can only bundle files
+inside the project's `custom-widgets/` folder** and its `external-libraries/`,
+both of which are served as-is anyway — so widgets may share a helper such as
+`custom-widgets/_shared/scale.ts`. The compiler checks esbuild's metafile — its
+record of every file the bundle read, whatever pulled it in (`import`,
+`import()`, `require()`, `export … from`, or a symlink) — and refuses a build
+that reached any other file, with an error such as
+`Widget “Leak” imports ../../../.manager-auth.json, which is outside the custom-widgets folder`.
+A refused build also removes the widget's previous `index.js`. Without that
+bound a widget could inline a server file — the manager's session secret,
+another project's datasource passwords — into its compiled module, which
+`/runtime/<id>/widget-js/` serves without a session.
+
 ## Folder contract
 
 Layout choices:
@@ -81,7 +118,13 @@ The compiler lives in `backend/services/widget_compiler.py` and runs in both dev
 
 A failed compile leaves the previous `index.js` in place, which is deliberate
 for a project widget: a broken edit keeps the last good module serving to the
-live HMI instead of blanking the operator's screen. The built-in half does not
+live HMI instead of blanking the operator's screen. The one exception is a
+build refused for reading a file outside the widget's folder (see
+[Security](#security-editor-access-is-code-execution)): that removes the
+previous `index.js` too, since it may predate the check and carry the same
+file. The built-in widgets are the product's own code and may share helpers
+across `frontend/widgets/`, so their build (`--once --manifest …`) bounds
+inputs to that tree instead. The built-in half does not
 get that latitude — `publish_builtin_widgets_assets` reads `.build-status.json` from
 disk and skips any widget whose row is not `ok`, so a broken build never
 publishes yesterday's artifact under a source that no longer matches it. One
@@ -369,8 +412,8 @@ widget that renders one branches on both pairs below — as the built-in `Icon`,
 
 - `isBuiltinIconId(value)` — `true` if the string is a built-in Phosphor icon id (allowlisted).
 - `getBuiltinIconComponent(iconId)` — returns the `PhosphorIconComponent` for that id, or `null`. It is not a plain component: the icon set is fetched on first render, so rendering one outside a `React.Suspense` boundary throws a promise instead of drawing anything. Wrap the tag — `<React.Suspense fallback={null}><IconComp size={20} weight="regular" /></React.Suspense>` — as every built-in widget that draws an icon does.
-- `isCustomIconAssetPath(value)` — `true` if the string points at a workspace SVG (`/assets/icons/…`) instead. Base-prefix aware, so it still matches under a proxied `/runtime/<slug>/` mount.
-- `useInlineSvg(url)` → `string` — fetches that SVG and returns its markup *rewritten for tinting*: every `fill` / `stroke` paint (attribute or CSS declaration) is repointed at `currentColor`, a `color` attribute is dropped, and a root that declares no fill gets `fill="currentColor"`, so the icon inherits the CSS `color` of its parent instead of shipping its own. Fills stay fills and strokes stay strokes, and a paint of `none` is kept, so an outline icon stays an outline. That is still a one-way trip — a multi-colour asset comes back monochrome, so fetch the file yourself (through `withBase`) when it has to keep its own palette. The rewritten markup is kept per URL for the rest of the page load (cleared when an asset changes), so a later mount draws it on its first render and icons mounting together share one fetch. Returns `''` for a null/empty url, while the first fetch is in flight, and when the fetch fails; the three are indistinguishable, so treat `''` as "nothing to draw" rather than as a loading state. Render the result with `dangerouslySetInnerHTML` — the markup comes from the project's own asset folder, which is already a trusted, editor-writable surface.
+- `isCustomIconAssetPath(value)` — `true` if the string is a `.svg` file inside the project's icons folder (`/assets/icons/…`) instead. Base-prefix aware, so it still matches under a proxied `/runtime/<slug>/` mount; load the icon from `withBase(value)`. It is strict, because an icon field can be bound to a tag any client on the network may write: a `.` or `..` segment (also percent-encoded), an encoded `/`, a backslash, a query, a hash, a relative path or another origin make it `false`, since any of them can reach another URL on the origin. Check every value before you load it.
+- `useInlineSvg(url)` → `string` — fetches that SVG and returns its markup *rewritten for tinting*: every `fill` / `stroke` paint (attribute or CSS declaration) is repointed at `currentColor`, a `color` attribute is dropped, and a root that declares no fill gets `fill="currentColor"`, so the icon inherits the CSS `color` of its parent instead of shipping its own. Fills stay fills and strokes stay strokes, and a paint of `none` is kept, so an outline icon stays an outline. That is still a one-way trip — a multi-colour asset comes back monochrome, so fetch the file yourself (through `withBase`) when it has to keep its own palette. Only a url `isCustomIconAssetPath` accepts is fetched, and the markup is sanitised before it is returned: it is parsed as XML and only drawing elements survive (no `script`, `foreignObject`, `a`, `image`, animation or filter elements, comments or processing instructions), with every `on…` attribute, every `href` / `xlink:href` other than a `#fragment` and every attribute or `<style>` block that loads from outside the file (a `url()` other than `#…`, `@import`, `image-set()`, a CSS escape) removed. The rewritten markup is kept per URL for the rest of the page load (cleared when an asset changes), so a later mount draws it on its first render and icons mounting together share one fetch. Returns `''` for a null/empty or rejected url, while the first fetch is in flight, when the fetch fails and when the file is not well-formed SVG; these are indistinguishable, so treat `''` as "nothing to draw" rather than as a loading state. Render the result with `dangerouslySetInnerHTML`. When you only need the icon in one colour, the built-in widgets' way needs no markup at all: an element with `background-color: currentColor` and the file as its CSS `mask-image` (set `url("…")` through a custom property, and `-webkit-mask-image` too).
 
 ### Virtual input
 
@@ -413,7 +456,12 @@ A loose `<name>.js` at the root of `external-libraries/` also works for single-f
 { "imports": { "weird-lib": "/external-libraries/weird/dist/esm/main.bundle.js" } }
 ```
 
-Override entries win over auto-derived ones.
+Override entries win over auto-derived ones. A key must be a bare module name:
+one that starts with `/`, `./` or `../`, or contains `:` or `\`, would remap
+that URL for every module on the page — a built-in widget's own
+`/runtime/<id>/builtin-widgets-js/…` included — so it is logged and left out of
+the import map (`build_import_map`, shared by the served page and the compiler;
+the dev server's plugin applies the same rule).
 
 **Which project the dev server scans.** The import map is built by a Vite plugin
 (`frontend/dev-plugins/externalModules.ts`), which has to find the live project

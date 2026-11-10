@@ -38,8 +38,8 @@ Everything under `/runtime/<project>/`, while that project runs:
 |---|---|
 | Pages, dialogs, components, themes, texts and translations | Read the complete screen design, including which variable each widget shows or writes. |
 | The project's `assets`, `custom-widgets` and `external-libraries` folders | Download any file in them, the source of your custom widgets included. Keep nothing secret there. |
-| The live connection | See the list of the project's variables, their live values, the active alarms and the recipes with their saved values. |
-| Variables | Write every variable marked writable in its datasource, and switch a Boolean. A read-only variable is refused for everyone. See [What the server enforces](users.md#what-the-server-enforces). |
+| The live connection | See the list of the project's enabled variables, their live values, the active alarms and the recipes with their saved values. A tag browsed but not enabled is never read. |
+| Variables | Write every enabled variable marked writable in its datasource, and switch a Boolean. A read-only or disabled variable is refused for everyone. See [What the server enforces](users.md#what-the-server-enforces). |
 | Recipes | Load a saved recipe to the PLC, or save the live values over a recipe. |
 | Alarms | Acknowledge active alarms, and read the alarm history, including who acknowledged each alarm. |
 | Historian | Read the recorded history of every variable the historian logs. |
@@ -72,14 +72,17 @@ The manager is the device's front door, at the address without
 - see whether a device-admin password has been set;
 - try the device-admin password: on the sign-in page, when pairing an MCP
   client or another NEXT HMI device, or over the API. Five wrong passwords
-  lock all of them for a minute;
+  from one address lock that address out of all of them for a minute, while
+  other devices can still sign in; a hundred wrong passwords within a minute
+  from all addresses together lock everyone out for a minute;
 - see that the device exists: it announces itself on the local network so
   other NEXT HMI devices can find it for a project transfer.
 
 > [!IMPORTANT]
-> **On a new install, whoever opens the dashboard first sets the device-admin
-> password.** See [Installing](install.md#installing) for how to close that
-> window.
+> **On a new install, whoever enters the setup code first sets the device-admin
+> password.** The device prints the code in its console and its log until a
+> password is set, so anyone who can read either can claim the install. See
+> [Installing](install.md#installing).
 
 ## What needs a credential
 
@@ -89,15 +92,31 @@ The manager is the device's front door, at the address without
 | **Device-admin password** over HTTP Basic | [API v1](api.md) on every project, with every scope. |
 | **API token** | [API v1](api.md) on every project, limited to the scopes ticked when it was created. Created under **Settings › Tokens** on the dashboard. |
 | **MCP token** | The [MCP endpoint](mcp.md) on every project, to read, or to read and write (writes only where **MCP write enabled** is ticked). Created under **Settings › Tokens** on the dashboard. |
-| **Peer token** | Sending and fetching projects between two NEXT HMI devices, after one pairing with the other device's device-admin password. See [Managing projects](install.md#managing-projects). |
+| **Peer token** | Sending and fetching projects between two NEXT HMI devices, after one pairing with the other device's device-admin password. Expires after 90 days without use; listed and revoked under **Settings › Tokens**. See [Managing projects](install.md#managing-projects). |
 | **A project user's password** | Signing in on that project's screens. It changes what the screens show and who actions are recorded as. It never opens the editor or the API. See [Users, groups & permissions](users.md). |
+
+A device-admin password must be at least 8 characters when it is set or
+changed; one set before this rule keeps working until it is changed.
+
+A sign-in on the dashboard lasts 24 hours, or until that browser signs out.
+The device keeps track of every sign-in, so signing out ends it on the device
+too, and a copy of the browser's sign-in cookie stops working at the same
+moment. **Settings › Security › Sign out everywhere** ends every browser's
+sign-in, your own included, and turning HTTPS on ends them all: a sign-in made
+over plain HTTP has crossed the network readable. MCP, API and peer tokens are
+not sign-ins and keep working through both. Changing the device-admin password
+ends every sign-in but your own, and revokes those tokens too.
 
 ## What protects the open part
 
 - **Other websites cannot use it.** A web page from another site, open in a
   browser on the panel or on a laptop on the same network, cannot connect to
   the live screens or send them changes: the device refuses a browser request
-  whose page did not come from the device itself.
+  whose page did not come from the device itself. Nor can it show the screens
+  inside a frame of its own, where a disguised button could trick someone into
+  a click that writes a setpoint: only the device itself and the sites you list
+  may do that (see [Showing NEXT HMI inside another
+  site](#showing-next-hmi-inside-another-site)).
 - **That check stops websites, not scripts.** A program on the network (curl,
   a Python script, a PLC tool) sends no page address, and gets the same reach
   as a panel.
@@ -105,9 +124,56 @@ The manager is the device's front door, at the address without
   own at the device's address looks to the device like the device itself. It
   still reaches only the open part: the browser does not send the dashboard
   sign-in to that name, and the projects running behind the device answer
-  only the device itself, never a name.
-- **Sign-ins are throttled**, per username on the screens, and for the
-  device-admin password everywhere.
+  only the device itself, never a name. On a new install it cannot set the
+  device-admin password either: that takes the setup code, which only the
+  device's console and log show.
+- **Other programs on the device go through the front door too.** Each
+  running project listens on the device's own internal address only, and
+  answers only requests that carry a secret the device gave it when it
+  started. Another program or user account on the same machine that finds it
+  gets nothing, and cannot take its place to receive the screens' traffic.
+- **Files in the project folders run no script.** An HTML or SVG file in
+  `assets` or `custom-widgets`, opened at its own address, shows as a plain
+  document, so a file someone put there cannot act with your dashboard
+  sign-in. Custom widgets and external libraries are code the screens run on
+  purpose and are not limited this way.
+- **Sign-ins are throttled**, per username and per address on the screens
+  (see [Users](users.md#add-users-and-groups)), and per address for the
+  device-admin password and the setup code everywhere.
+- **The open part takes at most 1 MB per request.** The device refuses a
+  larger request before reading it, so no amount of data sent its way can
+  exhaust the device's memory and take the screens down. An HTTP source whose
+  request is over that is not sent, and the screen says so.
+- **A project serves at most 500 open screens at once.** One more is turned
+  away and its browser tries again every 10 seconds, so no flood of
+  connections can wear down the device or the PLC behind it. The editor is
+  never turned away.
+
+## Showing NEXT HMI inside another site
+
+By default only the device itself can show its pages in a frame; another site
+that tries gets an empty frame. When a plant portal or another web page must
+show NEXT HMI inside its own page, add it under **Settings › Sites that may
+embed NEXT HMI** on the dashboard, as the address the portal is opened at:
+scheme, host and, when it is not the default, port, such as
+`https://portal.example.com` or `http://10.0.0.20:8080`. A path, a wildcard or
+anything else is refused. The change applies the next time the page loads; no
+restart.
+
+Up to **32 sites** can be listed. Every page of the device carries the list,
+and one long enough would make browsers refuse to load any page, so saving a
+longer list is refused with a message saying how many it has; in a file edited
+by hand, the sites past the 32nd are ignored.
+
+Embedding is meant for the runtime screens, at `/runtime/<project>/`. The
+dashboard and the editor do not work inside another site's frame: the browser
+does not send their sign-in cookie to a page framed by a different site, so
+they cannot stay signed in there. Open them directly, at the device's own
+address.
+
+A listed site can frame every page of the device, the screens of every project
+included, so list only sites you control: whoever controls one can lay a
+disguised page over your screens.
 
 ## Network advice
 

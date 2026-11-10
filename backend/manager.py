@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -29,10 +30,11 @@ from urllib.parse import quote, unquote
 import httpx
 from api.docs_api import bundled_docs_dir
 from api.docs_api import router as help_router
+from api.embedding_api import router as embedding_router
 from api.manager_auth_api import router as manager_auth_router
+from api.manager_peers_api import TRANSFER_DEADLINE_SECONDS, reconcile_transfer_journals
 from api.manager_peers_api import manager_router as manager_peers_router
 from api.manager_peers_api import public_router as public_manager_peers_router
-from api.manager_peers_api import reconcile_transfer_journals
 from api.mcp_auth_api import manager_router as mcp_tokens_router
 from api.mcp_auth_api import public_router as public_mcp_auth_router
 from api.projects_api import router as projects_router
@@ -44,6 +46,7 @@ from api.tls_api import router as tls_router
 from api.v1_api import router as api_v1_router
 from core import (
     audit,
+    instance_secret,
     manager_auth,
     peer_tokens,
     telemetry,
@@ -62,6 +65,7 @@ from core.manifest import (
 from core.origin_check import OriginCheckMiddleware
 from core.peer_discovery import peer_discovery
 from core.project_packer import max_zip_bytes
+from core.security_headers import FrameAncestorsMiddleware
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import (
     FileResponse,
@@ -74,10 +78,12 @@ from fastapi.staticfiles import StaticFiles
 from mcp_server.server import mount_workspace_mcp, run_session_manager_once
 from mcp_server.write_helpers import drain_inflight_broadcasts
 from services import frontend_serve, project_resume
-from services.supervisor import supervisor
+from services.supervisor import ChildAuth, supervisor
+from services.theme_manager import THEME_ID
 from starlette.background import BackgroundTask
+from starlette.datastructures import Headers
 from starlette.routing import get_route_path
-from starlette.types import Scope
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starlette.websockets import WebSocketState
 
 logger = logging.getLogger(__name__)
@@ -130,6 +136,9 @@ def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
     scheme the manager derived itself, and a client's ``X-Forwarded-Host``,
     ``X-Forwarded-Prefix`` and ``Forwarded`` are dropped — the child bakes the
     prefix into ``index.html``, so only the manager's own alias may set it.
+    The instance-secret headers are the manager's too: the proxy client adds
+    the secret itself (``ChildAuth``), and a nonce would turn the child into a
+    signing oracle.
     """
     headers: list[tuple[str, str]] = []
     for key, value in request.headers.items():
@@ -142,6 +151,8 @@ def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
             "x-real-ip",
             "forwarded",
             audit.EDITOR_HEADER,
+            instance_secret.HEADER,
+            instance_secret.NONCE_HEADER,
         ):
             continue
         if key.lower() == "cookie":
@@ -158,6 +169,14 @@ def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    # Logged as well as printed in the launcher's banner: start-dev.py prints
+    # its banner from another process, and the log file outlives the terminal.
+    setup_code = manager_auth.setup_code()
+    if setup_code is not None:
+        logger.warning(
+            "No device-admin password is set. Setup code for the first visit to the dashboard: %s",
+            setup_code,
+        )
     # start-dev.py binds uvicorn itself, so the launcher's ``mark_served`` call
     # never runs and tls_settings still defaults to "serving plain HTTP". Left
     # unset, Settings → HTTPS reads that stale default as reality and reports
@@ -169,7 +188,11 @@ async def lifespan(app: FastAPI):
                 served = tls_settings.describe(None, tls_settings.mode())
         tls_settings.mark_served(True, (served or {}).get("fingerprint"))
     global _proxy_client
-    _proxy_client = httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=None, write=None, pool=5.0))
+    _proxy_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=5.0, read=None, write=None, pool=5.0),
+        auth=ChildAuth(),
+        trust_env=False,
+    )
     # The workspace MCP transport runs for the life of the manager; its session
     # manager must be entered inside the lifespan.
     async with run_session_manager_once():
@@ -236,6 +259,7 @@ app.include_router(thumbnail_manager_router)
 app.include_router(system_router)
 app.include_router(tls_router)
 app.include_router(telemetry_router)
+app.include_router(embedding_router)
 # Excluded from ``_auth_gate`` (see ``_is_gated``): every v1 route checks its own
 # device-admin Basic or API-token credential, and a session cookie opens none.
 app.include_router(api_v1_router)
@@ -296,10 +320,11 @@ _ONE = "*"
 
 # The live view is the product's public face: an operator panel must come up on
 # a wall-mounted browser with no device-admin password. The project child mounts
-# every router on one app and has no auth of its own (``backend/main.py``), so
-# this table *is* the boundary. Deny by default; each entry is exact, or exact
-# with one wildcard segment. Query strings never take part in the match.
-_RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str, ...], ...]] = {
+# every router on one app and authenticates no user (it only checks that a
+# request came through this manager, ``core.instance_secret``), so this table
+# *is* the boundary. Deny by default; each entry is exact, or exact with one
+# wildcard segment. Query strings never take part in the match.
+_RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str | re.Pattern[str], ...], ...]] = {
     "GET": (
         ("api", "config", "config"),
         ("api", "config", "pages", _ONE),
@@ -309,7 +334,8 @@ _RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str, ...], ...]] = {
         ("api", "config", "dictionaries"),
         ("api", "config", "translations"),
         ("api", "themes"),
-        ("api", "themes", _ONE),
+        # Not ``_ONE``: it would pass ``D:foo``, a file on another drive to a Windows child.
+        ("api", "themes", THEME_ID),
         ("api", "default-theme"),
         ("api", "components"),
         ("api", "components", "folders"),
@@ -525,6 +551,24 @@ def _is_plain_sub_path(sub_path: str) -> bool:
     return all(_is_plain_segment(segment) for segment in sub_path.split("/"))
 
 
+def _has_dot_segment(sub_path: str) -> bool:
+    """True when a segment of *sub_path* is, or decodes to, ``.`` or ``..``.
+
+    The proxy's own check for every prefix, session or not. ``httpx`` collapses
+    a literal one when it builds the upstream URL and the child decodes an
+    encoded one, so either moves the request to a route other than the one
+    judged here: ``api/./internal/reload`` reached the internal hook. Unlike
+    :func:`_is_plain_sub_path` it leaves empty segments alone, which nothing
+    collapses, so an editor's trailing-slash request keeps working.
+    """
+    return any(
+        part in (".", "..")
+        for segment in sub_path.split("/")
+        for form in _decoded_forms(segment)
+        for part in form.split("/")
+    )
+
+
 def _decoded_path(path: str) -> str:
     """*path* with every segment decoded to its fixpoint, for a literal compare.
 
@@ -558,7 +602,10 @@ def _runtime_public(sub_path: str, method: str) -> bool:
         return first_forms.isdisjoint(_RUNTIME_PRIVATE_DOCS)
     return any(
         len(pattern) == len(segments)
-        and all(p in (_ONE, s) for p, s in zip(pattern, segments, strict=True))
+        and all(
+            p.fullmatch(s) is not None if isinstance(p, re.Pattern) else p in (_ONE, s)
+            for p, s in zip(pattern, segments, strict=True)
+        )
         for pattern in _RUNTIME_PUBLIC_ROUTES.get(lookup, ())
     )
 
@@ -645,7 +692,7 @@ async def _auth_gate(request: Request, call_next):
         if int(raw_length) > max_zip_bytes() + 2 * 1024 * 1024:
             return JSONResponse({"detail": "Transfer body exceeds the configured limit"}, status_code=413)
         try:
-            async with asyncio.timeout(660):
+            async with asyncio.timeout(TRANSFER_DEADLINE_SECONDS):
                 return await call_next(request)
         except TimeoutError:
             return JSONResponse({"detail": "Transfer deadline exceeded"}, status_code=408)
@@ -653,6 +700,9 @@ async def _auth_gate(request: Request, call_next):
 
 
 app.add_middleware(OriginCheckMiddleware)
+# Outside the gate and the proxy, so their documents are covered too; only the
+# body cap added below sits further out, and its 413 is JSON.
+app.add_middleware(FrameAncestorsMiddleware)
 
 
 @app.get("/api/health", include_in_schema=False)
@@ -732,13 +782,25 @@ async def _proxy_ws_to_child(
     import websockets
 
     await websocket.accept()
-    # The child attributes this socket's writes, recipe loads and acks to
-    # "engineer". The upstream is a fresh connection carrying none of the
-    # browser's headers, so only the session-gated editor prefix can set it.
-    headers = {audit.EDITOR_HEADER: "1"} if require_session else None
+    headers = supervisor.child_headers(port)
+    # The upstream is a fresh connection carrying none of the browser's
+    # headers. The address the manager saw goes along as the HTTP hop sends it
+    # (``_forwarded_headers``), so the child's sign-in throttle meters each
+    # browser rather than one loopback address for all of them. The child
+    # attributes an editor socket's writes, recipe loads and acks to
+    # "engineer", so only the session-gated editor prefix sets that mark.
+    if websocket.client:
+        headers["x-forwarded-for"] = websocket.client.host
+    if require_session:
+        headers[audit.EDITOR_HEADER] = "1"
     try:
+        # ``proxy=None``: an environment proxy cannot reach loopback, and would
+        # be handed the child's secret.
         async with websockets.connect(
-            f"ws://127.0.0.1:{port}/ws", max_size=None, additional_headers=headers
+            f"ws://127.0.0.1:{port}/ws",
+            max_size=None,
+            additional_headers=headers or None,
+            proxy=None,
         ) as upstream:
             await _pump_websocket(websocket, upstream)
     except Exception as exc:  # pragma: no cover — upstream gone mid-connect
@@ -779,6 +841,106 @@ async def _pump_websocket(client: WebSocket, upstream) -> None:
         await upstream.close()
 
 
+# ── request body caps ─────────────────────────────────────────────────────────
+
+# Neither uvicorn nor Starlette caps a request body, and FastAPI reads a JSON
+# body before any dependency authenticates the caller, so one chunked multi-GB
+# POST could fill the manager's memory and take every project's panels down with
+# it. Whatever the gate lets through with no session (the live view, sign-in and
+# pairing, API v1) gets the public cap. The proxy streams a body on to the child
+# rather than holding it, so the editor cap bounds what a child must take in:
+# the largest editor bodies are JSON saves (a page, or a datasource's whole
+# variable list after a large browse import) and the 2 MB thumbnail.
+_PUBLIC_BODY_LIMIT = 1024 * 1024
+_EDITOR_BODY_LIMIT = 64 * 1024 * 1024
+
+
+def _body_limit(scope: Scope) -> int | None:
+    """The most request body *scope* may carry, or ``None`` when it is not capped here."""
+    path = get_route_path(scope)
+    method = scope["method"]
+    if path == "/mcp" or path.startswith("/mcp/"):
+        return None  # authenticates before the transport reads a byte
+    if method == "POST" and path == "/api/manager/peer/transfers":
+        return None  # held to its own Content-Length limit by the gate
+    if not _is_gated(path, method, _raw_route_path(scope)):
+        return _PUBLIC_BODY_LIMIT
+    # The gate demands a session before anything reads the body; the manager's
+    # own routes (a project zip import among them) spool uploads to disk.
+    return _EDITOR_BODY_LIMIT if _is_proxy_path(path) else None
+
+
+class _BodyTooLarge(Exception):
+    pass
+
+
+class _RequestBodyLimit:
+    """Answer 413 to a request body over :func:`_body_limit`.
+
+    A declared ``Content-Length`` over the cap is refused before a byte is read;
+    a chunked body is counted as it arrives. Once the count trips, whatever the
+    app made of the failed read is replaced by the 413: FastAPI reports it as a
+    400 "error parsing the body", and through the gate's task group it surfaces
+    as an ``ExceptionGroup`` rather than anything a handler could match.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        headers = Headers(scope=scope) if scope["type"] == "http" else None
+        # A request that announces neither has no body, which is every asset GET.
+        has_body = headers is not None and (
+            "content-length" in headers or "transfer-encoding" in headers
+        )
+        limit = _body_limit(scope) if has_body else None
+        if limit is None:
+            await self.app(scope, receive, send)
+            return
+        too_large = JSONResponse(
+            {
+                "detail": "Request body too large: this address accepts at most "
+                f"{limit // (1024 * 1024)} MB."
+            },
+            status_code=413,
+        )
+        declared = headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > limit:
+            await too_large(scope, receive, send)
+            return
+
+        received = 0
+        exceeded = False
+        started = False
+
+        async def counting_receive() -> Message:
+            nonlocal received, exceeded
+            if exceeded:
+                raise _BodyTooLarge
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    exceeded = True
+                    raise _BodyTooLarge
+            return message
+
+        async def guarded_send(message: Message) -> None:
+            nonlocal started
+            if exceeded and not started:
+                return
+            started = started or message["type"] == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, counting_receive, guarded_send)
+        except Exception:
+            if not exceeded or started:
+                raise
+        if exceeded and not started:
+            await too_large(scope, receive, send)
+
+
 _PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
 
@@ -802,6 +964,10 @@ async def _proxy_http_to_child(
             status_code=409,
         )
 
+    # Refused rather than collapsed, so the path forwarded below is the one
+    # every check here judged.
+    if _has_dot_segment(path):
+        raise HTTPException(status_code=400, detail="Invalid request path")
     # The child's loopback reload hook is driven by the manager directly (over
     # the instance port), never through this browser-facing proxy.
     # Compare the decoded form: ``api%2finternal%2freload`` is one opaque
@@ -829,8 +995,14 @@ async def _proxy_http_to_child(
     port = _upstream_port_or_503(project_id)
     assert _proxy_client is not None
     try:
+        # Built from parts, not parsed from a string: a decoded ``?`` or ``#``
+        # in the path would otherwise end it there, and the child would serve
+        # a shorter path than the one checked.
         url = httpx.URL(
-            f"http://127.0.0.1:{port}/{path}",
+            scheme="http",
+            host="127.0.0.1",
+            port=port,
+            path="/" + path.replace("?", "%3F").replace("#", "%23"),
             query=request.url.query.encode("utf-8"),
         )
     except httpx.InvalidURL as exc:
@@ -845,9 +1017,12 @@ async def _proxy_http_to_child(
         # The auth gate has already demanded the session for /editor/*.
         if forwarded_prefix.startswith("/editor/"):
             headers.append((audit.EDITOR_HEADER, "1"))
-    body = await request.body()
+    # Streamed, not buffered: ``_RequestBodyLimit`` counts it on the way through.
+    # A request that announces no body sends none, so a GET is not reframed as
+    # an empty chunked upload.
+    has_body = "content-length" in request.headers or "transfer-encoding" in request.headers
     upstream_req = _proxy_client.build_request(
-        request.method, url, headers=headers, content=body
+        request.method, url, headers=headers, content=request.stream() if has_body else None
     )
     try:
         upstream_resp = await _proxy_client.send(upstream_req, stream=True, follow_redirects=False)
@@ -889,6 +1064,10 @@ def _register_proxy_routes(prefix: str) -> None:
 
 for _prefix in _PROXY_PREFIXES:
     _register_proxy_routes(_prefix)
+
+# Added after the gate so it wraps it: a declared oversize body is refused
+# before the gate or any route looks at the request.
+app.add_middleware(_RequestBodyLimit)
 
 
 # ── manager SPA (served at origin root, base "/") ───────────────────────────────

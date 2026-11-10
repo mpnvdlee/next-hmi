@@ -45,6 +45,53 @@ front it with a reverse proxy (Caddy/nginx/Traefik) that presents everything on
 one origin — the same proxy you would use for TLS termination (see [Behind a
 terminating proxy](../../user/install.md#behind-a-terminating-proxy)).
 
+### No framing by other sites
+
+Every HTML document — the dashboard, the editor, a project's screens, `/help`,
+and an HTML file one of the static mounts serves — carries
+`Content-Security-Policy: frame-ancestors 'self'` plus each site listed under
+**Settings › Sites that may embed NEXT HMI**, and `X-Frame-Options: SAMEORIGIN`
+while that list is empty, since that header cannot name another site
+(`core/security_headers.py`). Without it any web page could frame
+`/runtime/<slug>/`: the framed document is the device's own origin, so its
+socket passes the origin check above, and a click the page disguises writes a
+setpoint. Same-origin frames — the editor's live preview, thumbnail capture, a
+WebFrame widget pointing at the device itself — are unaffected.
+
+The manager and every project instance both set the policy, from the list in
+the runtime home they share (`<runtime_home>/.embedding.json`,
+`core/embed_settings.py`). The manager adds it only to a document that does not
+carry it yet, so a proxied document carries it exactly once, and an instance
+opened on its own loopback port is covered as well. A change applies from the
+next page load: each process keeps the parsed list until the file's inode,
+mtime or size changes. An entry is a bare origin, `scheme://host[:port]` with
+no path and no wildcard and a host of at most 253 characters; anything else is
+refused, which also keeps an entry from smuggling another directive into the
+header. The list holds at most 32 sites (`MAX_ORIGINS`), past which a save is
+refused and a hand-edited file is cut: every HTML document carries it, and a
+header past the browser's limit would fail every page, Settings included. Under `start-dev.py` Vite serves
+the documents itself, so dev documents carry no framing policy.
+
+There is no `script-src` or `default-src` policy yet. Every `index.html` gets an
+inline globals script injected by the backend (`services/frontend_serve.py`),
+which would need a per-response nonce, and external libraries loaded from a CDN
+and the WebFrame widget's URLs would each need their sources listed.
+
+### Project files served on the origin
+
+The project's `assets/`, `custom-widgets/` and `external-libraries/` folders and
+the compiled custom widgets are served on the device's origin (`main.py`, the
+static mounts), and every file there carries `X-Content-Type-Options: nosniff`.
+`/assets` and `/widgets` also carry `Content-Security-Policy: sandbox`: an HTML
+or SVG file placed there and opened directly renders without script and
+without the device's origin, so it cannot act with the device-admin session.
+The policy binds only a document made from the response, so the app's own
+`<img>`, CSS mask, `<video>` and `fetch` of the same file are unaffected.
+`/widget-js` and `/external-libraries` are code by design, run as module
+scripts, so they get no sandbox; `.js` and `.mjs` there are always served as
+`text/javascript`, whatever the platform's MIME table says (see [Custom
+widgets](../reference/custom-widgets.md#security-editor-access-is-code-execution)).
+
 ## MCP
 
 MCP is a single **workspace** endpoint hosted by the manager at the origin

@@ -69,7 +69,7 @@ def get_recipe_state() -> RecipeStateResponse:
 # ── Download / upload endpoints ───────────────────────────────────────────────
 
 
-async def _caller_username(credentials: HTTPBasicCredentials | None) -> str:
+async def _caller_username(request: Request, credentials: HTTPBasicCredentials | None) -> str:
     """Who an upload is attributed to: a project user, or nobody ("").
 
     This route is on the public runtime allowlist and the instance app has no
@@ -82,7 +82,9 @@ async def _caller_username(credentials: HTTPBasicCredentials | None) -> str:
     """
     if credentials is None:
         return ""
-    authenticated = await users_manager.authenticate(credentials.username, credentials.password)
+    authenticated = await users_manager.authenticate(
+        credentials.username, credentials.password, request.client.host if request.client else None
+    )
     if authenticated is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -134,7 +136,7 @@ async def upload_dataset(
     username = (
         audit.ENGINEER_ACTOR
         if audit.from_editor(request.headers)
-        else await _caller_username(credentials)
+        else await _caller_username(request, credentials)
     )
     config = await recipe_manager.upload_into(dataset_id, username=username)
     if config is None:

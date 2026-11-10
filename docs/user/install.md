@@ -41,17 +41,20 @@ origin root; an individual project's HMI is at
 ```
 <runtime_home>/
   projects.json           manifest: running[], projects[], peers[], defaultProjectId, defaultProjectsRoot
-  .manager-auth.json      device-admin password digest + session secret
+  .manager-auth.json      device-admin password digest, token secret, sign-ins
   .logs/                  rotating application logs
   .widget-build/          compiled custom-widget JS (regenerated)
   .restart-pending        sentinel for /api/system/restart
   .peer-tokens.json       hashed manager peer tokens (no bearer plaintext)
   .mcp-tokens.json        hashed MCP and API tokens
-  .peer-trust.json        pinned peer TLS certificates (trust on first use)
+  .peer-trust.json        peer TLS certificates you confirmed when pairing
+  .peer-pairings.json     pairing keys for peers you chose to remember (owner-only)
+  .peer-identity.json     this runtime's runtime ID, as peers pin it
   .install-id.json        random installation ID used by usage reporting
   .telemetry.json         usage-reporting on/off (absent means on), contact prompt dismissed
   .telemetry-session.json whether the last run stopped cleanly, and its version
   .telemetry-milestones/  a dated file per first time: connected, pageSaved, mcpUsed
+  .embedding.json         sites that may show NEXT HMI in a frame (absent means none)
   tls/                    HTTPS setting + generated and uploaded certificates
   .peer-transfer-sender.json    outgoing push transfer phases/progress (no bearer plaintext)
   .peer-transfer-receipts.json  incoming push claims, recovery phases, and receipts
@@ -122,12 +125,18 @@ after a backup — see [Managing projects](projects.md#the-manager-dashboard).
 The **manager dashboard** (the origin root, behind the device-admin
 password) is the operator surface:
 
-- **First-run setup** — on first launch the dashboard asks you to set a
-  device-admin password. It is stored hashed in
+- **First-run setup** — on first launch the dashboard asks for the **setup
+  code** and a device-admin password of at least 8 characters. Until a
+  password is set, the device prints the code (`XXXX-XXXX`) in its console
+  and its log at every start; with Docker, `docker logs nexthmi` shows it.
+  The code works once, and a restart prints a new one. The password is stored hashed in
   `<runtime_home>/.manager-auth.json` and gates every subsequent visit.
   Signing in lasts a day, counted from the moment you sign in and not from
   your last click: after that the dashboard asks for the password again, and
   an editor left open on the panel shows **Signed out** until someone does.
+  Signing out ends the sign-in on the device too; **Settings › Security ›
+  Sign out everywhere** ends every browser's, and changing the password ends
+  every one but your own.
 - **Project credentials** — a project brings its own `users.json` and nothing
   else gates it: a project copied from the bundled seed holds only the
   anonymous `guest` user, so it starts and opens with no password of its own.
@@ -179,8 +188,10 @@ the bearer token prevents unauthenticated mutation but does not stop a network
 observer from intercepting the pairing password, token, or project data. Serve
 the peer over HTTPS to close that (see [Peer transfer over
 HTTPS](#peer-transfer-over-https)), keep peers on a private network either way,
-and do not expose the peer endpoints to the public Internet. Changing the
-device-admin password revokes every paired peer token. Outgoing connections
+and do not expose the peer endpoints to the public Internet. A pairing expires
+after 90 days without use; **Settings › Tokens** lists every device paired with
+this one under **Paired devices**, where **Revoke** cuts one off at once, and
+changing the device-admin password revokes them all. Outgoing connections
 resolve once and are pinned to a private unicast address; public, mixed,
 link-local, multicast, and unspecified results are rejected. Loopback peers
 require the explicit `NEXTHMI_ALLOW_LOOPBACK_PEERS=1` deployment override.
@@ -329,7 +340,9 @@ moving it would break the port mapping the operator already published.
 
 **Settings → HTTPS** is the normal route and needs no shell access:
 
-1. Pick **HTTPS** on the protocol switch.
+1. Pick **HTTPS** on the protocol switch and confirm. Everyone signed in to
+   the dashboard, you included, signs in again over HTTPS: a sign-in made over
+   plain HTTP stops working.
 2. Under **Certificate**, keep *Generated for this device* — the manager
    creates a self-signed certificate covering `localhost`, this host's name,
    and its addresses, including the one it is routed to on the network — or
@@ -380,7 +393,8 @@ export NEXTHMI_SSL_KEYFILE=/etc/nexthmi/tls/privkey.pem
 ```
 
 The banner then prints an `https://` URL. In Docker, bind-mount the cert
-directory read-only and set the same variables.
+directory read-only and set the same variables; the files must be readable by
+the [user the app runs as](#the-user-inside-the-container).
 
 Certificate renewal is not automated in either route — the process reads its
 certificate once at startup, so restart the manager after a renewal (for an
@@ -395,8 +409,12 @@ manager answers the proxy alone and nothing reaches it directly, leave
 the browser's `Host` header through unchanged. Caddy and Traefik do that by
 default; nginx needs `proxy_set_header Host $http_host;` (`$host` drops the port, so a proxy on `:8443` would no longer match). Without it the manager
 cannot tell the browser's own address from another website's and refuses
-every change and every live connection. A proxy on the same host is trusted
-out of the box; one on another host needs its address allow-listed:
+every change and every live connection. Leave the `Content-Security-Policy` and
+`X-Frame-Options` response headers as the manager sends them; to show NEXT HMI
+inside another site, list that site instead (see [Showing NEXT HMI inside
+another site](network-access.md#showing-next-hmi-inside-another-site)). A
+proxy on the same host is trusted out of the box; one on another host needs
+its address allow-listed:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -409,31 +427,79 @@ client IP the backend believes it is seeing.
 ### Peer transfer over HTTPS
 
 Manager-to-manager transfer speaks whichever protocol the peer is configured
-with — pick **HTTPS** in the transfer dialog, or store it on a manual peer
-entry. A runtime serving TLS advertises `scheme=https` in its mDNS record, so
-picking a discovered peer fills the protocol in for you.
+with. The transfer dialog starts on **HTTPS**, port 8443; a protocol can also
+be stored on a manual peer entry. A runtime serving TLS advertises
+`scheme=https` in its mDNS record, so picking a discovered peer fills its
+protocol and port in for you.
 
-Peer certificates are trusted on first use rather than through a CA, because a
-plant LAN rarely has one:
+Peer certificates are trusted because you compared them, not through a CA,
+because a plant LAN rarely has one. The transfer dialog pairs in three steps —
+**Verify device → Sign in → Send** (**Fetch** when pulling):
 
-1. On the first HTTPS contact with a `host:port`, the manager records that
-   peer's certificate (SHA-256 digest and PEM) in
-   `<runtime_home>/.peer-trust.json`.
-2. Every later connection to that peer must present the same certificate. It
-   is the sole trust anchor, so a mismatch aborts the TLS handshake before the
-   bearer token or any project bytes reach the socket.
-3. Pairing returns the pinned fingerprint. Compare it once against the peer's
-   own certificate to close the first-contact gap, which is the one thing
-   trust-on-first-use cannot verify for you.
+1. **Verify device.** The manager connects to the peer without sending
+   anything and shows its name, address, runtime ID and the SHA-256
+   fingerprint of the certificate it presents. On the peer, open
+   **Settings › HTTPS** and compare that fingerprint with its **SHA-256**.
+   Only **It matches, continue** goes on; **It doesn’t match** stops, and
+   nothing has been sent.
+2. **Sign in.** Only now is the peer's device-admin password asked for. The
+   manager checks, during the TLS handshake of the pairing request itself,
+   that the peer still presents exactly the certificate you confirmed;
+   otherwise no password leaves this manager. The confirmed certificate is
+   then pinned in `<runtime_home>/.peer-trust.json`, by the address you used
+   and by the peer's runtime ID.
+3. **Send.** Every later connection to that peer must present the same
+   certificate. It is the sole trust anchor, so a mismatch aborts the TLS
+   handshake before the bearer token or any project bytes reach the socket.
+
+The pin follows the device rather than its address: the same device at a new
+address is recognised by its certificate and keeps its pin, while a different
+certificate at a pinned address, or claiming a pinned runtime ID, stops pairing
+with **Certificate changed: pairing stopped** — never a silent re-pin.
+
+A certificate pinned by a release from before this confirmation step was
+pinned silently, on first contact. The first pairing after the upgrade shows
+its fingerprint to compare, like a new device, and confirming it then records
+the peer's runtime ID.
+
+**Remember this device** (off by default) keeps the pairing key the peer
+issues, in `<runtime_home>/.peer-pairings.json` (readable by the manager's user
+only), so the next transfer to the same device needs no password. The key is
+only ever sent over the certificate it was paired over. When the peer no longer
+accepts it — revoked under its **Settings › Tokens**, unused for 90 days, or
+its device-admin password changed — the dialog says so (*hmi-line3 no longer
+accepts this device*), and **Pair again** drops the key and asks for the
+password.
+Forgetting the device's pinned certificate (below) drops its key too.
+
+**A cloned runtime home.** The runtime ID lives in
+`<runtime_home>/.peer-identity.json`. A runtime home copied to another machine
+— a cloned VM or disk image — carries it along, and the two devices then hide
+each other from discovery and cannot pair: the dialog stops with *This device
+has the same identity as the one you are pairing with.* Delete
+`.peer-identity.json` in the copy's runtime home and restart it; a new runtime
+ID is made on the next start.
 
 A peer that has ever been reached over HTTPS is never contacted over plain HTTP
 again, even if it later advertises otherwise — mDNS records are unauthenticated
 and would otherwise be a downgrade path.
 
+**A peer without HTTPS.** The dialog refuses to pair with it — **Pairing needs
+HTTPS on the other device** — because the password would cross the network
+unencrypted. Turn HTTPS on there (**Settings › HTTPS**, choose **HTTPS**; it
+restarts on its HTTPS port, 8443 unless changed), then verify the device again
+with protocol HTTPS and that port. On a network that is genuinely closed to
+other devices, **Isolated network without HTTPS?** lets you pair anyway after
+ticking *I understand the password is sent unencrypted, and this network is
+closed to other devices.* The dialog then says *Unencrypted connection: the
+certificate cannot be verified.* and shows the first step as **Not verified
+(HTTP)**. Over plain HTTP no pairing key is remembered.
+
 Renewing a peer's certificate breaks transfers to it on purpose: a certificate
 that changed without warning looks exactly like an interception. Confirm the
-new certificate is genuine, then drop the pin — **Forget pinned certificate**
-in the transfer dialog, or:
+new certificate is genuine, then drop the pin — **Forget pinned certificate and
+verify again** in the transfer dialog, which drops every pin of that device,
+and its remembered pairing key, and shows the new certificate to compare — or:
 
 ```bash
 curl -X DELETE "https://<manager>/api/manager/peers/trust?host=<peer>&port=8000"
@@ -442,14 +508,18 @@ curl -X DELETE "https://<manager>/api/manager/peers/trust?host=<peer>&port=8000"
 `GET /api/manager/peers/trust` lists the current pins and their fingerprints.
 
 Peer discovery itself (mDNS) is unauthenticated regardless of protocol — it
-advertises which runtimes exist, nothing more. Transfers to a discovered peer
-still require the device-admin password once and a bearer token thereafter.
+advertises which runtimes exist, nothing more, and anything on the LAN can
+advertise itself under any name. That is why the certificate is compared before
+the password is typed, whether the peer was discovered or entered by hand.
 
 ### What TLS covers
 
 The manager session cookie is marked `Secure` automatically on requests that
 arrive over HTTPS (directly or via a trusted proxy), and stays unmarked on
-plain HTTP so local installs keep working.
+plain HTTP so local installs keep working. The restart that turns HTTPS on in
+**Settings → HTTPS** ends every dashboard sign-in: a cookie set over plain HTTP
+is not `Secure`, has crossed the network readable, and the browser would keep
+sending it to the HTTP port.
 
 ## Docker
 
@@ -467,7 +537,8 @@ The image is multi-arch (`linux/amd64` + `linux/arm64`). Swap `:latest` for a
 version tag such as `:1.0.1` to pin a release.
 
 Open <http://localhost:8000> and set the device-admin password when the
-manager dashboard prompts. On first boot the bundled seed project is
+manager dashboard prompts. It asks for the setup code first:
+`docker logs nexthmi` shows it. On first boot the bundled seed project is
 registered and started; open its HMI or editor from the dashboard. The project
 needs no password of its own.
 
@@ -501,7 +572,33 @@ docker compose up -d
 `./project-data` to `/data`. That bind-mount carries both the runtime home
 (`projects.json`, `.logs/`, `.widget-build/`) AND any project folders the
 operator places under it. Projects with absolute paths outside `/data` need
-their own bind-mounts.
+their own bind-mounts, writable by the [user the app runs
+as](#the-user-inside-the-container).
+
+### The user inside the container
+
+The app runs as the unprivileged user `nexthmi`, uid and gid 10001, not as
+root. The container starts as root only to give `/data` to that user, then
+drops to it. The first start after an upgrade from a release that ran as root
+changes the owner of every file in the volume; later starts find nothing left
+to change. On the host, the files in `./project-data` therefore belong to uid
+10001.
+
+Anything else you bind-mount has to suit that user too, since the container
+leaves it alone: a project folder outside `/data` must be writable by uid
+10001, and a certificate pinned with `NEXTHMI_SSL_CERTFILE` /
+`NEXTHMI_SSL_KEYFILE` readable. Give it over on the host:
+
+```bash
+sudo chown -R 10001:10001 /path/on/the/host
+```
+
+To start the container without root at all, run it as that user yourself,
+`docker run --user 10001:10001 …`. Nothing is handed over then, so `/data`
+has to be writable by it already; a new named volume is.
+
+The enterprise build still runs as root: its license is bound to the host's
+hardware UUID, which only root can read.
 
 Discovery note: mDNS requires host networking. Without it (default bridge
 mode) the runtime won't appear on peer pickers — operators can still use
@@ -531,9 +628,11 @@ manual `host:port` entries.
   from the folder that holds your `project-data/`.
 - **Clone** — `git pull`, then `docker compose up -d --build`.
 
-The data volume is untouched. The backend checks each project's stamped
-format version on activation and refuses to open one written by a newer
-build.
+The data volume is untouched, apart from the owner of its files on the first
+start after an upgrade from a release that ran as root (see [The user inside
+the container](#the-user-inside-the-container)). The backend checks each
+project's stamped format version on activation and refuses to open one
+written by a newer build.
 
 ### Re-seeding
 
@@ -559,9 +658,11 @@ A terminal window opens, prints the banner, and stays in the foreground.
 
 The banner shows the version, the runtime-home path, the address the default
 project answers on, and a link to the manager's project list (`/projects`) for
-reaching the others. Under **Getting started** it lists the first steps: open
-the project list in a browser, choose the device-admin password on the first
-visit (and sign in with it after that), then pick a project — **Open** runs it,
+reaching the others. Until a device-admin password is set it also shows the
+**Setup code** the first visit asks for. Under **Getting started** it lists
+the first steps: open the project list in a browser, enter the setup code and
+choose the device-admin password on the first visit (and sign in with it after
+that), then pick a project — **Open** runs it,
 **Open editor** lets you change it. In a terminal that supports it, every URL in
 the banner is a clickable link.
 
@@ -573,17 +674,20 @@ default. Set `NEXTHMI_HOST=127.0.0.1` to keep it to this machine only, and the
 network block goes with it: nothing else is answering. See [HTTPS](#https)
 before putting an install on a network you do not control.
 
-On the first launch, set the device-admin password. That is the only credential
-the install asks for: the seeded project holds only its `guest` user and opens
-straight away. Upgrades preserve an existing project's users and passwords
-byte-for-byte.
+On the first launch, set the device-admin password, with the setup code from
+the banner. That is the only credential the install asks for: the seeded
+project holds only its `guest` user and opens straight away. Upgrades preserve
+an existing project's users and passwords byte-for-byte.
 
-**Do it straight away.** Until that password exists there is nothing to check a
-request against, so the first-run page accepts whoever reaches it first — this
-machine or any other on the network — and the install advertises itself over
-mDNS the whole time it waits. The window is short and it is yours to close:
-claim the install right after the first start, or bring it up with
-`NEXTHMI_HOST=127.0.0.1` and lift that once the password is set.
+**The setup code is what claims the install.** Until a password exists there is
+no password to check, so the first-run page asks for the code instead. The
+device prints it only in this terminal and in its log, and a website cannot
+read either: a page that points a name of its own at the device gets past its
+other checks, but not this one. Five wrong codes from one address lock setup
+from that address for a minute, as five wrong passwords lock sign-in. Anyone
+who can read the terminal or the log can still claim the install, and it advertises itself over mDNS the whole time
+it waits, so set the password right after the first start. The code works once;
+a restart prints a new one.
 
 To stop: focus the terminal window and press Ctrl-C — uvicorn's
 lifespan shutdown runs and the OPC-UA pool closes cleanly.

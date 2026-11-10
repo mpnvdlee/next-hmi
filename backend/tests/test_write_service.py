@@ -230,7 +230,7 @@ class FakeOpcuaDM:
 
 @pytest.mark.asyncio
 async def test_static_write_and_verify_match():
-    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, "writable": True}})
     outcome = await write_service.write_value(dm, None, "DS", "Temp", "92", verify=True)
     assert outcome.ok
     assert outcome.reason is None
@@ -253,7 +253,7 @@ async def test_static_field_write_targets_the_child_variable():
     dm = FakeStaticDM(
         {
             "Trial": {"_child_paths": {"Trial/fValue": "fValue"}},
-            "Trial/fValue": {"data_type": "float", "writable": True},
+            "Trial/fValue": {"data_type": "float", "enabled": True, "writable": True},
         }
     )
     outcome = await write_service.write_value(dm, None, "DS", "Trial", 42, field="fValue")
@@ -272,7 +272,7 @@ async def test_static_field_write_unknown_field_is_rejected():
 
 @pytest.mark.asyncio
 async def test_invalid_value_reason():
-    dm = FakeStaticDM({"Count": {"data_type": "int32", "writable": True}})
+    dm = FakeStaticDM({"Count": {"data_type": "int32", "enabled": True, "writable": True}})
     outcome = await write_service.write_value(dm, None, "DS", "Count", "not-a-number")
     assert not outcome.ok
     assert outcome.reason == write_service.REASON_INVALID_VALUE
@@ -280,14 +280,14 @@ async def test_invalid_value_reason():
 
 @pytest.mark.asyncio
 async def test_write_within_configured_range_ok():
-    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True, "min": -20, "max": 10}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, "writable": True, "min": -20, "max": 10}})
     outcome = await write_service.write_value(dm, None, "DS", "Temp", 5)
     assert outcome.ok
 
 
 @pytest.mark.asyncio
 async def test_write_below_min_rejected():
-    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True, "min": -20, "max": 10}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, "writable": True, "min": -20, "max": 10}})
     outcome = await write_service.write_value(dm, None, "DS", "Temp", -21)
     assert not outcome.ok
     assert outcome.reason == write_service.REASON_VALUE_OUT_OF_RANGE
@@ -295,7 +295,7 @@ async def test_write_below_min_rejected():
 
 @pytest.mark.asyncio
 async def test_write_above_max_rejected():
-    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True, "min": -20, "max": 10}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, "writable": True, "min": -20, "max": 10}})
     outcome = await write_service.write_value(dm, None, "DS", "Temp", 11)
     assert not outcome.ok
     assert outcome.reason == write_service.REASON_VALUE_OUT_OF_RANGE
@@ -303,7 +303,7 @@ async def test_write_above_max_rejected():
 
 @pytest.mark.asyncio
 async def test_write_boundary_values_are_inclusive():
-    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True, "min": -20, "max": 10}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, "writable": True, "min": -20, "max": 10}})
     assert (await write_service.write_value(dm, None, "DS", "Temp", -20)).ok
     assert (await write_service.write_value(dm, None, "DS", "Temp", 10)).ok
 
@@ -312,7 +312,7 @@ async def test_write_boundary_values_are_inclusive():
 @pytest.mark.parametrize("value", [19.9, "19.9"])
 async def test_float32_range_is_judged_on_the_value_entered_not_the_rounded_one(value):
     # 19.9 rounds to 19.8999996…, below a bound the operator would read as 19.9.
-    dm = FakeStaticDM({"Temp": {"data_type": "Float", "writable": True, "min": 19.9, "max": 48.2}})
+    dm = FakeStaticDM({"Temp": {"data_type": "Float", "enabled": True, "writable": True, "min": 19.9, "max": 48.2}})
     assert (await write_service.write_value(dm, None, "DS", "Temp", value)).ok
     assert dm._entry.cache[build_var_key("DS", "Temp")] == _float32(19.9)
     # …and 48.2 rounds up to 48.2000007…, above the maximum of 48.2.
@@ -324,14 +324,14 @@ async def test_float32_range_is_judged_on_the_value_entered_not_the_rounded_one(
 
 @pytest.mark.asyncio
 async def test_write_without_configured_range_is_unaffected():
-    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, "writable": True}})
     outcome = await write_service.write_value(dm, None, "DS", "Temp", 1_000_000)
     assert outcome.ok
 
 
 @pytest.mark.asyncio
 async def test_write_with_only_min_configured_enforces_lower_bound_only():
-    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True, "min": 0}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, "writable": True, "min": 0}})
     assert (await write_service.write_value(dm, None, "DS", "Temp", -1)).reason == (
         write_service.REASON_VALUE_OUT_OF_RANGE
     )
@@ -342,14 +342,14 @@ async def test_write_with_only_min_configured_enforces_lower_bound_only():
 async def test_write_with_invalid_persisted_range_is_unenforced():
     """min > max is a contract violation (see _log_invalid_ranges); until an
     author corrects it, writes are not blocked by the broken bound."""
-    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True, "min": 10, "max": -20}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, "writable": True, "min": 10, "max": -20}})
     outcome = await write_service.write_value(dm, None, "DS", "Temp", 1_000_000)
     assert outcome.ok
 
 
 @pytest.mark.asyncio
 async def test_array_write_rejects_any_out_of_range_element():
-    dm = FakeStaticDM({"Steps": {"data_type": "int32", "writable": True, "is_array": True, "min": 0, "max": 100}})
+    dm = FakeStaticDM({"Steps": {"data_type": "int32", "enabled": True, "writable": True, "is_array": True, "min": 0, "max": 100}})
     outcome = await write_service.write_value(dm, None, "DS", "Steps", [1, 2, 101])
     assert not outcome.ok
     assert outcome.reason == write_service.REASON_VALUE_OUT_OF_RANGE
@@ -357,7 +357,7 @@ async def test_array_write_rejects_any_out_of_range_element():
 
 @pytest.mark.asyncio
 async def test_indexed_array_element_write_rejected_out_of_range():
-    dm = FakeStaticDM({"Steps": {"data_type": "int32", "writable": True, "is_array": True, "min": 0, "max": 100}})
+    dm = FakeStaticDM({"Steps": {"data_type": "int32", "enabled": True, "writable": True, "is_array": True, "min": 0, "max": 100}})
     dm._entry.cache[build_var_key("DS", "Steps")] = [1, 2, 3]
     outcome = await write_service.write_value(dm, None, "DS", "Steps[1]", 101)
     assert not outcome.ok
@@ -366,7 +366,7 @@ async def test_indexed_array_element_write_rejected_out_of_range():
 
 @pytest.mark.asyncio
 async def test_static_array_write():
-    dm = FakeStaticDM({"Steps": {"data_type": "integer", "writable": True, "is_array": True, "array_length": 3}})
+    dm = FakeStaticDM({"Steps": {"data_type": "integer", "enabled": True, "writable": True, "is_array": True, "array_length": 3}})
     outcome = await write_service.write_value(dm, None, "DS", "Steps", [1, 2, 3])
     assert outcome.ok
     assert dm._entry.cache[build_var_key("DS", "Steps")] == [1, 2, 3]
@@ -374,7 +374,7 @@ async def test_static_array_write():
 
 @pytest.mark.asyncio
 async def test_static_fixed_array_rejects_wrong_length():
-    dm = FakeStaticDM({"Steps": {"data_type": "integer", "writable": True, "is_array": True, "array_length": 3}})
+    dm = FakeStaticDM({"Steps": {"data_type": "integer", "enabled": True, "writable": True, "is_array": True, "array_length": 3}})
     outcome = await write_service.write_value(dm, None, "DS", "Steps", [1, 2])
     assert outcome == write_service.WriteOutcome(False, write_service.REASON_INVALID_VALUE)
 
@@ -383,7 +383,7 @@ async def test_static_fixed_array_rejects_wrong_length():
 async def test_static_indexed_write_rejected_out_of_bounds():
     """write_value rejects an out-of-bounds indexed write upstream,
     without ever reaching update_static_value."""
-    dm = FakeStaticDM({"Steps": {"data_type": "integer", "writable": True, "is_array": True, "array_length": 3}})
+    dm = FakeStaticDM({"Steps": {"data_type": "integer", "enabled": True, "writable": True, "is_array": True, "array_length": 3}})
     outcome = await write_service.write_value(dm, None, "DS", "Steps[5]", 9)
     assert not outcome.ok
     assert outcome.reason == write_service.REASON_ARRAY_INDEX_OUT_OF_BOUNDS
@@ -394,7 +394,7 @@ async def test_static_indexed_write_rejected_out_of_bounds():
 async def test_opcua_indexed_write_rejected_out_of_bounds():
     engine = FakeEngine()
     dm = FakeOpcuaDM({
-        "Steps": {"data_type": "int32", "writable": True, "is_array": True, "array_length": 3, "node_id": "ns=2;s=Steps"},
+        "Steps": {"data_type": "int32", "enabled": True, "writable": True, "is_array": True, "array_length": 3, "node_id": "ns=2;s=Steps"},
     })
     pool = FakeOpcuaPool(engine)
     outcome = await write_service.write_value(dm, pool, "PLC", "Steps[5]", 9)
@@ -407,7 +407,7 @@ async def test_opcua_indexed_write_rejected_out_of_bounds():
 async def test_dynamic_array_index_has_allocation_cap():
     engine = FakeEngine()
     dm = FakeOpcuaDM({
-        "Steps": {"data_type": "int32", "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
+        "Steps": {"data_type": "int32", "enabled": True, "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
     })
     outcome = await write_service.write_value(
         dm, FakeOpcuaPool(engine), "PLC", "Steps[10001]", 9
@@ -420,7 +420,7 @@ async def test_dynamic_array_index_has_allocation_cap():
 async def test_negative_array_index_is_rejected_without_dispatch():
     engine = FakeEngine()
     dm = FakeOpcuaDM({
-        "Steps": {"data_type": "int32", "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
+        "Steps": {"data_type": "int32", "enabled": True, "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
     })
     outcome = await write_service.write_value(
         dm, FakeOpcuaPool(engine), "PLC", "Steps[-1]", 9
@@ -433,7 +433,7 @@ async def test_negative_array_index_is_rejected_without_dispatch():
 async def test_pathological_array_index_is_bounded_before_int_parsing():
     engine = FakeEngine()
     dm = FakeOpcuaDM({
-        "Steps": {"data_type": "int32", "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
+        "Steps": {"data_type": "int32", "enabled": True, "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
     })
     path = f"Steps[{'9' * 5001}]"
     outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", path, 9)
@@ -446,7 +446,7 @@ async def test_indexed_fixed_array_rejects_short_authoritative_state_without_syn
     engine = FakeEngine()
     dm = FakeOpcuaDM({
         "Steps": {
-            "data_type": "int32", "writable": True,
+            "data_type": "int32", "enabled": True, "writable": True,
             "is_array": True,
             "array_length": 3,
             "node_id": "ns=2;s=Steps",
@@ -467,7 +467,7 @@ async def test_indexed_fixed_array_rejects_missing_or_wrong_length_current_state
     engine = FakeEngine()
     dm = FakeOpcuaDM({
         "Steps": {
-            "data_type": "int32", "writable": True,
+            "data_type": "int32", "enabled": True, "writable": True,
             "is_array": True,
             "array_length": 3,
             "node_id": "ns=2;s=Steps",
@@ -487,7 +487,7 @@ async def test_indexed_array_reads_authoritative_state_and_preserves_siblings():
     engine = FakeEngine()
     dm = FakeOpcuaDM({
         "Steps": {
-            "data_type": "int32", "writable": True,
+            "data_type": "int32", "enabled": True, "writable": True,
             "is_array": True,
             "array_length": 3,
             "node_id": "ns=2;s=Steps",
@@ -506,7 +506,7 @@ async def test_indexed_array_reads_authoritative_state_and_preserves_siblings():
 async def test_indexed_dynamic_array_requires_existing_element():
     engine = FakeEngine()
     dm = FakeOpcuaDM({
-        "Steps": {"data_type": "int32", "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
+        "Steps": {"data_type": "int32", "enabled": True, "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
     })
     pool = FakeOpcuaPool(engine)
     missing = await write_service.write_value(dm, pool, "PLC", "Steps[0]", 7)
@@ -547,7 +547,7 @@ async def test_indexed_write_sends_untouched_elements_as_the_server_holds_them(
     # server would refuse the whole array.
     engine = FakeEngine()
     dm = FakeOpcuaDM({
-        "Steps": {"data_type": data_type, "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
+        "Steps": {"data_type": data_type, "enabled": True, "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
     })
     engine._store["ns=2;s=Steps"] = current
     outcome = await write_service.write_value(
@@ -562,7 +562,7 @@ async def test_indexed_write_sends_untouched_elements_as_the_server_holds_them(
 async def test_opcua_verified_write_beyond_two_to_the_53_is_confirmed():
     # The read-back arrives as the decimal string a browser can carry exactly.
     engine = FakeEngine()
-    dm = FakeOpcuaDM({"Count": {"data_type": "UInt64", "writable": True, "node_id": "ns=2;s=Count"}})
+    dm = FakeOpcuaDM({"Count": {"data_type": "UInt64", "enabled": True, "writable": True, "node_id": "ns=2;s=Count"}})
     outcome = await write_service.write_value(
         dm, FakeOpcuaPool(engine), "PLC", "Count", "18446744073709551615", verify=True,
     )
@@ -605,7 +605,7 @@ async def test_static_datetime_write_without_a_utc_form_is_an_invalid_value(valu
 async def test_opcua_datetime_write_without_a_utc_form_is_never_dispatched(value):
     # Written, the server would store the clamped bound and verify then raised.
     engine = FakeEngine()
-    dm = FakeOpcuaDM({"Stamp": {"data_type": "DateTime", "writable": True, "node_id": "ns=2;s=Stamp"}})
+    dm = FakeOpcuaDM({"Stamp": {"data_type": "DateTime", "enabled": True, "writable": True, "node_id": "ns=2;s=Stamp"}})
     outcome = await write_service.write_value(
         dm, FakeOpcuaPool(engine), "PLC", "Stamp", value, verify=True,
     )
@@ -627,7 +627,7 @@ async def test_static_int64_write_beyond_two_to_the_53_caches_the_decimal_string
 @pytest.mark.asyncio
 async def test_opcua_write_and_verify_match():
     engine = FakeEngine()
-    dm = FakeOpcuaDM({"Temp": {"data_type": "float", "writable": True, "node_id": "ns=2;s=Temp"}})
+    dm = FakeOpcuaDM({"Temp": {"data_type": "float", "enabled": True, "writable": True, "node_id": "ns=2;s=Temp"}})
     pool = FakeOpcuaPool(engine)
     outcome = await write_service.write_value(dm, pool, "PLC", "Temp", 3.5, verify=True)
     assert outcome.ok
@@ -646,7 +646,7 @@ class Float32Engine(FakeEngine):
 @pytest.mark.asyncio
 async def test_opcua_float32_write_sends_and_verifies_the_rounded_value():
     engine = Float32Engine()
-    dm = FakeOpcuaDM({"Temp": {"data_type": "Float", "writable": True, "node_id": "ns=2;s=Temp"}})
+    dm = FakeOpcuaDM({"Temp": {"data_type": "Float", "enabled": True, "writable": True, "node_id": "ns=2;s=Temp"}})
     outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", "Temp", 48.2, verify=True)
     assert outcome == write_service.WriteOutcome(True)
     assert engine.writes == [("ns=2;s=Temp", 48.20000076293945)]
@@ -656,7 +656,7 @@ async def test_opcua_float32_write_sends_and_verifies_the_rounded_value():
 async def test_opcua_verify_mismatch():
     engine = FakeEngine()
     # read_current_values won't return the written value if node_id differs
-    dm = FakeOpcuaDM({"Temp": {"data_type": "float", "writable": True, "node_id": "other"}})
+    dm = FakeOpcuaDM({"Temp": {"data_type": "float", "enabled": True, "writable": True, "node_id": "other"}})
     pool = FakeOpcuaPool(engine)
     outcome = await write_service.write_value(dm, pool, "PLC", "Temp", 3.5, verify=True)
     assert not outcome.ok
@@ -667,7 +667,7 @@ async def test_opcua_verify_mismatch():
 async def test_opcua_write_failed():
     engine = FakeEngine()
     engine.fail = True
-    dm = FakeOpcuaDM({"Temp": {"data_type": "float", "writable": True, "node_id": "ns=2;s=Temp"}})
+    dm = FakeOpcuaDM({"Temp": {"data_type": "float", "enabled": True, "writable": True, "node_id": "ns=2;s=Temp"}})
     pool = FakeOpcuaPool(engine)
     outcome = await write_service.write_value(dm, pool, "PLC", "Temp", 3.5)
     assert not outcome.ok
@@ -676,7 +676,7 @@ async def test_opcua_write_failed():
 
 @pytest.mark.asyncio
 async def test_read_value_static_array_index():
-    dm = FakeStaticDM({"Steps": {"data_type": "integer", "writable": True, "is_array": True, "array_length": 3}})
+    dm = FakeStaticDM({"Steps": {"data_type": "integer", "enabled": True, "writable": True, "is_array": True, "array_length": 3}})
     await write_service.write_value(dm, None, "DS", "Steps", [5, 6, 7])
     assert await write_service.read_value(dm, None, "DS", "Steps[1]") == 6
 
@@ -686,7 +686,7 @@ async def test_read_value_static_array_index():
 
 @pytest.mark.asyncio
 async def test_static_toggle_inverts_current_value():
-    dm = FakeStaticDM({"Run": {"data_type": "Boolean", "writable": True}})
+    dm = FakeStaticDM({"Run": {"data_type": "Boolean", "enabled": True, "writable": True}})
     dm._entry.cache[build_var_key("DS", "Run")] = True
     outcome, written = await write_service.toggle_value(dm, None, "DS", "Run")
     assert outcome.ok
@@ -698,7 +698,7 @@ async def test_static_toggle_inverts_current_value():
 async def test_opcua_toggle_reads_the_server_value():
     engine = FakeEngine()
     engine._store["ns=2;s=Run"] = False
-    dm = FakeOpcuaDM({"Run": {"data_type": "bool", "writable": True, "node_id": "ns=2;s=Run"}})
+    dm = FakeOpcuaDM({"Run": {"data_type": "bool", "enabled": True, "writable": True, "node_id": "ns=2;s=Run"}})
     outcome, written = await write_service.toggle_value(dm, FakeOpcuaPool(engine), "PLC", "Run")
     assert outcome.ok
     assert written is True
@@ -707,7 +707,7 @@ async def test_opcua_toggle_reads_the_server_value():
 
 @pytest.mark.asyncio
 async def test_toggle_rejects_non_boolean_variable():
-    dm = FakeStaticDM({"Speed": {"data_type": "int32", "writable": True}})
+    dm = FakeStaticDM({"Speed": {"data_type": "int32", "enabled": True, "writable": True}})
     dm._entry.cache[build_var_key("DS", "Speed")] = 1
     outcome, written = await write_service.toggle_value(dm, None, "DS", "Speed")
     assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_INVALID_VALUE, None)
@@ -715,7 +715,7 @@ async def test_toggle_rejects_non_boolean_variable():
 
 @pytest.mark.asyncio
 async def test_toggle_without_a_known_value_writes_nothing():
-    dm = FakeStaticDM({"Run": {"data_type": "Boolean", "writable": True}})
+    dm = FakeStaticDM({"Run": {"data_type": "Boolean", "enabled": True, "writable": True}})
     outcome, written = await write_service.toggle_value(dm, None, "DS", "Run")
     assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_VALUE_UNAVAILABLE, None)
     assert dm._entry.cache == {}
@@ -734,7 +734,7 @@ async def test_toggle_bad_path():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("flag", [{}, {"writable": False}, {"writable": "true"}, {"writable": 1}])
 async def test_static_write_to_a_variable_not_declared_writable_is_refused(flag):
-    dm = FakeStaticDM({"Temp": {"data_type": "float", **flag}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "enabled": True, **flag}})
     outcome = await write_service.write_value(dm, None, "DS", "Temp", 5)
     assert outcome == write_service.WriteOutcome(False, write_service.REASON_READ_ONLY)
     assert dm._entry.cache == {}
@@ -743,7 +743,7 @@ async def test_static_write_to_a_variable_not_declared_writable_is_refused(flag)
 @pytest.mark.asyncio
 async def test_opcua_write_to_a_read_only_node_is_never_dispatched():
     engine = FakeEngine()
-    dm = FakeOpcuaDM({"Temp": {"data_type": "float", "node_id": "ns=2;s=Temp", "writable": False}})
+    dm = FakeOpcuaDM({"Temp": {"data_type": "float", "node_id": "ns=2;s=Temp", "enabled": True, "writable": False}})
     outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", "Temp", 3.5)
     assert outcome.reason == write_service.REASON_READ_ONLY
     assert engine.writes == []
@@ -753,7 +753,7 @@ async def test_opcua_write_to_a_read_only_node_is_never_dispatched():
 async def test_array_element_write_takes_the_arrays_writable_flag():
     engine = FakeEngine()
     engine._store["ns=2;s=Steps"] = [1, 2, 3]
-    entry = {"data_type": "int32", "is_array": True, "array_length": 3, "node_id": "ns=2;s=Steps"}
+    entry = {"data_type": "int32", "enabled": True, "is_array": True, "array_length": 3, "node_id": "ns=2;s=Steps"}
     dm = FakeOpcuaDM({"Steps": entry})
     pool = FakeOpcuaPool(engine)
     refused = await write_service.write_value(dm, pool, "PLC", "Steps[1]", 7)
@@ -766,7 +766,7 @@ async def test_array_element_write_takes_the_arrays_writable_flag():
 
 @pytest.mark.asyncio
 async def test_static_array_element_write_to_a_read_only_array_is_refused():
-    dm = FakeStaticDM({"Steps": {"data_type": "int32", "is_array": True, "array_length": 3}})
+    dm = FakeStaticDM({"Steps": {"data_type": "int32", "enabled": True, "is_array": True, "array_length": 3}})
     dm._entry.cache[build_var_key("DS", "Steps")] = [1, 2, 3]
     outcome = await write_service.write_value(dm, None, "DS", "Steps[1]", 7)
     assert outcome.reason == write_service.REASON_READ_ONLY
@@ -779,8 +779,8 @@ async def test_struct_field_write_takes_the_members_own_writable_flag():
     dm = FakeStaticDM(
         {
             "Motor": {"_child_paths": {"Motor/Speed": "Speed", "Motor/Status": "Status"}},
-            "Motor/Speed": {"data_type": "float", "writable": True},
-            "Motor/Status": {"data_type": "int32", "writable": False},
+            "Motor/Speed": {"data_type": "float", "enabled": True, "writable": True},
+            "Motor/Status": {"data_type": "int32", "enabled": True, "writable": False},
         }
     )
     refused = await write_service.write_value(dm, None, "DS", "Motor", 1, field="Status")
@@ -794,8 +794,8 @@ async def test_struct_member_written_by_path_takes_its_own_writable_flag():
     engine = FakeEngine()
     dm = FakeOpcuaDM(
         {
-            "Motor/Speed": {"data_type": "float", "node_id": "ns=2;s=Speed", "writable": True},
-            "Motor/Status": {"data_type": "int32", "node_id": "ns=2;s=Status"},
+            "Motor/Speed": {"data_type": "float", "node_id": "ns=2;s=Speed", "enabled": True, "writable": True},
+            "Motor/Status": {"data_type": "int32", "node_id": "ns=2;s=Status", "enabled": True},
         }
     )
     pool = FakeOpcuaPool(engine)
@@ -842,10 +842,10 @@ async def test_read_only_is_reported_before_any_value_error(path, value):
     # succeed: the operator is told that, not to correct a value in vain.
     engine = FakeEngine()
     dm = FakeOpcuaDM({
-        "Count": {"data_type": "Int16", "node_id": "ns=2;s=Count", "min": 0, "max": 100},
-        "Temp": {"data_type": "Float", "node_id": "ns=2;s=Temp", "writable": False},
-        "Label": {"data_type": "LocalizedText", "node_id": "ns=2;s=Label"},
-        "Steps": {"data_type": "int32", "is_array": True, "array_length": 3, "node_id": "ns=2;s=Steps"},
+        "Count": {"data_type": "Int16", "node_id": "ns=2;s=Count", "enabled": True, "min": 0, "max": 100},
+        "Temp": {"data_type": "Float", "node_id": "ns=2;s=Temp", "enabled": True, "writable": False},
+        "Label": {"data_type": "LocalizedText", "node_id": "ns=2;s=Label", "enabled": True},
+        "Steps": {"data_type": "int32", "is_array": True, "array_length": 3, "node_id": "ns=2;s=Steps", "enabled": True},
     })
     outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", path, value)
     assert outcome == write_service.WriteOutcome(False, write_service.REASON_READ_ONLY)
@@ -884,7 +884,7 @@ async def test_read_only_struct_member_is_reported_before_its_value_error():
     dm = FakeStaticDM(
         {
             "Motor": {"_child_paths": {"Motor/Status": "Status"}},
-            "Motor/Status": {"data_type": "int32", "writable": False},
+            "Motor/Status": {"data_type": "int32", "enabled": True, "writable": False},
         }
     )
     outcome = await write_service.write_value(dm, None, "DS", "Motor", "abc", field="Status")
@@ -893,7 +893,7 @@ async def test_read_only_struct_member_is_reported_before_its_value_error():
 
 @pytest.mark.asyncio
 async def test_toggle_of_a_read_only_non_boolean_reports_read_only():
-    dm = FakeStaticDM({"Speed": {"data_type": "int32"}})
+    dm = FakeStaticDM({"Speed": {"data_type": "int32", "enabled": True}})
     dm._entry.cache[build_var_key("DS", "Speed")] = 1
     outcome, written = await write_service.toggle_value(dm, None, "DS", "Speed")
     assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_READ_ONLY, None)
@@ -901,7 +901,7 @@ async def test_toggle_of_a_read_only_non_boolean_reports_read_only():
 
 @pytest.mark.asyncio
 async def test_toggle_of_a_read_only_boolean_is_refused_without_reading_it():
-    dm = FakeStaticDM({"Run": {"data_type": "Boolean"}})
+    dm = FakeStaticDM({"Run": {"data_type": "Boolean", "enabled": True}})
     dm._entry.cache[build_var_key("DS", "Run")] = True
     outcome, written = await write_service.toggle_value(dm, None, "DS", "Run")
     assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_READ_ONLY, None)
@@ -910,7 +910,7 @@ async def test_toggle_of_a_read_only_boolean_is_refused_without_reading_it():
 
 @pytest.mark.asyncio
 async def test_toggle_of_a_read_only_untyped_variable_reports_read_only():
-    dm = FakeStaticDM({"NoType": {"writable": False}})
+    dm = FakeStaticDM({"NoType": {"enabled": True, "writable": False}})
     dm._entry.cache[build_var_key("DS", "NoType")] = True
     outcome, written = await write_service.toggle_value(dm, None, "DS", "NoType")
     assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_READ_ONLY, None)
@@ -918,7 +918,7 @@ async def test_toggle_of_a_read_only_untyped_variable_reports_read_only():
 
 @pytest.mark.asyncio
 async def test_static_bit_write_sets_and_clears_one_bit_of_the_word():
-    dm = FakeStaticDM({"Mask": {"data_type": "Byte", "writable": True}})
+    dm = FakeStaticDM({"Mask": {"data_type": "Byte", "enabled": True, "writable": True}})
     key = build_var_key("DS", "Mask")
     dm._entry.cache[key] = 0b1000_0001
     assert (await write_service.write_value(dm, None, "DS", "Mask.3", True)).ok
@@ -933,7 +933,7 @@ async def test_static_bit_write_sets_and_clears_one_bit_of_the_word():
 
 @pytest.mark.asyncio
 async def test_signed_bit_write_keeps_twos_complement():
-    dm = FakeStaticDM({"Status": {"data_type": "Int32", "writable": True}})
+    dm = FakeStaticDM({"Status": {"data_type": "Int32", "enabled": True, "writable": True}})
     key = build_var_key("DS", "Status")
     dm._entry.cache[key] = 5
     assert (await write_service.write_value(dm, None, "DS", "Status.31", True)).ok
@@ -945,9 +945,9 @@ async def test_signed_bit_write_keeps_twos_complement():
 @pytest.mark.asyncio
 async def test_bit_write_refuses_what_is_no_bit_of_a_writable_word():
     dm = FakeStaticDM({
-        "Mask": {"data_type": "Byte", "writable": True},
-        "Speed": {"data_type": "Double", "writable": True},
-        "Locked": {"data_type": "UInt16", "writable": False},
+        "Mask": {"data_type": "Byte", "enabled": True, "writable": True},
+        "Speed": {"data_type": "Double", "enabled": True, "writable": True},
+        "Locked": {"data_type": "UInt16", "enabled": True, "writable": False},
     })
     dm._entry.cache[build_var_key("DS", "Mask")] = 0
     assert (await write_service.write_value(dm, None, "DS", "Mask.8", True)).reason == write_service.REASON_BAD_PATH
@@ -960,7 +960,7 @@ async def test_bit_write_refuses_what_is_no_bit_of_a_writable_word():
 async def test_opcua_bit_write_reads_the_word_fresh_and_writes_it_whole():
     engine = FakeEngine()
     engine._store["ns=2;s=Status"] = 0b0100
-    dm = FakeOpcuaDM({"Status": {"data_type": "UInt16", "writable": True, "node_id": "ns=2;s=Status"}})
+    dm = FakeOpcuaDM({"Status": {"data_type": "UInt16", "enabled": True, "writable": True, "node_id": "ns=2;s=Status"}})
     outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", "Status.0", True)
     assert outcome.ok
     assert engine.writes == [("ns=2;s=Status", 0b0101)]
@@ -968,7 +968,7 @@ async def test_opcua_bit_write_reads_the_word_fresh_and_writes_it_whole():
 
 @pytest.mark.asyncio
 async def test_a_bit_path_no_type_could_hold_is_a_bad_path():
-    dm = FakeStaticDM({"Mask": {"data_type": "Byte", "writable": True}, "Speed": {"data_type": "Double", "writable": True}})
+    dm = FakeStaticDM({"Mask": {"data_type": "Byte", "enabled": True, "writable": True}, "Speed": {"data_type": "Double", "enabled": True, "writable": True}})
     dm._entry.cache[build_var_key("DS", "Mask")] = 0
     huge = "Mask." + "9" * 5000  # past int()'s digit limit
     assert (await write_service.write_value(dm, None, "DS", huge, True)).reason == write_service.REASON_BAD_PATH
@@ -981,3 +981,73 @@ def test_a_dotted_tag_name_is_no_bit():
     assert write_service.split_bit(dm, "DS", "Motor.1") == ("Motor.1", None)
     assert write_service.split_bit(dm, "DS", "Motor.2") == ("Motor", 2)
     assert write_service.registry_path_of(dm, "DS", "Motor.2") == "Motor"
+
+
+# ── disabled refusal ─────────────────────────────────────────────────────────
+# A browsed tag that was never enabled stays in the registry, and any client on
+# the network can name it: none of these may read it from the PLC or write it.
+
+
+class _ReadRecordingEngine(FakeEngine):
+    def __init__(self) -> None:
+        super().__init__()
+        self.reads: list[set[str]] = []
+
+    async def read_current_values(self, paths: set[str], *, raw: bool = False) -> dict[str, Any]:
+        self.reads.append(set(paths))
+        return await super().read_current_values(paths, raw=raw)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "state",
+    [{}, {"enabled": False}, {"enabled": True, "present_on_server": False}],
+    ids=["never-enabled", "disabled", "gone-from-server"],
+)
+async def test_a_variable_that_is_not_enabled_is_never_written(state):
+    engine = _ReadRecordingEngine()
+    engine._store["ns=2;s=Limit"] = 100
+    dm = FakeOpcuaDM({"Limit": {"data_type": "Int16", "node_id": "ns=2;s=Limit", "writable": True, **state}})
+    outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", "Limit", 999)
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_DISABLED)
+    assert engine.writes == []
+
+
+@pytest.mark.asyncio
+async def test_a_disabled_array_bit_or_boolean_is_refused_without_reading_it():
+    engine = _ReadRecordingEngine()
+    engine._store.update({"ns=2;s=Steps": [1, 2, 3], "ns=2;s=Status": 0, "ns=2;s=Run": True})
+    dm = FakeOpcuaDM({
+        "Steps": {"data_type": "int32", "is_array": True, "array_length": 3, "node_id": "ns=2;s=Steps",
+                  "enabled": False, "writable": True},
+        "Status": {"data_type": "UInt16", "node_id": "ns=2;s=Status", "enabled": False, "writable": True},
+        "Run": {"data_type": "Boolean", "node_id": "ns=2;s=Run", "enabled": False, "writable": True},
+    })
+    pool = FakeOpcuaPool(engine)
+    assert (await write_service.write_value(dm, pool, "PLC", "Steps[1]", 7)).reason == write_service.REASON_DISABLED
+    assert (await write_service.write_value(dm, pool, "PLC", "Status.3", True)).reason == write_service.REASON_DISABLED
+    outcome, written = await write_service.toggle_value(dm, pool, "PLC", "Run")
+    assert (outcome.reason, written) == (write_service.REASON_DISABLED, None)
+    assert engine.reads == []
+    assert engine.writes == []
+
+
+@pytest.mark.asyncio
+async def test_a_struct_field_write_takes_the_members_own_enabled_flag():
+    dm = FakeStaticDM({
+        "Line": {"_child_paths": {"Line/Speed": "Speed", "Line/SafetyLimit": "SafetyLimit"}},
+        "Line/Speed": {"data_type": "float", "enabled": True, "writable": True},
+        "Line/SafetyLimit": {"data_type": "float", "enabled": False, "writable": True},
+    })
+    refused = await write_service.write_value(dm, None, "DS", "Line", 999, field="SafetyLimit")
+    assert refused.reason == write_service.REASON_DISABLED
+    assert (await write_service.write_value(dm, None, "DS", "Line", 12, field="Speed")).ok
+    assert dm._entry.cache == {build_var_key("DS", "Line/Speed"): 12.0}
+
+
+@pytest.mark.asyncio
+async def test_a_disabled_static_variable_is_refused_and_stays_unread():
+    dm = _static_dm({"display_name": "Limit", "data_type": "Int16", "enabled": False})
+    outcome = await write_service.write_value(dm, None, "DS", "Limit", 999)
+    assert outcome.reason == write_service.REASON_DISABLED
+    assert dm.get_cached_values({"DS:Limit"}) == {}

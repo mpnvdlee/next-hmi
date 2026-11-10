@@ -191,6 +191,31 @@ describe('buildImportMap', () => {
       tiny: '/external-libraries/tiny.js',
     });
   });
+
+  test('keeps only bare module names, so an override cannot remap a URL', () => {
+    const override = path.join(tmpRoot, 'external-modules.json');
+    fs.writeFileSync(
+      override,
+      JSON.stringify({
+        imports: {
+          lodash: '/external-libraries/lodash.js',
+          '/runtime/p/builtin-widgets-js/Button/index.js': '/external-libraries/evil.js',
+          './local.js': '/external-libraries/evil.js',
+          '../up.js': '/external-libraries/evil.js',
+          'https://cdn.example/x.js': '/external-libraries/evil.js',
+          'C:\\x': '/external-libraries/evil.js',
+          '': '/external-libraries/evil.js',
+        },
+      }),
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const map = buildImportMap(path.join(tmpRoot, 'missing'), override);
+
+    expect(map.imports).toEqual({ lodash: '/external-libraries/lodash.js' });
+    expect(warn).toHaveBeenCalledTimes(6);
+    warn.mockRestore();
+  });
 });
 
 describe('resolveLiveProjectDir', () => {

@@ -1,4 +1,4 @@
-import { extractVarKeys, usesBranch } from './extractVarKeys';
+import { extractLiveKeys, extractVarKeys, usesBranch } from './extractVarKeys';
 
 const v = (path: string, index?: number) => ({
   $var: index === undefined ? { path } : { path, index },
@@ -82,5 +82,35 @@ describe('usesBranch', () => {
       false,
     );
     expect(usesBranch(v('PLC:a'))).toBe(false);
+  });
+});
+
+describe('extractLiveKeys', () => {
+  const structMeta = { type: { kind: 'struct', name: 'Motor', array: true, fields: ['Speed'] } };
+  const varMeta = {
+    'PLC:Motors': structMeta,
+    'PLC:Motors/Line[1]': structMeta,
+    'PLC:Motors/Line[1]/Speed': { type: { kind: 'scalar', base: 'Float', array: false } },
+    'PLC:Motors/Line[2]': structMeta,
+    'PLC:Motors/Line[2]/Speed': { type: { kind: 'scalar', base: 'Float', array: false } },
+  };
+
+  it('adds the element key of a struct array bound at a literal index, by position', () => {
+    const props = { a: v('PLC:Motors', 1), b: v('PLC:Other') };
+    // Position 1 is the second element — Line[2] on an array that counts from 1.
+    expect(extractLiveKeys(props, varMeta)).toEqual([
+      'PLC:Motors',
+      'PLC:Other',
+      'PLC:Motors/Line[2]',
+    ]);
+  });
+
+  it('returns the plain keys when nothing is indexed, and memoises per metadata', () => {
+    const props = { a: v('PLC:Motors') };
+    expect(extractLiveKeys(props, varMeta)).toBe(extractVarKeys(props));
+    const indexed = { a: v('PLC:Motors', 0) };
+    expect(extractLiveKeys(indexed, varMeta)).toBe(extractLiveKeys(indexed, varMeta));
+    // A scalar array has no element keys to add.
+    expect(extractLiveKeys({ a: v('PLC:Zones', 3) }, varMeta)).toEqual(['PLC:Zones']);
   });
 });

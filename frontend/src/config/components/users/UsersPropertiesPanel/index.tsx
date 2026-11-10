@@ -20,7 +20,6 @@ import type {
   UsersSettings,
 } from '../../../store/domains/usersDomainStore';
 
-
 interface Props {
   doc: UsersDocument;
   selection: UsersSelection;
@@ -220,7 +219,11 @@ const LOCK_ROWS: { key: keyof UserLocks; label: string; description: string }[] 
     label: 'Lock password',
     description: 'The runtime cannot change this password, not even the user themselves.',
   },
-  { key: 'groups', label: 'Lock groups', description: "The runtime cannot change this user's groups." },
+  {
+    key: 'groups',
+    label: 'Lock groups',
+    description: "The runtime cannot change this user's groups.",
+  },
 ];
 
 function UserRuntimeSection({
@@ -237,7 +240,10 @@ function UserRuntimeSection({
   return (
     <div className="cfg-section">
       <div className="cfg-section__title">Runtime</div>
-      <PropRow label="Language" description="Switches the HMI to this language when the user signs in.">
+      <PropRow
+        label="Language"
+        description="Switches the HMI to this language when the user signs in."
+      >
         <Select value={language} onChange={(v) => onChange({ ...user, language: v })}>
           <option value="">(none)</option>
           {/* A code no longer in the dictionaries still shows, rather than reading as none. */}
@@ -254,7 +260,10 @@ function UserRuntimeSection({
       {user.id !== 'guest' &&
         LOCK_ROWS.map(({ key, label, description }) => (
           <PropRow key={key} label={label} description={description} sourceless>
-            <BoolButtonGroup value={Boolean(user.locked?.[key])} onChange={(on) => setLock(key, on)} />
+            <BoolButtonGroup
+              value={Boolean(user.locked?.[key])}
+              onChange={(on) => setLock(key, on)}
+            />
           </PropRow>
         ))}
     </div>

@@ -3424,6 +3424,8 @@ def validate_widget_node(
                     _validate_actions_softly(value, field_ctx, prop_path, report)
     if wtype == "Repeater" and isinstance(properties, dict):
         _validate_placed_items(properties, f"{path}/properties", report)
+    if wtype == "WebFrame" and isinstance(properties, dict):
+        _validate_web_frame(properties, f"{path}/properties", report)
     # Walk children
     child_ctx = ctx
     items_key = ctx.repeat_items_key(wtype)
@@ -3480,6 +3482,52 @@ def _validate_placed_items(properties: dict, path: str, report: ValidationReport
                 "'side' must be top, bottom, left or right",
                 code="repeat-placement",
             )
+
+
+def _fixed_value(value: Any) -> Any:
+    """A literal, bare or in `$static`; None for a value a source computes."""
+    if isinstance(value, dict) and set(value.keys()) == {"$static"}:
+        return value["$static"]
+    return None if _has_property_source(value) else value
+
+
+def _validate_web_frame(properties: dict, path: str, report: ValidationReport) -> None:
+    """The Web Frame settings that let another site in. The widget ignores a
+    `*` or `null` inbound origin and reads a `*` outbound one as the URL's
+    origin, so these only say what it does; a URL any source computes while
+    the sandbox is off is the one it cannot help."""
+    allowed = _fixed_value(properties.get("allowedOrigins"))
+    entries = [entry.strip() for entry in allowed.split(",")] if isinstance(allowed, str) else []
+    # `null` is the origin of any page a sandbox without allow-same-origin
+    # holds, whichever site it is, so it lets in as much as `*`.
+    refused = next((entry for entry in entries if entry in ("*", "null")), None)
+    if refused:
+        report.warn(
+            f"{path}/allowedOrigins",
+            f"'{refused}' is not allowed: every message runs On Message and writes to a "
+            "variable. Until the sites that may send messages are listed, every message "
+            "is ignored",
+            severity="error",
+            code="webframe-inbound-any",
+        )
+    outbound = _fixed_value(properties.get("outboundOrigin"))
+    if isinstance(outbound, str) and outbound.strip() == "*":
+        report.warn(
+            f"{path}/outboundOrigin",
+            "'*' is read as the origin of the URL, so the outbound value goes to no other "
+            "site — clear the field, or name the site",
+            code="webframe-outbound-any",
+        )
+    url = properties.get("url")
+    computed_url = _has_property_source(url) and _property_source_key(url) != "$static"
+    if computed_url and _fixed_value(properties.get("enableSandbox")) is False:
+        report.warn(
+            f"{path}/url",
+            "the URL comes from a variable or another source and the sandbox is off: whoever "
+            "can change it decides which site this panel shows, with full access to its "
+            "messages — turn the sandbox on",
+            code="webframe-url-unsandboxed",
+        )
 
 
 def _is_actions_field(field_schema: Any) -> bool:

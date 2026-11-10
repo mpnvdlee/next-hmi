@@ -1,6 +1,7 @@
 import { useContext, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useVariableStore } from '../store/variableStore';
+import { buildVarKey } from '@shared/types/datasource';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { resolveUserField, useHmiStore, type UserAccount } from '../store/hmiStore';
 import { useUsersData } from './useUsersData';
@@ -8,7 +9,7 @@ import { useHmiScope } from '../context/HmiScopeContext';
 import { useHostPageId } from '../context/HostPageContext';
 import { useInputScope } from '../context/InputScopeContext';
 import { useRepeatScope } from '../context/RepeatScopeContext';
-import { resolveRepeatItem } from '../utils/repeatItemResolution';
+import { readArrayElement, resolveRepeatItem } from '../utils/repeatItemResolution';
 import { scopedWidgetId } from './usePublishWidgetProp';
 import { useComponentPropStore } from '../store/widgetPropStore';
 import { useAlarmStore } from '../store/alarmStore';
@@ -110,6 +111,16 @@ export function useEvalContext(): EvaluationContext {
           // widgets that read a changed variable re-render — not every bound one.
           const v = useVariableStore.getState().values[key];
           return (v !== undefined ? v : null) as ResolvedValue;
+        },
+
+        resolveElement: (datasource, path, index): ResolvedValue => {
+          const key = buildVarKey(datasource, path);
+          const { values, varMeta } = useVariableStore.getState();
+          const element = readArrayElement(values, varMeta, key, index);
+          if (element !== undefined) return element as ResolvedValue;
+          // A non-array value with an index reads as itself, as it always did.
+          const whole = values[key];
+          return (whole === undefined || Array.isArray(whole) ? null : whole) as ResolvedValue;
         },
 
         resolveTranslation: (key) => useTranslationStore.getState().resolve(key),

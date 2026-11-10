@@ -118,6 +118,7 @@ docker load -i nexthmi-image.tar.gz
 echo "[install] starting…"
 docker compose up -d
 echo "[install] NEXT HMI is up. Open http://localhost:8000"
+echo "[install] First visit asks for the one-time setup code; show it with: docker logs nexthmi"
 INSTALL
 chmod +x "$OUTPUT_DIR/install.sh"
 
@@ -144,7 +145,9 @@ NEXT HMI — Docker distribution $VERSION (linux/$ARCH_TAG, $EDITION)
 Install:
   ./install.sh
 
-Then open http://localhost:8000
+Then open http://localhost:8000. On a new install the page asks for a
+one-time setup code; it is printed in the container log:
+  docker logs nexthmi
 
 The container bind-mounts ./project-data to /data. On first boot, a seed
 workspace is copied into ./project-data/ so you have a working project

@@ -17,7 +17,7 @@ instead: it carries ``scopes`` rather than an ``access`` level.
 from __future__ import annotations
 
 from core import manager_auth, mcp_tokens
-from core.exceptions import NotFoundError, RateLimitError, ValidationError
+from core.exceptions import NotFoundError, ValidationError
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -71,13 +71,8 @@ def _issue(body: CreateBody) -> dict:
 
 @public_router.post("/pair", status_code=201)
 async def pair(body: PairBody, request: Request) -> dict:
-    remaining = manager_auth.lockout_remaining()
-    if remaining > 0:
-        raise RateLimitError(f"Too many failed attempts. Try again in {int(remaining) + 1}s.")
-    if not manager_auth.verify_password(body.password):
-        manager_auth.register_login_failure()
+    if not await manager_auth.check_password(manager_auth.client_address(request), body.password):
         raise ValidationError("Incorrect device-admin password")
-    manager_auth.register_login_success()
     return _issue(body)
 
 

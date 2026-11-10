@@ -107,7 +107,12 @@ describe('useWebSocket', () => {
     useTranslationStore.getState().setActiveLanguage('en');
     const identity = { type: 'user_identity', scope: 'runtime:lang', groups: [], groupLabels: {} };
     const accounts = [
-      { username: 'ann', groups: ['admin'], language: 'de', locked: { delete: false, password: false, groups: false } },
+      {
+        username: 'ann',
+        groups: ['admin'],
+        language: 'de',
+        locked: { delete: false, password: false, groups: false },
+      },
     ];
     act(() => socket.receive({ ...identity, username: 'ann', language: 'de', accounts }));
     expect(useTranslationStore.getState().activeLanguage).toBe('de');
@@ -198,6 +203,38 @@ describe('useWebSocket', () => {
       });
 
       expect(FakeSocket.instances.length).toBe(before + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('backs off while sockets close before the backend sends anything', () => {
+    // A project at its connection cap closes the socket the manager already
+    // opened: `onopen` fires every time, and resetting on it retried every 500 ms.
+    vi.useFakeTimers();
+    try {
+      render(<Probe />);
+      const refuse = () => {
+        const socket = FakeSocket.instances[FakeSocket.instances.length - 1];
+        act(() => socket.open());
+        act(() => socket.fireClose());
+      };
+      const sockets = () => FakeSocket.instances.length;
+
+      refuse();
+      act(() => vi.advanceTimersByTime(500));
+      refuse();
+      act(() => vi.advanceTimersByTime(999));
+      expect(sockets()).toBe(2);
+      act(() => vi.advanceTimersByTime(1));
+      expect(sockets()).toBe(3);
+
+      const live = FakeSocket.instances[sockets() - 1];
+      act(() => live.open());
+      act(() => live.receive({ type: 'var_snapshot', values: {}, bootId: 'boot-a' }));
+      act(() => live.fireClose());
+      act(() => vi.advanceTimersByTime(500));
+      expect(sockets()).toBe(4);
     } finally {
       vi.useRealTimers();
     }

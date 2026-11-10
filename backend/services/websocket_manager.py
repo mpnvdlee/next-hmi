@@ -21,14 +21,13 @@ Responsibilities:
 import asyncio
 import contextlib
 import hashlib
-import itertools
 import json
 import logging
 import secrets
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -41,7 +40,7 @@ from core.storage import (
     read_json,
 )
 from core.validation.ids import is_valid_panel_name
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 from models.datasource import build_var_key, parse_var_key
 from models.websocket import (
     LoginMessage,
@@ -69,6 +68,24 @@ def _config_path():
 _MAX_PAGE_IDS = 2000
 _MAX_PRIORITY_KEYS = 5000
 _MAX_WS_MESSAGE_BYTES = 64 * 1024
+# Identity scopes are a view's own name ("runtime:" plus 12 hex digits,
+# "runtime:preview"). Each stored one costs memory for the connection's life,
+# so both its length and how many one socket keeps are capped.
+_MAX_SCOPE_LENGTH = 64
+_MAX_SCOPES_PER_CONNECTION = 16
+# A set_context can resubscribe and read the PLC: one socket gets at most one
+# applied per interval (the latest wins), and the fast subscriptions are
+# recomputed at most once per interval however many sockets move them.
+_SET_CONTEXT_INTERVAL_S = 0.25
+_PRIORITY_RECOMPUTE_INTERVAL_S = 0.25
+# Prefetch reads in flight at once across every socket. Each first takes what
+# the reads before it cached, so sockets opening one page together cost the
+# PLC a few reads, not one each.
+_MAX_CONCURRENT_PREFETCHES = 4
+# Runtime sockets one project instance serves at once, far above any plant's
+# panel count. Editor sockets, behind the device-admin session, don't count.
+_MAX_RUNTIME_CONNECTIONS = 500
+_CLOSE_TRY_AGAIN_LATER = 1013
 # Names this backend process, so a client can tell a reconnect from a restart.
 _BOOT_ID = uuid.uuid4().hex
 # How long a runtime login can be resumed on a new socket after it was last used.
@@ -97,6 +114,18 @@ class ConfigChangedEvent:
     diff: Any = None
     agent_label: str | None = None
     tab_id: str | None = None
+
+
+@dataclass
+class _SocketContext:
+    """One socket's set_context pacing and its OPC-UA prefetch."""
+
+    applied_at: float = float("-inf")
+    waiting: SetContextMessage | None = None  # the latest, held for its turn
+    apply_task: asyncio.Task | None = None
+    prefetch_task: asyncio.Task | None = None
+    # The latest (keys, page ids) that arrived while a prefetch ran.
+    prefetch_waiting: tuple[set[str], list[str]] | None = None
 
 
 class WebSocketManager:
@@ -135,7 +164,16 @@ class WebSocketManager:
         # Coalesced background priority recompute (see schedule_priority_recompute)
         self._priority_recompute_task: asyncio.Task | None = None
         self._priority_recompute_rerun = False
-        self._deferred_tasks: set[asyncio.Task] = set()
+        # The composite keys each client's last set_context asked for. A
+        # var_update reaches a client only for keys in here (plus the shared
+        # keys every client reads), so a 100k-variable server does not stream
+        # every change to every browser.
+        self._client_keys: dict[str, set[str]] = {}
+        # Bytes of value frames sent per client, for the Admin page.
+        self._client_bytes: dict[str, int] = {}
+        self._priority_recomputed_at = float("-inf")
+        self._contexts: dict[str, _SocketContext] = {}
+        self._prefetch_slots = asyncio.Semaphore(_MAX_CONCURRENT_PREFETCHES)
 
     # -- Dependency injection -------------------------------------------------
 
@@ -172,8 +210,11 @@ class WebSocketManager:
         call_soon_threadsafe first). If a recompute is already running, this
         only flags a trailing rerun instead of starting a second task, so a
         burst of concurrent saves converges on one recompute reading the
-        latest live state rather than stacking one task per save. Failures
-        are logged, never raised — this must never affect the caller.
+        latest live state rather than stacking one task per save. Runs start
+        at least ``_PRIORITY_RECOMPUTE_INTERVAL_S`` apart, so sockets moving
+        the union in turn cost the PLC a few resubscriptions a second, not one
+        per message. Failures are logged, never raised — this must never
+        affect the caller.
         """
         if self._priority_recompute_task is not None and not self._priority_recompute_task.done():
             self._priority_recompute_rerun = True
@@ -183,6 +224,10 @@ class WebSocketManager:
 
     async def _run_priority_recompute(self) -> None:
         while True:
+            await asyncio.sleep(
+                max(0.0, self._priority_recomputed_at + _PRIORITY_RECOMPUTE_INTERVAL_S - time.monotonic())
+            )
+            self._priority_recomputed_at = time.monotonic()
             try:
                 await self.recompute_priority_subscriptions()
             except Exception:
@@ -235,9 +280,9 @@ class WebSocketManager:
                     self._pending_updates = {}
                     self._next_flush_at = None
             if self._connections and priority_pending:
-                await self._broadcast({"type": "var_update", "values": priority_pending})
+                await self._broadcast_values(priority_pending)
             if self._connections and pending:
-                await self._broadcast({"type": "var_update", "values": pending})
+                await self._broadcast_values(pending)
 
     def _sleep_until_next_flush(self) -> float:
         with self._pending_lock:
@@ -263,18 +308,79 @@ class WebSocketManager:
         return value
 
     async def _broadcast(self, payload: dict) -> None:
-        message = json.dumps(payload)
         if not self._connections:
             return
-        # Snapshot the values (not a copy of the dict) so removals during gather are safe
-        clients = list(self._connections.items())
+        message = json.dumps(payload)
+        await self._send_all([(client_id, message) for client_id in self._connections])
+
+    async def _send_all(self, frames: list[tuple[str, str]]) -> None:
+        """Send each (client_id, frame) concurrently; a client whose send
+        fails or stalls past 5 s is dropped."""
+        live = [(client_id, self._connections.get(client_id), frame) for client_id, frame in frames]
+        live = [(client_id, ws, frame) for client_id, ws, frame in live if ws is not None]
+        if not live:
+            return
         results = await asyncio.gather(
-            *[asyncio.wait_for(ws.send_text(message), timeout=5.0) for _, ws in clients],
+            *[asyncio.wait_for(ws.send_text(frame), timeout=5.0) for _, ws, frame in live],
             return_exceptions=True,
         )
-        for (client_id, _), result in zip(clients, results, strict=False):
+        for (client_id, _, _), result in zip(live, results, strict=True):
             if isinstance(result, Exception):
                 self._connections.pop(client_id, None)
+
+    def _values_frame(self, client_id: str, values: dict[str, Any]) -> str:
+        """A var_update frame for one client, counted towards its bytes sent."""
+        frame = json.dumps({"type": "var_update", "values": values})
+        self._client_bytes[client_id] = self._client_bytes.get(client_id, 0) + len(frame)
+        return frame
+
+    def _shared_value_keys(self) -> set[str]:
+        """Keys every client reads whatever its page: a recipe's parameters,
+        which the client compares against the loaded dataset itself."""
+        if self._recipe_manager is None:
+            return set()
+        return {
+            build_var_key(ds_name, path)
+            for ds_name, paths in self._recipe_manager.get_parameter_paths_by_datasource().items()
+            for path in paths
+        }
+
+    def _delivery_keys(self, promoted: set[str]) -> set[str]:
+        """Every key a client holding *promoted* receives: those keys, the
+        shared recipe parameters, and the elements of each struct array it
+        binds whole (the client reads an element under its own key). Decided
+        once per set_context, so every delivery path — metadata, cached
+        values, the prefetch, the live broadcast — is one set lookup."""
+        keys = set(promoted) | self._shared_value_keys()
+        if self._datasource_manager is not None:
+            for key in promoted:
+                keys |= self._datasource_manager.element_keys(key)
+        return keys
+
+    async def _broadcast_values(self, values: dict[str, Any]) -> None:
+        """Send each client the slice of *values* its context asked for.
+        Clients wanting the same slice share one serialised frame."""
+        if not self._connections:
+            return
+        frames: list[tuple[str, str]] = []
+        shared_frames: dict[frozenset[str], str] = {}
+        for client_id in list(self._connections):
+            wanted = self._client_keys.get(client_id)
+            if not wanted:
+                continue
+            if len(wanted) < len(values):
+                subset = {k: values[k] for k in wanted if k in values}
+            else:
+                subset = {k: v for k, v in values.items() if k in wanted}
+            if not subset:
+                continue
+            signature = frozenset(subset)
+            frame = shared_frames.get(signature)
+            if frame is None:
+                frame = shared_frames[signature] = json.dumps({"type": "var_update", "values": subset})
+            self._client_bytes[client_id] = self._client_bytes.get(client_id, 0) + len(frame)
+            frames.append((client_id, frame))
+        await self._send_all(frames)
 
     async def broadcast_var_removed(self, var_ids: list[str]) -> None:
         """Notify all connected clients that these variable IDs are no longer available."""
@@ -284,21 +390,30 @@ class WebSocketManager:
     async def broadcast_var_values(self, values: dict[str, Any]) -> None:
         """Broadcast an explicit cache refresh after a datasource edit."""
         if values and self._connections:
-            await self._broadcast({"type": "var_update", "values": values})
+            await self._broadcast_values(values)
 
     async def broadcast_var_metadata(self) -> None:
-        """Broadcast the complete authoritative variable metadata snapshot.
+        """Send every client a fresh metadata snapshot for its own context.
 
         Datasource edits can add, remove, or reshape bindings while clients stay
-        connected. Sending a replacement snapshot keeps picker/runtime validation
-        in sync without requiring a WebSocket reconnect. An empty mapping is
-        significant and must also be sent.
+        connected. The snapshot is authoritative: the client drops values for
+        keys no longer in it, so one that lost all its keys gets an empty map.
         """
         if self._datasource_manager is None or not self._connections:
             return
-        await self._broadcast(
-            {"type": "var_metadata", "meta": self._datasource_manager.variable_metadata()}
-        )
+        for client_id in list(self._connections):
+            await self._send_context_metadata(client_id, self._client_keys.get(client_id, set()))
+
+    async def _send_context_metadata(self, client_id: str, keys: set[str]) -> None:
+        """The metadata a client holding *keys* reads (see ``variable_metadata``)."""
+        ws = self._connections.get(client_id)
+        if ws is None or self._datasource_manager is None:
+            return
+        meta = self._datasource_manager.variable_metadata(keys)
+        try:
+            await ws.send_text(json.dumps({"type": "var_metadata", "meta": meta}))
+        except Exception:
+            self._connections.pop(client_id, None)
 
     async def broadcast_opcua_status(self, datasource_name: str, connected: bool) -> None:
         """Notify all connected clients of an OPC-UA connection state change."""
@@ -362,8 +477,16 @@ class WebSocketManager:
         """Accept connection, send snapshot, register client. Returns client_id.
 
         ``editor`` marks a socket the manager proxied from ``/editor/<slug>/ws``.
+        A runtime socket over ``_MAX_RUNTIME_CONNECTIONS`` is closed ``1013``
+        and raises ``WebSocketDisconnect``.
         """
         await websocket.accept()
+        if not editor and len(self._connections) - len(self._editor_clients) >= _MAX_RUNTIME_CONNECTIONS:
+            logger.warning("WS client refused: %d runtime connections open", _MAX_RUNTIME_CONNECTIONS)
+            await websocket.close(
+                code=_CLOSE_TRY_AGAIN_LATER, reason="Too many open connections to this project"
+            )
+            raise WebSocketDisconnect(_CLOSE_TRY_AGAIN_LATER)
         client_id = str(uuid.uuid4())
         self._connections[client_id] = websocket
         if editor:
@@ -376,24 +499,10 @@ class WebSocketManager:
             await websocket.send_text(
                 json.dumps({"type": "var_snapshot", "values": {}, "bootId": _BOOT_ID})
             )
-            # Metadata is an authoritative replacement snapshot. Send it even
-            # when no datasource manager/variables exist so a reconnect cannot
-            # retain metadata from the previous backend generation.
-            meta = (
-                self._datasource_manager.variable_metadata()
-                if self._datasource_manager is not None
-                else {}
-            )
-            await websocket.send_text(json.dumps({"type": "var_metadata", "meta": meta}))
-            if self._datasource_manager is not None:
-                snapshot = self._datasource_manager.snapshot()
-                it = iter(snapshot.items())
-                while True:
-                    chunk = dict(itertools.islice(it, 500))
-                    if not chunk:
-                        break
-                    await websocket.send_text(json.dumps({"type": "var_update", "values": chunk}))
-                    await asyncio.sleep(0)  # yield event loop between chunks
+            # No metadata or value snapshot here: both follow the client's
+            # set_context (metadata for its keys, cached values at once, the
+            # rest after a read), so a client only ever holds what its pages
+            # bind — 100k variables are 13 MB of metadata per connect otherwise.
             # Replay current OPC-UA connection status for every datasource so that
             # clients which connect after the PLC is already up receive the correct
             # state instead of staying stuck at opcuaConnected=false.
@@ -424,13 +533,20 @@ class WebSocketManager:
         """Remove client and demote any variables that were only priority for this client."""
         self._connections.pop(client_id, None)
         self._client_users.pop(client_id, None)
+        self._client_keys.pop(client_id, None)
+        self._client_bytes.pop(client_id, None)
         self._editor_clients.discard(client_id)
         self._client_panels.pop(client_id, None)
         self._client_connected_at.pop(client_id, None)
-        if self._datasource_manager is not None:
-            self._datasource_manager.clear_client(client_id)
-            # Re-apply priority so demoted paths are moved back to background
-            await self._apply_priority_keys(client_id, set())
+        # Before its keys are cleared: a context still being applied would
+        # otherwise store them again for a socket that is gone.
+        if (context := self._contexts.pop(client_id, None)) is not None:
+            for task in (context.apply_task, context.prefetch_task):
+                if task is not None:
+                    task.cancel()
+        if self._datasource_manager is not None and self._datasource_manager.clear_client(client_id):
+            # Demote the paths only this client's page held back to background
+            self.schedule_priority_recompute()
         logger.info(
             "WS client disconnected: %s (total: %d)",
             client_id[:8],
@@ -453,6 +569,11 @@ class WebSocketManager:
                             "username": identity.get("username", "guest"),
                             "groups": identity.get("groups", ["guest"]),
                             "connectedAt": connected_at,
+                            # What this socket's context asked for, and what
+                            # it has been sent — the per-client half of the
+                            # value filter made visible.
+                            "keys": len(self._client_keys.get(client_id, ())),
+                            "bytesSent": self._client_bytes.get(client_id, 0),
                         }
                     )
         return result
@@ -483,7 +604,7 @@ class WebSocketManager:
 
         msg_type = msg.get("type")
         if msg_type == "set_context":
-            await self._handle_set_context(client_id, cast(SetContextMessage, msg))
+            await self._pace_set_context(client_id, cast(SetContextMessage, msg))
         elif msg_type == "write_field":
             await self._handle_write_field(client_id, cast(WriteFieldMessage, msg))
         elif msg_type == "toggle_field":
@@ -505,24 +626,68 @@ class WebSocketManager:
         else:
             logger.debug("Unknown WS message type '%s' from %s", msg_type, client_id[:8])
 
-    async def _apply_priority_keys(self, client_id: str, keys: set[str]) -> None:
-        """Store keys for this client, recompute union, update OPC-UA subscriptions."""
+    async def _pace_set_context(self, client_id: str, msg: SetContextMessage) -> None:
+        """Apply *msg* now, or once this socket's interval is up, the latest
+        context waiting by then winning."""
+        context = self._contexts.setdefault(client_id, _SocketContext())
+        wait = context.applied_at + _SET_CONTEXT_INTERVAL_S - time.monotonic()
+        if context.apply_task is None and wait <= 0:
+            context.applied_at = time.monotonic()
+            await self._handle_set_context(client_id, msg)
+            return
+        context.waiting = msg
+        if context.apply_task is None:
+            context.apply_task = asyncio.create_task(self._apply_waiting_context(client_id, context, wait))
+
+    async def _apply_waiting_context(self, client_id: str, context: _SocketContext, wait: float) -> None:
+        try:
+            while True:
+                await asyncio.sleep(wait)
+                msg, context.waiting = context.waiting, None
+                if msg is None or client_id not in self._connections:
+                    return
+                context.applied_at = time.monotonic()
+                await self._handle_set_context(client_id, msg)
+                wait = max(0.0, context.applied_at + _SET_CONTEXT_INTERVAL_S - time.monotonic())
+        except Exception:
+            # A send to a socket that has gone; its receive loop disconnects it.
+            logger.debug("set_context for %s not applied", client_id[:8], exc_info=True)
+        finally:
+            context.apply_task = None
+
+    def _apply_priority_keys(self, client_id: str, keys: set[str]) -> None:
+        """Store keys for this client and schedule the OPC-UA subscription
+        update if the union moved.
+
+        Deliberately not awaited: a client's WebSocket messages are handled
+        one after another, so awaiting the promote/demote round-trips here
+        would queue the *next* navigation (and the "page left" context) behind
+        them. The coalesced recompute always reads the latest union, so
+        superseded contexts are skipped, not replayed. A client opening a page
+        others already show changes no subscription.
+        """
         if self._datasource_manager is None or self._opcua_pool is None:
             return
-        self._datasource_manager.set_client_page(client_id, keys)
-        await self.recompute_priority_subscriptions()
+        if self._datasource_manager.set_client_page(client_id, keys):
+            self.schedule_priority_recompute()
 
     async def recompute_priority_subscriptions(self) -> None:
         """Recompute the per-datasource fast subscription set and push it to the pool.
 
         The priority set is the union of: page-driven keys across all clients,
         alarm trigger paths, and historized variables. Called on every client
-        context change (via _apply_priority_keys) and whenever alarm/historian
+        context change that moves the union (via _apply_priority_keys), on a
+        disconnect that does, on an engine (re)connect, and whenever alarm/historian
         config changes whose writers call this method, so new entries are
         subscribed immediately rather than only on the next page navigation.
         """
         if self._datasource_manager is None or self._opcua_pool is None:
             return
+        # A recipe edit changes what every client receives; cheap per client.
+        for client_id in list(self._client_keys):
+            self._client_keys[client_id] = self._delivery_keys(
+                self._datasource_manager.client_page_keys(client_id)
+            )
         priority_keys = self._datasource_manager.get_priority_keys()
         ds_keys = _group_priority_paths_by_datasource(priority_keys)
 
@@ -573,17 +738,53 @@ class WebSocketManager:
             current_page_ids=current_page_ids,
             explicit_priority_keys=explicit_priority_keys,
         )
-        sent_keys = await self._send_cached_values(client_id, composite_keys)
-        await self._apply_priority_keys(client_id, composite_keys)
-        missing_keys = composite_keys - sent_keys
-        if missing_keys:
-            task = asyncio.create_task(
-                self._send_uncached_values_then_ready(client_id, missing_keys, current_page_ids)
-            )
-            self._deferred_tasks.add(task)
-            task.add_done_callback(self._deferred_tasks.discard)
-        else:
+        # Only keys naming a datasource variable or folder are kept: the rest
+        # could never be answered or subscribed, only held per connection. An
+        # array bound at a literal index is read, promoted and shipped as that
+        # element, never as the whole array (see _promotion_keys).
+        promoted = self._datasource_manager.known_keys(
+            _promotion_keys(composite_keys, self._datasource_manager)
+        )
+        delivered = self._delivery_keys(promoted)
+        previous = self._client_keys.get(client_id)
+        self._client_keys[client_id] = delivered
+        # Metadata first: the client validates a binding against it and drops
+        # values for keys outside it, so it has to precede the values. An
+        # unchanged context (a scroll in the variable table) resends nothing.
+        if delivered != previous:
+            await self._send_context_metadata(client_id, delivered)
+        sent_keys = await self._send_cached_values(client_id, delivered)
+        self._apply_priority_keys(client_id, promoted)
+        # Elements of a whole-bound array arrive with the array itself.
+        missing_keys = (promoted | self._shared_value_keys()) - sent_keys
+        context = self._contexts.setdefault(client_id, _SocketContext())
+        if not missing_keys:
+            context.prefetch_waiting = None  # superseded: this context needs no read
             await self._send_context_ready(client_id, current_page_ids)
+        elif context.prefetch_task is not None:
+            # One read in flight per socket; the latest context waits for it.
+            context.prefetch_waiting = (missing_keys, current_page_ids)
+        else:
+            context.prefetch_task = asyncio.create_task(
+                self._prefetch(client_id, context, missing_keys, current_page_ids)
+            )
+
+    async def _prefetch(
+        self, client_id: str, context: _SocketContext, keys: set[str], page_ids: list[str]
+    ) -> None:
+        """Background continuation of `_handle_set_context`: read the uncached
+        keys, then tell the client this context is ready regardless, so it
+        isn't left waiting forever on a page whose variables couldn't be read.
+        Then the same for the context that arrived meanwhile, if any."""
+        try:
+            while True:
+                await self._send_uncached_values(client_id, keys)
+                await self._send_context_ready(client_id, page_ids)
+                if context.prefetch_waiting is None:
+                    return
+                (keys, page_ids), context.prefetch_waiting = context.prefetch_waiting, None
+        finally:
+            context.prefetch_task = None
 
     async def _handle_write_field(self, client_id: str, msg: WriteFieldMessage) -> None:
         """Write a value to the PLC via the appropriate OPC-UA pool engine,
@@ -897,6 +1098,10 @@ class WebSocketManager:
         # Re-insert so the dict's last entry is the latest identity (_connection_actor).
         scopes.pop(scope, None)
         scopes[scope] = identity
+        # Evict rather than refuse: the oldest is a view that remounted long
+        # ago, and refusing would leave the newest view with no identity.
+        while len(scopes) > _MAX_SCOPES_PER_CONNECTION:
+            del scopes[next(iter(scopes))]
 
     async def _send_identity(
         self, client_id: str, scope: str, identity: dict, doc: dict, *, request_id: str | None = None
@@ -935,7 +1140,7 @@ class WebSocketManager:
     async def _handle_login(self, client_id: str, msg: LoginMessage) -> None:
         """Validate credentials and update the scoped identity."""
         scope = msg.get("scope", "")
-        if not isinstance(scope, str) or not scope:
+        if not _is_valid_scope(scope):
             return
 
         username = msg.get("username", "")
@@ -943,14 +1148,17 @@ class WebSocketManager:
         request_id = msg.get("requestId")
 
         from services import users_manager
-        if client_id not in self._connections:
+        websocket = self._connections.get(client_id)
+        if websocket is None:
             return
         # This socket is on the public runtime prefix, so the throttle in
         # ``users_manager.authenticate`` is the only thing metering guesses
         # here. It reports a lockout by raising; say so rather than letting the
         # operator read "wrong password" for a minute after the fifth typo.
         try:
-            authenticated = await users_manager.authenticate(username, password)
+            authenticated = await users_manager.authenticate(
+                username, password, websocket.client.host if websocket.client else None
+            )
         except RateLimitError:
             await self._safe_send_json(
                 client_id,
@@ -995,7 +1203,7 @@ class WebSocketManager:
     async def _handle_request_identity(self, client_id: str, msg: RequestIdentityMessage) -> None:
         """Auto-login the configured autoLoginName user for the given scope."""
         scope = msg.get("scope", "")
-        if not isinstance(scope, str) or not scope:
+        if not _is_valid_scope(scope):
             return
 
         panel = msg.get("panel")
@@ -1031,7 +1239,7 @@ class WebSocketManager:
     async def _handle_logout(self, client_id: str, msg: LogoutMessage) -> None:
         """Revert scoped identity back to the auto-login user."""
         scope = msg.get("scope", "")
-        if not isinstance(scope, str) or not scope:
+        if not _is_valid_scope(scope):
             return
 
         request_id = msg.get("requestId")
@@ -1089,8 +1297,12 @@ class WebSocketManager:
             elif msg_type == "user_delete":
                 result = await asyncio.to_thread(users_manager.delete_user, identity, msg.get("username"))
             else:
+                websocket = self._connections.get(client_id)
                 result = await users_manager.change_own_password(
-                    identity, msg.get("currentPassword"), msg.get("newPassword"),
+                    identity,
+                    msg.get("currentPassword"),
+                    msg.get("newPassword"),
+                    websocket.client.host if websocket is not None and websocket.client else None,
                 )
         except users_manager.UserActionRefused as exc:
             await self._send_result(client_id, "user", request_id, None, exc.reason)
@@ -1264,48 +1476,41 @@ class WebSocketManager:
         ws = self._connections.get(client_id)
         if ws is None:
             return set()
-        await ws.send_text(json.dumps({"type": "var_update", "values": cached}))
+        await ws.send_text(self._values_frame(client_id, cached))
         return set(cached)
 
     async def _send_uncached_values(self, client_id: str, composite_keys: set[str]) -> None:
+        """Read *composite_keys* from the server and send the client the ones
+        its current context still wants — a page it has already left only
+        warms the cache for its return."""
         if not composite_keys or self._datasource_manager is None or self._opcua_pool is None:
             return
 
         fresh_values: dict[str, Any] = {}
-        for ds_name, paths in _group_priority_paths_by_datasource(composite_keys).items():
-            engine = self._opcua_pool.get(ds_name)
-            if engine is None:
-                continue
-            try:
-                fresh_values.update(await engine.read_current_values(paths))
-            except Exception as exc:
-                logger.warning("Failed to prefetch values for %s: %s", ds_name, exc)
-
-        if not fresh_values:
-            return
-
-        self._datasource_manager.seed_cached_values(fresh_values)
+        async with self._prefetch_slots:
+            # A read that finished since (this socket's last, or another's)
+            # may have cached some of them: those are not read again.
+            values = self._datasource_manager.get_cached_values(composite_keys)
+            for ds_name, paths in _group_priority_paths_by_datasource(composite_keys - values.keys()).items():
+                engine = self._opcua_pool.get(ds_name)
+                if engine is None:
+                    continue
+                try:
+                    fresh_values.update(await engine.read_current_values(paths))
+                except Exception as exc:
+                    logger.warning("Failed to prefetch values for %s: %s", ds_name, exc)
+            self._datasource_manager.seed_cached_values(fresh_values)
+        values.update(fresh_values)
         ws = self._connections.get(client_id)
-        if ws is None:
+        wanted = self._client_keys.get(client_id, set())
+        values = {k: v for k, v in values.items() if k in wanted}
+        if ws is None or not values:
             return
         try:
-            await ws.send_text(json.dumps({"type": "var_update", "values": fresh_values}))
+            await ws.send_text(self._values_frame(client_id, values))
         except Exception:
             self._connections.pop(client_id, None)
             return
-
-    async def _send_uncached_values_then_ready(
-        self,
-        client_id: str,
-        composite_keys: set[str],
-        current_page_ids: list[str],
-    ) -> None:
-        """Background continuation of `_handle_set_context`'s fire-and-forget
-        OPC-UA prefetch: once the uncached reads land (or fail), tell the
-        client this context is ready regardless, so it isn't left waiting
-        forever on a page whose variables couldn't be read."""
-        await self._send_uncached_values(client_id, composite_keys)
-        await self._send_context_ready(client_id, current_page_ids)
 
     async def _send_context_ready(self, client_id: str, current_page_ids: list[str]) -> None:
         """Tell the client every variable requested by this set_context has
@@ -1342,6 +1547,10 @@ def _user(doc: dict, username: str) -> dict[str, Any] | None:
 
 def _groups(user: dict) -> list[str]:
     return list(user.get("groups", ["guest"]))
+
+
+def _is_valid_scope(scope: object) -> bool:
+    return isinstance(scope, str) and 0 < len(scope) <= _MAX_SCOPE_LENGTH
 
 
 def _username(identity: object) -> str:
@@ -1402,7 +1611,54 @@ def _resolve_current_page_ids(msg: dict) -> list[str]:
     return _coerce_non_empty_str_list(msg.get("currentPageIds"), _MAX_PAGE_IDS)
 
 
-_runtime_pages_config_cache: dict | None = None
+@dataclass
+class _RuntimePages:
+    """The runtime pages config, with what set_context has resolved from it.
+
+    A context may name 2000 page ids; walking the page tree for each, on every
+    set_context, held the event loop for a second. Kept until the config
+    changes, each id is walked once.
+    """
+
+    config: dict
+    # Kept sets are never handed out: ``resolve`` copies them into a fresh one.
+    shared_keys: ContextKeys  # header and footer, in every context
+    # Every id a page or group node carries: no other id can match a page,
+    # so one is answered without a walk and is never kept.
+    page_ids: frozenset[str]
+    scopes: dict[str, ContextKeys] = field(default_factory=dict)
+
+    def keys_for(self, page_id: str) -> ContextKeys:
+        keys = self.scopes.get(page_id)
+        if keys is None:
+            keys = self.scopes[page_id] = ContextKeys()
+            for root in INDEX_ROOTS:
+                if _collect_active_scope_composite_keys(self.config.get(root, []), page_id, keys):
+                    break
+        return keys
+
+    def resolve(self, current_page_ids: list[str]) -> ContextKeys:
+        """Header, footer and every current page's keys, with their index refs."""
+        keys = ContextKeys()
+        for part in (self.shared_keys, *map(self.keys_for, self.page_ids.intersection(current_page_ids))):
+            keys |= part
+            for key, indexes in part.index_refs.items():
+                keys.index_refs.setdefault(key, set()).update(indexes)
+        return keys
+
+
+def _build_runtime_pages(config: dict) -> _RuntimePages:
+    """*config* in runtime shape, with its shared keys and page ids collected."""
+    shared_keys = ContextKeys()
+    _walk_components(config["header"], shared_keys)
+    _walk_components(config["footer"], shared_keys)
+    page_ids: set[str] = set()
+    for root in INDEX_ROOTS:
+        _collect_page_ids(config.get(root, []), page_ids)
+    return _RuntimePages(config, shared_keys, frozenset(page_ids))
+
+
+_runtime_pages_config_cache: _RuntimePages | None = None
 _runtime_pages_config_lock = threading.Lock()
 
 
@@ -1413,7 +1669,7 @@ def invalidate_runtime_pages_config_cache() -> None:
         _runtime_pages_config_cache = None
 
 
-def _get_runtime_pages_config() -> dict | None:
+def _get_runtime_pages() -> _RuntimePages | None:
     global _runtime_pages_config_cache
     with _runtime_pages_config_lock:
         if _runtime_pages_config_cache is not None:
@@ -1423,10 +1679,27 @@ def _get_runtime_pages_config() -> dict | None:
     except Exception as exc:
         logger.warning("set_context: could not read config.json: %s", exc)
         return None
-    runtime = _to_runtime_pages_config(raw)
+    runtime = _build_runtime_pages(_to_runtime_pages_config(raw))
     with _runtime_pages_config_lock:
         _runtime_pages_config_cache = runtime
     return runtime
+
+
+def _collect_page_ids(nodes: list, ids: set[str]) -> None:
+    """Every string id below *nodes* that the page/group walk can reach."""
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if isinstance(node.get("id"), str):
+            ids.add(node["id"])
+        _collect_page_ids(
+            [
+                child
+                for child in _iter_dict_children(node.get("children", []))
+                if _is_page_group_node(node) or _is_page_group_node(child)
+            ],
+            ids,
+        )
 
 
 def _resolve_context_composite_keys(
@@ -1439,16 +1712,39 @@ def _resolve_context_composite_keys(
     if not current_page_ids:
         return set(explicit_priority_keys)
 
-    pages_config = _get_runtime_pages_config()
-    if pages_config is None:
+    pages = _get_runtime_pages()
+    if pages is None:
         return set(explicit_priority_keys)
 
-    composite_keys = _collect_from_runtime_pages_config(
-        pages_config,
-        current_page_ids=current_page_ids,
-    )
+    composite_keys = pages.resolve(current_page_ids)
+    # An explicit key the saved config does not bind (an unsaved edit, a
+    # variable table row) carries no index: it is wanted whole.
+    for key in explicit_priority_keys:
+        if key not in composite_keys:
+            composite_keys.index_refs.setdefault(key, set()).add(None)
     composite_keys.update(explicit_priority_keys)
     return composite_keys
+
+
+def _promotion_keys(composite_keys: set[str], dm: Any) -> set[str]:
+    """What to put on the fast subscription for *composite_keys*.
+
+    An array-of-struct folder bound only at literal indexes (``Motors[3]``,
+    ``Motors[7]``) is replaced by those element folders, so two bindings into
+    a 50-element array promote, cache and ship two elements instead of all
+    250 leaves. The client reads the element under its own key (see
+    ``resolveElement``) and falls back to ``value[index]`` of the aggregate
+    when a context named the array whole.
+    """
+    keys = set(composite_keys)
+    for key, indexes in getattr(composite_keys, "index_refs", {}).items():
+        if None in indexes:
+            continue
+        elements = dm.element_keys(key, indexes)
+        if elements:
+            keys.discard(key)
+            keys |= elements
+    return keys
 
 
 def _iter_dict_children(raw_children: Any) -> list[dict]:
@@ -1462,33 +1758,13 @@ def _collect_context_composite_keys(
     *,
     current_page_ids: list[str],
 ) -> set[str]:
-    """Collect all variable keys for the current runtime context (raw input)."""
-    return _collect_from_runtime_pages_config(
-        _to_runtime_pages_config(raw_pages_config),
-        current_page_ids=current_page_ids,
-    )
-
-
-def _collect_from_runtime_pages_config(
-    pages_config: dict,
-    *,
-    current_page_ids: list[str],
-) -> set[str]:
-    """Collect variable keys from a pages_config already in runtime shape.
+    """Collect all variable keys for the current runtime context (raw input).
 
     A current page id may name a page in either index root: the routed page
     lives under ``pages``, an open page overlay under either one."""
-    keys: set[str] = set()
-
-    _walk_components(pages_config.get("header", []), keys)
-    _walk_components(pages_config.get("footer", []), keys)
-
-    for page_id in current_page_ids:
-        for root in INDEX_ROOTS:
-            if _collect_active_scope_composite_keys(pages_config.get(root, []), page_id, keys):
-                break
-
-    return keys
+    return _build_runtime_pages(_to_runtime_pages_config(raw_pages_config)).resolve(
+        current_page_ids
+    )
 
 
 def _collect_active_scope_composite_keys(nodes: list[dict], page_id: str, keys: set[str]) -> bool:
@@ -1641,6 +1917,18 @@ def _to_runtime_page_node(node: dict, root: str) -> dict:
     return runtime
 
 
+class ContextKeys(set):
+    """The composite keys a context binds, plus how each array folder was
+    addressed: ``index_refs[key]`` holds every literal element index bound,
+    and ``None`` once something binds the array whole (a Repeater, a bound
+    index). ``_promotion_keys`` promotes only the bound elements of an array
+    that is addressed by literal indexes alone."""
+
+    def __init__(self, *args: Any) -> None:
+        super().__init__(*args)
+        self.index_refs: dict[str, set[int | None]] = {}
+
+
 def _extract_binding_from_value(value: Any) -> tuple[str, str] | None:
     """Return (datasource, location) from a canonical $var source."""
     if not isinstance(value, dict):
@@ -1679,9 +1967,15 @@ def _extract_variable_keys_from_value(value: Any, keys: set[str], depth: int = M
     binding = _extract_binding_from_value(value)
     if binding is not None:
         ds, path = binding
-        keys.add(build_var_key(ds, path))
+        key = build_var_key(ds, path)
+        keys.add(key)
+        index = value["$var"].get("index")
+        refs = getattr(keys, "index_refs", None)
+        if refs is not None:
+            literal = isinstance(index, int) and not isinstance(index, bool) and index >= 0
+            refs.setdefault(key, set()).add(index if literal else None)
         # A bound index is a source of its own, which may read another variable.
-        _extract_variable_keys_from_value(value["$var"].get("index"), keys, depth - 1)
+        _extract_variable_keys_from_value(index, keys, depth - 1)
         return
 
     for nested in value.values():

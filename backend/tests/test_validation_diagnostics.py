@@ -1631,3 +1631,75 @@ def test_a_bit_is_a_boolean_write_and_toggle_target(ctx):
     assert codes({"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Status", "bit": 16}}}) == [
         ("/a/0/target/$var/bit", "write-target-type")
     ]
+
+
+# ── Web Frame settings that let another site in ──────────────────────────────
+
+
+@pytest.fixture()
+def frame_ctx(ctx) -> ValidationContext:
+    """The shipped Web Frame schema, so a renamed property fails here too."""
+    from core.builtin_widgets_manifest import builtin_widgets_catalog_entries
+
+    web_frame = builtin_widgets_catalog_entries()["WebFrame"]
+    return replace(
+        ctx,
+        widget_schemas={"version": 2, "builtin": {"WebFrame": web_frame}, "custom": {}},
+        datasource_registry={"PLC": {"Portal/Url": {"kind": "scalar", "base": "String", "array": False}}},
+    )
+
+
+def _frame_warnings(properties: dict, frame_ctx: ValidationContext) -> list[tuple[str, str, str]]:
+    report = validate_widget_node({"type": "WebFrame", "properties": properties}, frame_ctx)
+    assert report.findings == []
+    return [(w.path, w.code, w.severity) for w in report.warnings]
+
+
+@pytest.mark.parametrize(
+    "allowed", ["*", "https://portal.example.com, *", {"$static": " * "}, "null"]
+)
+def test_webframe_inbound_any_origin_is_an_error(frame_ctx, allowed):
+    assert _frame_warnings({"allowedOrigins": allowed}, frame_ctx) == [
+        ("/properties/allowedOrigins", "webframe-inbound-any", "error")
+    ]
+
+
+@pytest.mark.parametrize("outbound", ["*", {"$static": " * "}])
+def test_webframe_outbound_any_origin_is_a_warning(frame_ctx, outbound):
+    assert _frame_warnings({"outboundOrigin": outbound}, frame_ctx) == [
+        ("/properties/outboundOrigin", "webframe-outbound-any", "warning")
+    ]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        {"$var": {"path": "PLC:Portal/Url"}},
+        {"$urlParam": {"name": "portal", "default": ""}},
+        {"$loc": "app.title"},
+    ],
+)
+def test_webframe_url_from_a_source_with_the_sandbox_off_is_a_warning(frame_ctx, url):
+    warnings = _frame_warnings({"url": url, "enableSandbox": False}, frame_ctx)
+    assert ("/properties/url", "webframe-url-unsandboxed", "warning") in warnings
+
+
+@pytest.mark.parametrize(
+    "properties",
+    [
+        # A fixed URL with a listed origin keeps working as before.
+        {
+            "url": "https://portal.example.com/",
+            "enableSandbox": False,
+            "allowedOrigins": "https://portal.example.com",
+            "outboundOrigin": "https://portal.example.com",
+        },
+        {"url": {"$static": "https://portal.example.com/"}, "enableSandbox": False},
+        # The sandbox is on unless it is turned off.
+        {"url": {"$var": {"path": "PLC:Portal/Url"}}},
+        {"url": {"$var": {"path": "PLC:Portal/Url"}}, "enableSandbox": True},
+        {"outboundOrigin": ""},
+    ],
+)
+def test_webframe_settings_that_keep_other_sites_out_are_clean(frame_ctx, properties):
+    assert _frame_warnings(properties, frame_ctx) == []

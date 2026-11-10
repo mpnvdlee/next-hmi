@@ -5,7 +5,10 @@ import type { DatasourceConfig } from '@shared/types/datasource';
 import { apiJson } from '@shared/utils/api';
 import DatasourcePropertiesPanel from './index';
 
-vi.mock('@shared/utils/api', () => ({ apiJson: vi.fn() }));
+vi.mock('@shared/utils/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/utils/api')>()),
+  apiJson: vi.fn(),
+}));
 
 const mockedApiJson = vi.mocked(apiJson);
 
@@ -47,6 +50,7 @@ describe('DatasourcePropertiesPanel', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   describe('LifecycleButtons', () => {
@@ -399,6 +403,243 @@ describe('DatasourcePropertiesPanel', () => {
         '/api/datasources/certs/info?path=certs%2Fplc-cert.pem',
       );
       expect(screen.getByText('Valid — 3650 days left')).toBeInTheDocument();
+    });
+  });
+
+  describe('server certificate', () => {
+    const presented = {
+      status: 'untrusted',
+      subject: 'CN=plc-1500',
+      issuer: 'CN=plant-ca',
+      expiresAt: '2036-01-01T00:00:00+00:00',
+      fingerprint: 'ab'.repeat(32),
+    };
+
+    function securedClient(username = 'operator'): DatasourceConfig {
+      const config = makeOpcuaClientConfig();
+      config.settings = { ...config.settings, security_policy: 'Basic256Sha256', username };
+      return config;
+    }
+
+    it('shows what the server presented and pins exactly that fingerprint on Trust', async () => {
+      const config = securedClient();
+      useVariablesDomainStore.setState({ selectedConfig: config });
+      mockedApiJson
+        .mockResolvedValueOnce(presented)
+        .mockResolvedValueOnce({ server_certificate: 'certs/PLC-server.der' });
+      const onStatusChange = vi.fn();
+
+      render(
+        <DatasourcePropertiesPanel
+          config={config}
+          connected={false}
+          certificateStatus="untrusted"
+          onSave={vi.fn()}
+          onStatusChange={onStatusChange}
+        />,
+      );
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      expect(mockedApiJson).toHaveBeenCalledWith('/api/datasources/PLC/server-certificate');
+      expect(screen.getByText('CN=plc-1500')).toBeInTheDocument();
+      expect(screen.getByText('CN=plant-ca')).toBeInTheDocument();
+      expect(screen.getByText(Array(16).fill('abab').join(' '))).toBeInTheDocument();
+      expect(
+        screen.getByText(/username and password are sent only after you trust this certificate/),
+      ).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Trust certificate' }));
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      expect(mockedApiJson).toHaveBeenLastCalledWith(
+        '/api/datasources/PLC/server-certificate/trust',
+        { method: 'POST', body: { fingerprint: 'ab'.repeat(32) } },
+      );
+      expect(useVariablesDomainStore.getState().selectedConfig?.settings).toMatchObject({
+        server_certificate: 'certs/PLC-server.der',
+      });
+      expect(onStatusChange).toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Trust certificate' })).toBeNull();
+    });
+
+    it('keeps an unsaved settings draft from unpinning the certificate on save', async () => {
+      const config = securedClient();
+      useVariablesDomainStore.setState({
+        selectedConfig: config,
+        propsDrafts: { PLC: { ...config.settings, reconnect_interval_s: 9 } },
+      });
+      mockedApiJson
+        .mockResolvedValueOnce(presented)
+        .mockResolvedValueOnce({ server_certificate: 'certs/PLC-server.der' });
+
+      render(
+        <DatasourcePropertiesPanel
+          config={config}
+          connected={false}
+          certificateStatus="untrusted"
+          onSave={vi.fn()}
+        />,
+      );
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      fireEvent.click(screen.getByRole('button', { name: 'Trust certificate' }));
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      expect(useVariablesDomainStore.getState().propsDrafts.PLC).toMatchObject({
+        reconnect_interval_s: 9,
+        server_certificate: 'certs/PLC-server.der',
+      });
+    });
+
+    it('warns in danger colours when the certificate changed', async () => {
+      mockedApiJson.mockResolvedValueOnce({ ...presented, status: 'changed' });
+
+      render(
+        <DatasourcePropertiesPanel
+          config={securedClient()}
+          connected={false}
+          certificateStatus="changed"
+          onSave={vi.fn()}
+        />,
+      );
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveClass('cfg-error-banner');
+      expect(alert).toHaveTextContent('changed since you trusted it');
+    });
+
+    it('shows why a trust was refused', async () => {
+      mockedApiJson
+        .mockResolvedValueOnce(presented)
+        .mockRejectedValueOnce(new Error('The server presents a different certificate now.'));
+
+      render(
+        <DatasourcePropertiesPanel
+          config={securedClient()}
+          connected={false}
+          certificateStatus="untrusted"
+          onSave={vi.fn()}
+        />,
+      );
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      fireEvent.click(screen.getByRole('button', { name: 'Trust certificate' }));
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      expect(
+        screen.getByText('The server presents a different certificate now.'),
+      ).toBeInTheDocument();
+    });
+
+    it('says why the connection is held once, in the card rather than the header', async () => {
+      mockedApiJson.mockResolvedValueOnce({ ...presented, status: 'changed' });
+
+      render(
+        <DatasourcePropertiesPanel
+          config={securedClient()}
+          connected={false}
+          statusError="The server certificate changed since it was trusted."
+          certificateStatus="changed"
+          onSave={vi.fn()}
+        />,
+      );
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+      expect(screen.getByRole('alert').closest('.cfg-panel-header')).toBeNull();
+      expect(screen.queryByText(/changed since it was trusted/)).toBeNull();
+    });
+
+    it('folds the card to a Review row on Not now, and fetches nothing once trusted', async () => {
+      mockedApiJson.mockResolvedValueOnce(presented);
+      const { rerender } = render(
+        <DatasourcePropertiesPanel
+          config={securedClient('')}
+          connected={true}
+          certificateStatus="untrusted"
+          onSave={vi.fn()}
+        />,
+      );
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      expect(screen.getByText(/cannot tell the PLC from an impostor/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      expect(screen.getByText('Server certificate')).toBeInTheDocument();
+      expect(screen.getByText('Not trusted yet.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Trust certificate' })).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Review certificate' }));
+      expect(screen.getByRole('button', { name: 'Trust certificate' })).toBeInTheDocument();
+      expect(mockedApiJson).toHaveBeenCalledTimes(1);
+
+      mockedApiJson.mockClear();
+      rerender(
+        <DatasourcePropertiesPanel
+          config={securedClient('')}
+          connected={true}
+          certificateStatus="trusted"
+          onSave={vi.fn()}
+        />,
+      );
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      expect(mockedApiJson).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('test server reach', () => {
+    it('states where a running test server listens', () => {
+      render(
+        <DatasourcePropertiesPanel
+          config={makeTestServerConfig()}
+          connected={true}
+          onSave={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('opc.tcp://127.0.0.1:4855/nexthmi/test/')).toBeInTheDocument();
+      expect(
+        screen.getByText('Anonymous only. Writes follow each node\u2019s access level.'),
+      ).toBeInTheDocument();
+    });
+
+    it('warns once the server is made reachable from the network', () => {
+      render(
+        <DatasourcePropertiesPanel
+          config={makeTestServerConfig()}
+          connected={false}
+          onSave={vi.fn()}
+        />,
+      );
+      const warning = /Every device on the network can connect to this test server/;
+      expect(screen.queryByText(warning)).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'On' }));
+
+      expect(screen.getByText(warning)).toBeInTheDocument();
+      expect(useVariablesDomainStore.getState().propsDrafts.TestServer).toMatchObject({
+        reachable_from_network: true,
+      });
+    });
+
+    it('names the address this page came from for a server reachable from the network', () => {
+      vi.stubGlobal('location', { hostname: '192.168.10.20' });
+      const config = makeTestServerConfig();
+      config.settings = { ...config.settings, reachable_from_network: true };
+
+      render(<DatasourcePropertiesPanel config={config} connected={true} onSave={vi.fn()} />);
+
+      expect(screen.getByText('opc.tcp://192.168.10.20:4855/nexthmi/test/')).toBeInTheDocument();
+    });
+
+    it('stands in for the device address when the page came over loopback', () => {
+      vi.stubGlobal('location', { hostname: 'localhost' });
+      const config = makeTestServerConfig();
+      config.settings = { ...config.settings, reachable_from_network: true };
+
+      render(<DatasourcePropertiesPanel config={config} connected={true} onSave={vi.fn()} />);
+
+      expect(
+        screen.getByText('opc.tcp://<this device\u2019s address>:4855/nexthmi/test/'),
+      ).toBeInTheDocument();
     });
   });
 

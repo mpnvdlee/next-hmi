@@ -3,6 +3,7 @@ import AdminSection from '../AdminSection';
 import Button from '../../ui/Button';
 import Spinner from '@shared/components/Spinner';
 import type { RuntimeSession } from '../../../store/adminViewStore';
+import { formatBytes } from '@shared/utils/formatBytes';
 
 interface Props {
   runtimes: RuntimeSession[];
@@ -33,6 +34,8 @@ export default function ConnectedRuntimesSection({ runtimes, loading, error, onR
               <th>Username</th>
               <th>Groups</th>
               <th>Connected since</th>
+              <th>Keys</th>
+              <th>Sent</th>
             </tr>
           </thead>
           <tbody>
@@ -43,6 +46,10 @@ export default function ConnectedRuntimesSection({ runtimes, loading, error, onR
                 <td>{r.groups.join(', ')}</td>
                 <td className="cfg-runtimes-table__time">
                   {new Date(r.connectedAt).toLocaleTimeString()}
+                </td>
+                <td className="cfg-runtimes-table__time">{r.keys ?? '–'}</td>
+                <td className="cfg-runtimes-table__time">
+                  {r.bytesSent === undefined ? '–' : formatBytes(r.bytesSent)}
                 </td>
               </tr>
             ))}

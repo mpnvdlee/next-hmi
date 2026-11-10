@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { useVariableStore, type VarMeta } from '../store/variableStore';
 import { type VariableBinding, bindingIndex, bindingKey } from '@shared/types/config';
 import { readBit } from '@shared/utils/valueTypes';
+import { readArrayElement } from '../utils/repeatItemResolution';
 
 const noSubscribe = (): (() => void) => () => {};
 
@@ -43,7 +44,7 @@ export function useBindingValue(binding: VariableBinding | undefined): unknown {
     if (index === undefined) return id ? values[id] : undefined;
     const type = id ? varMeta[id]?.type : undefined;
     if (!type?.array || !Number.isInteger(index) || index < 0) return null;
-    if (type.kind === 'struct') return values[`${id}/[${index}]`];
+    if (type.kind === 'struct') return readArrayElement(values, varMeta, id, index);
     const raw = values[id];
     return Array.isArray(raw) ? (raw[index] ?? null) : null;
   };

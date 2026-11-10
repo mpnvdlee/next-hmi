@@ -4,7 +4,9 @@ uvicorn[standard]
 # 3.14; 1.x needed a local ua_binary monkey patch (removed in this baseline).
 asyncua>=2.0.1,<3
 python-multipart
-mcp~=2.0.0
+# 2.2 is the first release that reaps and caps stateful Streamable HTTP
+# sessions (CVE-2026-59951) and fixes three further advisories against 2.0.
+mcp>=2.2.0,<3
 watchfiles
 tree-sitter
 tree-sitter-typescript

@@ -37,6 +37,7 @@ MANIFEST_FILENAME = "projects.json"
 LOGS_SUBDIR = ".logs"
 WIDGET_BUILD_SUBDIR = ".widget-build"
 THUMBNAILS_SUBDIR = ".thumbnails"
+LOCKS_SUBDIR = ".locks"
 RESTART_SENTINEL_FILENAME = ".restart-pending"
 
 
@@ -97,3 +98,8 @@ def thumbnails_dir() -> Path:
 
 def restart_sentinel_path() -> Path:
     return runtime_home_path() / RESTART_SENTINEL_FILENAME
+
+
+def locks_dir() -> Path:
+    """Lock files the manager and its project children share."""
+    return runtime_home_path() / LOCKS_SUBDIR

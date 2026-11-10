@@ -131,7 +131,8 @@ def _walk_for_list(
             "data_type": to_simple_type(
                 entry.get("data_type"), is_array=bool(entry.get("is_array"))
             ),
-            "enabled": entry.get("enabled", True),
+            # A variable with no flag is disabled at runtime (is_subscribable).
+            "enabled": bool(entry.get("enabled", False)),
         }
         items.append((full_id, full_id, summary))
 

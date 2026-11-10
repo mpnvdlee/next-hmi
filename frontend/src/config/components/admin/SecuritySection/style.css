@@ -4,3 +4,44 @@
   gap: var(--cfg-space-5);
   max-width: 360px;
 }
+
+.cfg-security__part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-security__heading {
+  margin: 0;
+  font-size: var(--cfg-text-base);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+}
+
+.cfg-security__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cfg-space-3);
+}
+
+.cfg-security__note {
+  font-size: var(--cfg-hint-font-size);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-password-rule {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cfg-space-1);
+  font-size: var(--cfg-text-xs, var(--cfg-text-sm));
+  color: var(--cfg-text-muted);
+}
+
+.cfg-password-rule--met {
+  color: var(--cfg-success-fg);
+}
+
+.cfg-password-rule--unmet {
+  color: var(--cfg-danger-fg);
+}

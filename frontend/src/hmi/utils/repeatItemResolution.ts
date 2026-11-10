@@ -47,6 +47,33 @@ export function structElementPath(
   return elementPaths(varMeta, arrayKey).get(index);
 }
 
+/** The store key a struct array's element at position `index` lives under:
+ *  the element folder named in the metadata, else the `[index]` name a
+ *  metadata-less test fixture uses. The backend ships an indexed element
+ *  under this key and not inside the whole array. */
+export function structElementKey(
+  varMeta: Record<string, unknown>,
+  arrayKey: string,
+  index: number,
+): string {
+  return structElementPath(varMeta, arrayKey, index) ?? `${arrayKey}/[${index}]`;
+}
+
+/** One element of an array variable as the store holds it: a struct array's
+ *  element under its own key, else the whole value sliced; `undefined` when
+ *  neither has arrived. */
+export function readArrayElement(
+  values: Record<string, unknown>,
+  varMeta: Record<string, unknown>,
+  arrayKey: string,
+  index: number,
+): unknown {
+  const element = values[structElementKey(varMeta, arrayKey, index)];
+  if (element !== undefined) return element;
+  const whole = values[arrayKey];
+  return Array.isArray(whole) ? whole[index] : undefined;
+}
+
 /** The element a struct array's shape is read off: the one at position `index`
  *  when given and present, otherwise the first. Mirrored by `_element_path` in
  *  the backend validator. */

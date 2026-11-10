@@ -20,6 +20,8 @@ import { SearchHighlightProvider } from '@config/components/ui/SearchHighlight';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
+import { buildVarKey } from '@shared/types/datasource';
+import { clearContextProducer, setContextProducer } from '@hmi/hooks/useWebSocket';
 import VirtualTreeRows from '@config/components/shared/VirtualTreeRows';
 import { PickerRow, type RowContext } from './rows';
 import {
@@ -44,7 +46,7 @@ import { useVariableStore } from '@hmi/store/variableStore';
 import type { VariableBinding } from '@shared/types/config';
 import type { DatasourceListItem } from '@shared/types/datasource';
 import { parseVarKey } from '@shared/types/datasource';
-import { isArrayShape } from '@shared/types/arrayShape';
+import { isArrayShape, isFixedArray } from '@shared/types/arrayShape';
 import { findComponentInPages } from '@shared/utils/widgetTree';
 import { allPageRootNodes } from '@shared/utils/pageTree';
 import { apiJson } from '@shared/utils/api';
@@ -493,6 +495,17 @@ export default function VariableBindingPicker() {
     }
     return out;
   }, [isComponentPropMode, dsTree, listBits]);
+
+  // A dynamic array's `[#]` rows follow its live length, which only arrives
+  // for keys some context asked for — so ask for them while the picker is open.
+  useEffect(() => {
+    const keys = allVars
+      .filter((v) => isArrayShape(v) && !isFixedArray(v))
+      .slice(0, 500)
+      .map((v) => buildVarKey(v._datasource ?? '', v._path ?? v.display_name));
+    setContextProducer('binding-picker', { priorityKeys: keys });
+    return () => clearContextProducer('binding-picker');
+  }, [allVars]);
 
   // The type-filtered tree a selected folder is judged against, even while
   // "Show all" lists everything.
