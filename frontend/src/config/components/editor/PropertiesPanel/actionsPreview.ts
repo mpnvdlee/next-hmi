@@ -97,6 +97,25 @@ export const ACTION_TYPES = [
     description: 'Drops back to the auto-login user.',
   },
   {
+    type: 'userUpdate' as const,
+    label: 'Update User',
+    category: 'Session',
+    description:
+      'Creates or changes an account: groups, a new password, language. An empty field stays as it is. User admins only.',
+  },
+  {
+    type: 'userDelete' as const,
+    label: 'Delete User',
+    category: 'Session',
+    description: 'Removes an account. User admins only; a locked account or your own is refused.',
+  },
+  {
+    type: 'userChangePassword' as const,
+    label: 'Change Own Password',
+    category: 'Session',
+    description: "Sets the signed-in user's password after checking the current one.",
+  },
+  {
     type: 'acknowledgeAllAlarms' as const,
     label: 'Acknowledge All Alarms',
     category: 'Machine',
@@ -174,6 +193,9 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   recipeSave: 'recipeList',
   loginUser: 'user',
   logoutUser: 'userGroups',
+  userUpdate: 'user',
+  userDelete: 'userGroups',
+  userChangePassword: 'user',
   acknowledgeAllAlarms: 'alarmCount',
   delay: 'time',
   setLanguage: 'languages',

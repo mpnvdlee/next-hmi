@@ -14,7 +14,8 @@
 
 import { useEffect, useRef } from 'react';
 import { LOCAL_INPUT_DATASOURCE, useVariableStore, type VarMeta } from '../store/variableStore';
-import { useHmiStore } from '../store/hmiStore';
+import { useHmiStore, type UserAccount } from '../store/hmiStore';
+import { useTranslationStore } from '@shared/store/translationStore';
 import { useAlarmStore } from '../store/alarmStore';
 import { useRecipeStore } from '../store/recipeStore';
 import { publishConfigChanged, type ConfigChangedEvent } from '@shared/events/configChangedBus';
@@ -48,6 +49,10 @@ type WsMessage =
       requestId?: string;
       /** Present while the identity is a login a new socket can resume. */
       sessionToken?: string;
+      /** The account's own language code. */
+      language?: string;
+      /** Every account — only to a user admin. */
+      accounts?: UserAccount[];
     }
   | { type: 'auth_error'; scope: string; reason: ActionResultReason; requestId?: string }
   | {
@@ -78,6 +83,8 @@ type WsMessage =
     }
   | { type: 'recipe_error'; requestId: string; reason: string }
   | { type: 'alarm_ack_response'; requestId: string }
+  | { type: 'user_response'; requestId: string; result: Record<string, unknown> | null }
+  | { type: 'user_error'; requestId: string; reason: string }
   | { type: 'alarm_ack_error'; requestId: string; reason: string }
   | ({ type: 'config_changed' } & ConfigChangedEvent)
   | {
@@ -419,12 +426,19 @@ export function useWebSocket(): void {
             return;
           case 'user_identity':
             if (msg.scope) {
+              const previous = useHmiStore.getState().currentUsersByScope[msg.scope];
               setCurrentUserRef.current(msg.scope, {
                 username: msg.username,
                 groups: msg.groups ?? [],
                 groupLabels: msg.groupLabels ?? {},
                 signedIn: Boolean(msg.sessionToken),
+                ...(msg.accounts && { accounts: msg.accounts }),
               });
+              // A user's language applies when that user arrives, not on every
+              // refresh, so a language picked during the session stays.
+              if (isLiveScope(msg.scope) && msg.language && previous?.username !== msg.username) {
+                useTranslationStore.getState().setActiveLanguage(msg.language);
+              }
               setLoginErrorRef.current(msg.scope, null);
               if (isLiveScope(msg.scope)) saveSessionToken(msg.sessionToken);
             }
@@ -476,10 +490,14 @@ export function useWebSocket(): void {
             return;
           case 'recipe_error':
           case 'alarm_ack_error':
+          case 'user_error':
             resolvePending(msg.requestId, { reason: msg.reason }, false);
             return;
           case 'alarm_ack_response':
             resolvePending(msg.requestId, {}, true);
+            return;
+          case 'user_response':
+            resolvePending(msg.requestId, msg.result ?? {}, true);
             return;
           case 'config_changed':
             ingestConfigChanged(msg);

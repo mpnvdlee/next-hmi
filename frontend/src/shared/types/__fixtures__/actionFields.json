@@ -56,6 +56,28 @@
     "onSettled": "actions"
   },
   "logoutUser": { "onSuccess": "actions", "onFailed": "actions", "onSettled": "actions" },
+  "userUpdate": {
+    "username": "String",
+    "groups": "String",
+    "password": "String",
+    "language": "String",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
+  "userDelete": {
+    "username": "String",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
+  "userChangePassword": {
+    "currentPassword": "String",
+    "newPassword": "String",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
   "recipeLoad": {
     "datasetId": "String",
     "verify": "Boolean",

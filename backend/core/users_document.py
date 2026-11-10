@@ -50,6 +50,9 @@ def document_state(document: Any) -> DocumentState:
         return _invalid()
     if not isinstance(document.get("users"), list):
         return _invalid()
+    admin_groups = document["settings"].get("userAdminGroups", [])
+    if not isinstance(admin_groups, list) or not all(isinstance(g, str) for g in admin_groups):
+        return _invalid()
     group_ids: set[str] = set()
     for group in document["groups"]:
         if not isinstance(group, dict) or not is_valid_user_id(group.get("id", "")):
@@ -74,6 +77,11 @@ def document_state(document: Any) -> DocumentState:
             return _invalid()
         if user["id"] in user_ids or user["username"] in usernames:
             return _invalid()
+        if not isinstance(user.get("language", ""), str):
+            return _invalid()
+        locked = user.get("locked", {})
+        if not isinstance(locked, dict) or not all(isinstance(v, bool) for v in locked.values()):
+            return _invalid()
         if "passwordHash" in user and (
             user.get("password", "") != "" or not is_valid_hash(user["passwordHash"])
         ):
@@ -82,3 +90,26 @@ def document_state(document: Any) -> DocumentState:
         usernames.add(user["username"])
 
     return _VALID
+
+
+def merge_installed_accounts(incoming: dict, installed: dict) -> tuple[dict, list[str]]:
+    """``incoming`` with the accounts of ``installed`` in place of its own.
+
+    A project replaced on a machine keeps the accounts operators made there:
+    groups and settings are design and come from the incoming project, the
+    accounts belong to the installation. A group an installed account still
+    names but the new design dropped is put back (label = id) rather than
+    stripping access nobody chose to remove; its id is returned so the
+    operator hears about it. Both documents must already be valid.
+    """
+    groups = [dict(group) for group in incoming["groups"]]
+    known = {group["id"] for group in groups}
+    restored: list[str] = []
+    for user in installed["users"]:
+        for group_id in user["groups"]:
+            if group_id not in known:
+                known.add(group_id)
+                restored.append(group_id)
+                groups.append({"id": group_id, "label": group_id})
+    merged = {**incoming, "groups": groups, "users": [dict(user) for user in installed["users"]]}
+    return merged, restored

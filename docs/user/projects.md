@@ -123,6 +123,11 @@ Pick how to resolve it:
 | **Install as a separate copy** | Installs alongside the existing project under a new id. |
 | **Replace the existing project** | Overwrites it — only a stopped project, only after you confirm, and rolled back if the install fails partway. |
 
+Replacing keeps the users on the far side by default: the accounts, passwords
+and languages operators set there stay, and groups and settings come from your
+project. Untick **Keep the users on the destination** to send your accounts
+instead. See [Manage users from the runtime](users.md#manage-users-from-the-runtime).
+
 **When it fails anyway.** The dialog says what went wrong and what to do about
 it, instead of printing a raw error: a wrong device-admin password (the
 *peer's*, not this manager's), a pairing lockout with the countdown to wait

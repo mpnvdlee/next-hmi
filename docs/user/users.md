@@ -32,13 +32,25 @@ A saved change reaches a running project's panels at once: a removed user, or on
 >
 > **A device that keeps getting passwords wrong is refused too.** Sixty wrong passwords within a minute from one address, whatever usernames they try, refuse every sign-in from that address for 30 seconds; other panels and PCs sign in as usual. Only 300 wrong passwords within a minute from all addresses together pause every sign-in for 30 seconds. Behind a reverse proxy on another host, list it in `NEXTHMI_FORWARDED_ALLOW_IPS`, or every browser counts as the proxy's one address.
 
-## Settings: auto-login
+## Settings: auto-login and user admins
 
-Select **Settings** in the tree for the one project-wide choice:
+Select **Settings** in the tree for the project-wide choices:
 
 | Setting | Means |
 |---|---|
 | **Auto-login user** | Who a freshly opened runtime is signed in as before anyone touches it, and who it goes back to when someone signs out. `guest` is the normal answer; picking a real user makes an unattended panel start out with that user's rights. |
+| **User admins** | The groups whose members may add, change and delete users from the runtime — see [Manage users from the runtime](#manage-users-from-the-runtime). `Admin` by default; empty means nobody. |
+
+Each user also has a **Runtime** section:
+
+| Setting | Means |
+|---|---|
+| **Language** | The language the screens switch to when this user signs in. *(none)* leaves the language as it is. |
+| **Prevent delete** | The runtime cannot delete this account. |
+| **Lock password** | The runtime cannot change this password — not a user admin, and not the user themselves. Right for a shared account. |
+| **Lock groups** | The runtime cannot change this account's groups. |
+
+The locks apply to the runtime only. Here in the editor, and over the API, you can still change everything.
 
 > [!IMPORTANT]
 > **No group opens the editor.** The fence around the project itself is the installation's **device-admin password** — the one that unlocks the Manager dashboard — and nothing in `users.json` widens or narrows it. Whoever has that password can rewrite pages, alarms and users, whichever project user the runtime happens to be signed in as, so keep it to the people who genuinely engineer the system. See [How this relates to the device-admin password](#how-this-relates-to-the-device-admin-password).
@@ -108,7 +120,26 @@ Pick **Notification** for a panel where a small flash is easy to miss, **None** 
 
 To offer a sign-in instead, attach an **Open Dialog** pointing at your sign-in dialog to the **onInteractionDenied** global event (see [Global events](actions.md#global-events)). It fires on every locked press, whatever the mode, so pair it with **None** if the dialog should be the only answer. It fires for any locked widget, including one locked by a variable rather than by a group.
 
-Two more sources read the identity directly, for labels and lists rather than gates: **`$user`** gives the signed-in **username** or their **groups** as text. On a list field — a Dropdown's **Options**, a Repeater's **Items** — it lists **All users** (each valued by username) or **All user groups** instead, the raw material for a user-picker screen.
+Two more sources read the identity directly, for labels and lists rather than gates: **`$user`** gives the signed-in **username** or their **groups** as text. On a list field — a Dropdown's **Options**, a Repeater's **Items** — it lists **All users** (each valued by username), **All user groups**, or **Accounts (user admins)** instead, the raw material for a user-picker or user-management screen.
+
+## Manage users from the runtime
+
+The people at the machine can look after their own accounts: a shift lead adds a new operator, resets a forgotten password, sets someone's language. You build that screen yourself from ordinary widgets and three actions:
+
+| Piece | How |
+|---|---|
+| **The list** | A **Repeater** whose **Items** come from `$user` → **Accounts (user admins)**. Each copy reads the account with **Repeat Item**: `value` (the username), `groups` (the group labels), `groupIds`, `language`, and `lockedDelete`, `lockedPassword`, `lockedGroups` to disable a button the server would refuse anyway. |
+| **Add or change** | An **Update User** action, its fields bound to a String Input (tick **Password field** for the password), a Dropdown on `$user` → **All user groups** for one group, a Dropdown with your languages. A new username creates the account, which then needs a group and a password; for an existing one an empty field leaves that part unchanged. |
+| **Delete** | A **Delete User** action with **Username** from the row's **Repeat Item** `value`. |
+| **Own password** | A **Change Own Password** action with the current and the new password, for anyone signed in. |
+
+Put a Show Toast with `$result` → `reason` in each action's **onFailed** so a refusal reads as one.
+
+**Who may do it.** Only members of a **User admins** group may add, change or delete users, and only they get the Accounts list — for everyone else it is empty. The server checks this against who is signed in on that screen, so a hidden button is a convenience, not the protection. On top of that, nobody can delete their own account or take away their own user-admin group, so a user admin always remains; and the locks you set per account in the editor hold whatever the screen asks.
+
+Every change reaches the other panels at once: a deleted user is signed out, a changed password ends that user's other sign-ins, and an open editor shows the new accounts.
+
+**Accounts survive a new version of the project.** When you replace the project on a machine with a transfer, the accounts there stay: groups and settings come from your project, accounts, passwords and languages from the machine. Untick **Keep the users on the destination** in the transfer window to overwrite them with the accounts from the editor instead. A group a kept account still uses but your new version no longer has is put back, so nobody loses access without anyone deciding so. See [Push & pull between devices](projects.md#push--pull-between-devices).
 
 ## What the server enforces
 
@@ -134,7 +165,7 @@ Groups decide what a signed-in operator sees and may touch on the screens. They 
 > [!IMPORTANT]
 > **A running project's screens are open — no password at all.** `/runtime/<slug>/` is reachable by anyone who can reach the panel, which is what an HMI is for: an operator walks up and works. The device-admin password guards the editor and the dashboard, not the live view.
 >
-> The live view can also list every username and group name — that is what fills a sign-in dropdown — but not who belongs to which group, or which accounts have a password. Those stay behind the device-admin password.
+> The live view can also list every username and group name — that is what fills a sign-in dropdown — but not who belongs to which group, or which accounts have a password. Group membership reaches only a user admin signed in on that screen (for the [Accounts list](#manage-users-from-the-runtime)); the rest stays behind the device-admin password.
 >
 > That means operating is open too — pressing a button, changing a setpoint, writing a tag. The server does not restrict who may write a writable variable; blocking the button is how a project stops it (see [What the server enforces](#what-the-server-enforces)). [What is reachable without a password](network-access.md) lists everything the live view leaves open.
 

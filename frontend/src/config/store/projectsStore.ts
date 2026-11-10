@@ -264,6 +264,7 @@ interface ProjectsStore {
     peerRuntimeId?: string | null;
     collisionPolicy: 'reject' | 'replace' | 'copy';
     confirmReplace: boolean;
+    keepUsers: boolean;
     start: boolean;
     transferId: string;
   }): Promise<PeerTransferStatus>;
@@ -280,6 +281,7 @@ interface ProjectsStore {
     peerRuntimeId?: string | null;
     collisionPolicy: 'reject' | 'replace' | 'copy';
     confirmReplace: boolean;
+    keepUsers: boolean;
     start: boolean;
     transferId: string;
     /** The operator trusts the source to run the project's code here. */

@@ -149,7 +149,9 @@ leaving a half-initialised socket registered.
 | `recipe_error` | `{ type, requestId, reason }` | A correlated `recipe_load` / `recipe_save` failed. |
 | `alarm_ack_response` | `{ type, requestId }` | A correlated `alarm_ack` / `alarm_ack_all` succeeded. |
 | `alarm_ack_error` | `{ type, requestId, reason }` | A correlated `alarm_ack` / `alarm_ack_all` failed: `not_found` (no active instance with that id), `bad_request` (no `instanceId`), `alarms_unavailable`. |
-| `user_identity` | `{ type, scope, username, groups, groupLabels, sessionToken? }` | After `login`, `logout`, or `request_identity`. Also unprompted, with no `requestId`: for every scope on a named panel's connections when [API v1](../reference/rest-api.md#panel-sessions) signs that panel in or out, and for a scope whose user a `users` reload deleted, regrouped or gave a new password (see [Internal API](../reference/rest-api.md#internal-api)). `sessionToken` is present while the identity is a resumable login (see `request_identity`). |
+| `user_identity` | `{ type, scope, username, groups, groupLabels, sessionToken?, language?, accounts? }` | After `login`, `logout`, or `request_identity`. Also unprompted, with no `requestId`: for every scope on a named panel's connections when [API v1](../reference/rest-api.md#panel-sessions) signs that panel in or out, for a scope whose user a `users` reload deleted, regrouped or gave a new password (see [Internal API](../reference/rest-api.md#internal-api)), and after every users write for each scope held by a user admin. `sessionToken` is present while the identity is a resumable login (see `request_identity`). `language` is the account's own language code; the live view switches to it when the scope's username changes, not on a refresh of the same user. `accounts` — `[{ username, groups, language, locked: { delete, password, groups } }]` — is present only while the identity is a user admin (a member of a `settings.userAdminGroups` group) and feeds `$user` → Accounts. |
+| `user_response` | `{ type, requestId, result }` | A correlated `user_update` / `user_delete` / `user_change_password` succeeded — `result` is `{ username, created }` (update) or `{ username }`. |
+| `user_error` | `{ type, requestId, reason }` | One of those failed; see the reason table below. |
 | `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username or this connection's address off. |
 | `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` or `toggle_field` succeeded — see [Action result correlation](#action-result-correlation). |
 | `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` or `toggle_field` failed. |
@@ -419,6 +421,32 @@ integer digits keeps them too — and writes it back as a string.
     12 hours; the user's groups are re-read. Tokens live in backend memory, so a
     backend restart ends every login.
 
+- `user_update` / `user_delete` / `user_change_password` — runtime user
+  management (`_handle_user_admin`, rules in `services/users_manager.py`).
+
+  ```json
+  { "type": "user_update", "username": "jan", "groups": "operator,engineer", "password": "…", "language": "de", "scope": "runtime:main", "requestId": "…" }
+  { "type": "user_delete", "username": "jan", "scope": "runtime:main", "requestId": "…" }
+  { "type": "user_change_password", "currentPassword": "…", "newPassword": "…", "scope": "runtime:main", "requestId": "…" }
+  ```
+
+  - Authorised by the identity this socket holds for `scope`, never by a name
+    in the message. `user_update` and `user_delete` need a user admin;
+    `user_change_password` acts on the scope's own user (not `guest`) and
+    checks `currentPassword` through the sign-in throttle.
+  - `user_update` creates the account when `username` is new (groups and a
+    password required) and otherwise changes it. An empty field leaves that
+    part unchanged; `groups` is comma-separated group ids.
+  - Refused: a part the account's `locked` flags protect (`locked`; an update
+    that leaves locked groups as they are and sends no password still goes
+    through), deleting yourself or dropping your own user-admin groups
+    (`forbidden`), deleting `guest` (`invalid`).
+  - After a write: the change is audited (`user.save`, `user.delete`,
+    `user.password`), held identities are refreshed — a deleted user's scopes
+    fall back to the auto-login user, a changed password ends that user's
+    logins except the one that changed its own — and `config_changed` goes out
+    with `source: "runtime"`.
+
 All `scope` values must be non-empty strings of at most 64 characters; an
 empty, missing or longer scope causes the message to be ignored silently. A
 connection keeps the identity of at most 16 scopes: storing a 17th (a
@@ -428,7 +456,8 @@ stored longest ago, never the scope just named.
 ## Action result correlation
 
 Client-fired async actions (`login`, `logout`, `write_field`, `toggle_field`, `recipe_load`,
-`recipe_save`, `alarm_ack`, `alarm_ack_all`) accept an optional `requestId` (UUID). When supplied, the backend
+`recipe_save`, `alarm_ack`, `alarm_ack_all`, `user_update`, `user_delete`,
+`user_change_password`) accept an optional `requestId` (UUID). When supplied, the backend
 echoes it on the corresponding response so the frontend dispatcher
 (`frontend/src/hmi/utils/actionDispatcher.ts`) can fire the authored
 `onSuccess` / `onFailed` / `onSettled` handlers.
@@ -441,6 +470,8 @@ echoes it on the corresponding response so the frontend dispatcher
   `DownloadResult` exposed as `$result` in handlers), `recipe_error` on failure.
 - `alarm_ack` / `alarm_ack_all` → `alarm_ack_response` on success,
   `alarm_ack_error` on failure.
+- `user_update` / `user_delete` / `user_change_password` → `user_response` on
+  success, `user_error` on failure.
 
 Every deterministic failure path in `_handle_write_field` and `_handle_toggle_field` emits a `write_error`
 immediately, so the client never waits out the 10 s timeout. Reason codes are a
@@ -462,6 +493,12 @@ stable contract the frontend `$switch`es on:
 | `array_index_out_of_bounds` | Write: an indexed write exceeds a fixed array's declared length |
 | `array_state_unavailable` | Write: indexed array state is missing/stale, so siblings cannot be preserved safely |
 | `value_unavailable` | Toggle: the variable's current value is not a known boolean, so there is nothing to invert |
+| `forbidden` | User management: the scope's user is no user admin, the action would delete it or take its own user-admin groups away, or nobody is signed in to change a password |
+| `locked` | User management: the account's `locked` flag protects what was asked (delete, password or groups) |
+| `invalid` | User management: a bad username, an unknown group, a new account without groups or password, an empty new password, or `guest` |
+| `not_found` | User management: no account by that name |
+| `wrong_password` | Own password change: `currentPassword` is wrong (counts as a failed sign-in) |
+| `unavailable` | User management: `users.json` is unreadable or invalid, so nothing is written |
 | `verify_mismatch` | Write: `verify` was requested, the write itself succeeded, but reading the value back did not match what was written. Only reachable when the caller opts in — `recipe_load` with `verify: true` is the one producer today; `write_field` never sets it |
 
 `invalid_value` follows the documented [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix). The REST variable-write endpoint uses project-user HTTP Basic credentials, then calls the same request parser, coercer, and dispatcher.
@@ -500,7 +537,7 @@ can re-fetch it or warn about unsaved edits.
 - `artifact_ids` is always an array — single-target writes send one element; bulk
   tools coalesce. A REST write sends the route's path parameters (a theme id, a
   datasource name), none for a route that replaces a whole document.
-- `source` is `mcp`, `rest` or `api` (an [API v1](../reference/rest-api.md#api-v1) user write). `agent_label` is included only when
+- `source` is `mcp`, `rest`, `api` (an [API v1](../reference/rest-api.md#api-v1) user write) or `runtime` (runtime user management). `agent_label` is included only when
   `source === "mcp"`.
 - `tab_id` is included only on a `rest` write whose request named its browser
   tab in the `X-NextHMI-Tab` header (`apiJson` sends `TAB_ID` on every write).

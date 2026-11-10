@@ -733,8 +733,9 @@ Supported action types (see `frontend/src/config/components/editor/PropertiesPan
 - `delay` — `{ duration }`; waits `duration` ms, then runs the actions after it in the list, which then read the values of that moment.
 - `loginUser` / `logoutUser` — scope-based authentication (the scope defaults to the current `useHmiScope()`).
 - `recipeLoad` (`{ datasetId, verify? }`) / `recipeSave` (`{ datasetId? }`) — download a recipe dataset to its variables, or save the live values into one.
+- `userUpdate` (`{ username, groups, password, language }`) / `userDelete` (`{ username }`) / `userChangePassword` (`{ currentPassword, newPassword }`) — runtime user management; the backend checks the signed-in user is allowed.
 
-`writeDataVariable`, `toggleDataVariable`, `editValue`, `loginUser`, `logoutUser`, `recipeLoad` and `recipeSave` are asynchronous: each takes optional `onSuccess` / `onFailed` / `onSettled` action lists that run when the backend answers (or the request times out), and inside those lists `$result` reads fields off the response.
+`writeDataVariable`, `toggleDataVariable`, `editValue`, `loginUser`, `logoutUser`, `recipeLoad`, `recipeSave`, `userUpdate`, `userDelete` and `userChangePassword` are asynchronous: each takes optional `onSuccess` / `onFailed` / `onSettled` action lists that run when the backend answers (or the request times out), and inside those lists `$result` reads fields off the response.
 - `showAlert` — modal alert with `onCancel` / `onOk` nested action lists.
 - `showToast` — transient toast (`info` | `success` | `warning` | `error`); `discard: 'auto' | 'manual'` with optional `duration`.
 

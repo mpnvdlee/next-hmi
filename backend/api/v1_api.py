@@ -354,6 +354,7 @@ def _public_user(user: dict[str, Any]) -> dict[str, Any]:
         "username": user.get("username"),
         "groups": user.get("groups", []),
         "passwordSet": user.get("passwordSet", False),
+        **({"language": user["language"]} if user.get("language") else {}),
     }
 
 
@@ -413,12 +414,14 @@ def _write_user(project_id: str, user_id: str, body: dict[str, Any], caller: Cal
             "groups": body.get("groups", current["groups"] if current else None),
             "password": body.get("password") or "",
         }
+        if "language" in body:
+            submitted["language"] = body["language"]
         users = [
             # Every other account passes through unchanged: an empty password
             # tells the shared validator to keep the stored credential.
             submitted
             if u is current
-            else {"id": u.get("id"), "username": u.get("username"), "groups": u.get("groups"), "password": ""}
+            else users_api.users_manager.unchanged_user(u)
             for u in stored
         ]
         if current is None:
@@ -447,7 +450,7 @@ async def put_user(
     caller: Caller = _USERS_WRITE,
 ) -> dict[str, Any]:
     """Create or update one user; an omitted or empty password keeps the current one."""
-    unknown = set(body) - {"username", "password", "groups"}
+    unknown = set(body) - {"username", "password", "groups", "language"}
     if unknown:
         raise ValidationError(f"Unknown fields: {sorted(unknown)}")
     if not isinstance(body.get("password", ""), str):

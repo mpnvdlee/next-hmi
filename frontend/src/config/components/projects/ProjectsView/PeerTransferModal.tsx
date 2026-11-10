@@ -125,6 +125,7 @@ export default function PeerTransferModal({
   const [destinationFolder, setDestinationFolder] = useState(source?.name ?? '');
   const [replacementId, setReplacementId] = useState('');
   const [confirmReplace, setConfirmReplace] = useState(false);
+  const [keepUsers, setKeepUsers] = useState(true);
   const [start, setStart] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -193,6 +194,7 @@ export default function PeerTransferModal({
     collisionPolicy: policy,
     replacementId,
     confirmReplace,
+    keepUsers,
     start,
   };
 
@@ -502,6 +504,7 @@ export default function PeerTransferModal({
         peerRuntimeId: probe?.runtimeId,
         collisionPolicy: policy,
         confirmReplace,
+        keepUsers,
         start,
         transferId: nextTransferId,
         ...(isPull ? { trustCustomWidgets: trustWidgets } : {}),
@@ -998,6 +1001,19 @@ export default function PeerTransferModal({
                               />
                               <span>Back up and replace this stopped {replaceLabel}</span>
                             </label>
+                            <label className="project-form__toggle">
+                              <input
+                                type="checkbox"
+                                checked={keepUsers}
+                                onChange={(event) => setKeepUsers(event.target.checked)}
+                              />
+                              <span>Keep the users on the destination</span>
+                            </label>
+                            <span className="project-form__hint">
+                              {keepUsers
+                                ? 'Accounts, passwords and languages there stay; groups and settings come from this project.'
+                                : "The destination's accounts are replaced by this project's."}
+                            </span>
                             {selectedReplacementFolder && (
                               <span className="project-form__hint">
                                 {`Installs into "${selectedReplacementFolder}", the folder that project is registered under.`}

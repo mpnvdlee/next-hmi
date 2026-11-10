@@ -128,6 +128,29 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <path d="M14.2 8.2 h-3.2 M12.4 6.6 l-1.6 1.6 1.6 1.6" />
     </Icon>
   ),
+  // Person, plus.
+  userUpdate: (
+    <Icon>
+      <circle cx="6.3" cy="5.2" r="2.3" />
+      <path d="M2.3 13.2 a4 3.6 0 0 1 8 0" />
+      <path d="M12.6 6.4 v3.6 M10.8 8.2 h3.6" />
+    </Icon>
+  ),
+  // Person, cross.
+  userDelete: (
+    <Icon>
+      <circle cx="6.3" cy="5.2" r="2.3" />
+      <path d="M2.3 13.2 a4 3.6 0 0 1 8 0" />
+      <path d="M11.2 6.8 l2.8 2.8 M14 6.8 l-2.8 2.8" />
+    </Icon>
+  ),
+  // A key.
+  userChangePassword: (
+    <Icon>
+      <circle cx="5.2" cy="8" r="2.7" />
+      <path d="M7.9 8 h6.3 M12.2 8 v2 M14.2 8 v1.6" />
+    </Icon>
+  ),
   // A play mark inside a component's box.
   runComponentActions: (
     <Icon>

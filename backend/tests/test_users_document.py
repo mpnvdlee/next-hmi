@@ -90,3 +90,25 @@ def test_hash_alongside_a_plaintext_password_is_invalid() -> None:
     )
 
     assert users_document.document_state(document).valid is False
+
+
+def test_merge_keeps_installed_accounts_and_restores_their_groups():
+    incoming = {
+        "settings": {"autoLoginName": "guest", "userAdminGroups": ["admin"]},
+        "groups": [{"id": "guest", "label": "Guest"}, {"id": "admin", "label": "Admin"}],
+        "users": [{"id": "guest", "username": "guest", "password": "", "groups": ["guest"]}],
+    }
+    installed = {
+        "settings": {"autoLoginName": "op"},
+        "groups": [{"id": "guest", "label": "Guest"}, {"id": "line2", "label": "Line 2"}],
+        "users": [
+            {"id": "guest", "username": "guest", "password": "", "groups": ["guest"]},
+            {"id": "op", "username": "op", "password": "", "groups": ["line2"], "language": "de"},
+        ],
+    }
+    merged, restored = users_document.merge_installed_accounts(incoming, installed)
+    assert restored == ["line2"]
+    assert merged["settings"] == incoming["settings"]
+    assert [u["username"] for u in merged["users"]] == ["guest", "op"]
+    assert {"id": "line2", "label": "line2"} in merged["groups"]
+    assert users_document.document_state(merged).valid

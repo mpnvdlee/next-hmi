@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useVariableStore } from '../store/variableStore';
 import { buildVarKey } from '@shared/types/datasource';
 import { useTranslationStore } from '@shared/store/translationStore';
-import { resolveUserField, useHmiStore } from '../store/hmiStore';
+import { resolveUserField, useHmiStore, type UserAccount } from '../store/hmiStore';
 import { useUsersData } from './useUsersData';
 import { useHmiScope } from '../context/HmiScopeContext';
 import { useHostPageId } from '../context/HostPageContext';
@@ -30,6 +30,9 @@ import type { PageGroupChild, PagePathSegment } from '@shared/types/config';
 import { PageGroupStackContext, pickPageGroup } from '../components/PageGroupStackContext';
 import type { EvaluationContext, ResolvedValue } from '../utils/propertySourceEval';
 import { useViewport, getViewportSnapshot } from './useViewport';
+
+/** Stable, so an `accounts` list memo holds for a non-admin. */
+const NO_ACCOUNTS: UserAccount[] = [];
 
 const PAGE_ID_PATH_PATTERN = /\/(?:pages|preview)\/([^/]+)/;
 
@@ -138,6 +141,8 @@ export function useEvalContext(): EvaluationContext {
         resolveUserGroups: () => currentUsersByScope[scope]?.groups ?? ['guest'],
 
         resolveUserList: () => allUsernames,
+
+        resolveUserAccounts: () => currentUsersByScope[scope]?.accounts ?? NO_ACCOUNTS,
 
         resolveDevice: (field) => {
           if (!deviceInfo) return null;

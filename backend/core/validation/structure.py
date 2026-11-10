@@ -1622,12 +1622,27 @@ def _repeat_item_read(payload: dict, ctx: ValidationContext) -> tuple[str, str, 
 # Item-list sources whose elements are values, never variables: a copy has no
 # variable behind its element to write back to.
 _VALUE_LIST_SOURCES = frozenset({"$static", "$user", "$http", "$recipeList", "$widgetProp"})
-_USER_LIST_FIELDS = frozenset({"userList", "groups"})
 _STRING = {"kind": "scalar", "base": "String", "array": False}
 _LABEL_VALUE_RECORD: tuple[dict, dict[str, dict]] = (
     {"kind": "struct", "name": "Struct", "array": False, "fields": ["label", "value"]},
     {"label": _STRING, "value": _STRING},
 )
+_BOOLEAN = {"kind": "scalar", "base": "Boolean", "array": False}
+# Mirrors ACCOUNT_MEMBER_TYPES (frontend/src/hmi/store/hmiStore.ts).
+_ACCOUNT_MEMBERS = {
+    **{name: _STRING for name in ("label", "value", "groups", "groupIds", "language")},
+    **{name: _BOOLEAN for name in ("lockedDelete", "lockedPassword", "lockedGroups")},
+}
+_ACCOUNT_RECORD: tuple[dict, dict[str, dict]] = (
+    {"kind": "struct", "name": "Struct", "array": False, "fields": list(_ACCOUNT_MEMBERS)},
+    _ACCOUNT_MEMBERS,
+)
+# What a Repeater copy over each `$user` list field reads.
+_USER_LIST_RECORDS = {
+    "userList": _LABEL_VALUE_RECORD,
+    "groups": _LABEL_VALUE_RECORD,
+    "accounts": _ACCOUNT_RECORD,
+}
 
 
 def _repeat_bound_asset(ref: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> bool:
@@ -1673,7 +1688,7 @@ def _repeat_list_types(ctx: ValidationContext) -> tuple[dict | None, dict[str, d
     if isinstance(items, dict) and "$static" in items:
         items = items["$static"]
     elif isinstance(items, dict) and isinstance(items.get("$user"), dict):
-        return _LABEL_VALUE_RECORD if items["$user"].get("field") in _USER_LIST_FIELDS else None
+        return _USER_LIST_RECORDS.get(items["$user"].get("field"))
     if not isinstance(items, list):
         return None
     # An empty list has no values to type it by: it offers the `{ label,
@@ -2143,6 +2158,28 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "onSettled": "actions",
     },
     "logoutUser": {"onSuccess": "actions", "onFailed": "actions", "onSettled": "actions"},
+    "userUpdate": {
+        "username": "String",
+        "groups": "String",
+        "password": "String",
+        "language": "String",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "userDelete": {
+        "username": "String",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "userChangePassword": {
+        "currentPassword": "String",
+        "newPassword": "String",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
     "recipeLoad": {
         "datasetId": "String",
         "verify": "Boolean",

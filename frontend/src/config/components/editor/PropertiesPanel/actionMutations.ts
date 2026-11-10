@@ -65,6 +65,22 @@ export function makeDefaultAction(
       };
     case 'logoutUser':
       return { type: 'logoutUser' };
+    case 'userUpdate':
+      return {
+        type: 'userUpdate',
+        username: { $static: '' },
+        groups: { $static: '' },
+        password: { $static: '' },
+        language: { $static: '' },
+      };
+    case 'userDelete':
+      return { type: 'userDelete', username: { $static: '' } };
+    case 'userChangePassword':
+      return {
+        type: 'userChangePassword',
+        currentPassword: { $static: '' },
+        newPassword: { $static: '' },
+      };
     case 'acknowledgeAllAlarms':
       return { type: 'acknowledgeAllAlarms' };
     case 'reloadHmi':

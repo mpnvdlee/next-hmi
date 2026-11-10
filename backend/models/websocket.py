@@ -130,6 +130,10 @@ class UserIdentityMessage(TypedDict, total=False):
     requestId: str
     # Present while this identity is a resumable login (see request_identity).
     sessionToken: str
+    # The account's own language code; absent when it has none.
+    language: str
+    # Every account with its groups — only to a user-admin identity.
+    accounts: list[dict[str, Any]]
 
 
 class AuthErrorMessage(TypedDict, total=False):
@@ -170,6 +174,8 @@ def build_user_identity(
     group_labels: dict[str, str],
     request_id: str | None = None,
     session_token: str | None = None,
+    language: str = "",
+    accounts: list[dict[str, Any]] | None = None,
 ) -> UserIdentityMessage:
     payload: UserIdentityMessage = {
         "type": "user_identity",
@@ -182,6 +188,10 @@ def build_user_identity(
         payload["requestId"] = request_id
     if session_token:
         payload["sessionToken"] = session_token
+    if language:
+        payload["language"] = language
+    if accounts is not None:
+        payload["accounts"] = accounts
     return payload
 
 

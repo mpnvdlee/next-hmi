@@ -61,8 +61,11 @@ Both open actions carry the presentation fields:
 |---|---|
 | **Login User** | Signs this runtime in with a **Username** and **Password** — both properties, so they come from wherever the operator typed them. |
 | **Logout User** | Drops back to the auto-login user. |
+| **Update User** | Adds an account when the **Username** is new, otherwise changes it: **Groups** (comma-separated group ids), a new **Password**, **Language**. An empty field leaves that part as it is. Only for a user admin. |
+| **Delete User** | Removes the account named by **Username**. Only for a user admin; your own account and a locked one are refused. |
+| **Change Own Password** | Sets the signed-in user's password from **New password**, after checking **Current password**. |
 
-See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the sign-in screen around them.
+See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the sign-in screen around them, and [Manage users from the runtime](users.md#manage-users-from-the-runtime) for a user-management screen.
 
 ### Interface
 
@@ -84,7 +87,7 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 
 ## Async actions and `$result`
 
-Seven actions cross the wire and therefore *may fail*: **Write Data Variable**, **Toggle Boolean Variable**, **Edit Value**, **Recipe: Load**, **Recipe: Save**, **Login User**, **Logout User**. Each carries three optional handler lists:
+Ten actions cross the wire and therefore *may fail*: **Write Data Variable**, **Toggle Boolean Variable**, **Edit Value**, **Recipe: Load**, **Recipe: Save**, **Login User**, **Logout User**, **Update User**, **Delete User**, **Change Own Password**. Each carries three optional handler lists:
 
 - **onSuccess** — the server acknowledged.
 - **onFailed** — the server refused, or the request timed out (10 seconds) or the connection dropped.
@@ -99,10 +102,12 @@ Inside those handlers the **`$result`** source reads fields of what came back. W
 | **Edit Value** | `value` (what was entered), `previous` (what the tag held when the numpad opened), `datasource`, `path` | the same, plus `reason` |
 | **Recipe: Load** | `result`, `datasetId`, `written`, `total`, `verified`, `failures` | `reason` |
 | **Recipe: Save** | `datasetId` | `reason` |
+| **Update User** | `username`, `created` | `reason` |
+| **Delete User** · **Change Own Password** | `username` | `reason` |
 
 `onSettled` sees the union of both. The `reason` vocabulary is fixed, so you can branch on it with `$compare`:
 
-`invalid_credentials` · `rate_limited` · `bad_request` · `bad_path` · `bad_field` · `invalid_value` · `opcua_unreachable` · `write_failed` · `array_index_out_of_bounds` · `array_state_unavailable` · `value_unavailable` · `read_only` · `disabled` · `timeout` · `disconnected`
+`invalid_credentials` · `rate_limited` · `bad_request` · `bad_path` · `bad_field` · `invalid_value` · `opcua_unreachable` · `write_failed` · `array_index_out_of_bounds` · `array_state_unavailable` · `value_unavailable` · `read_only` · `disabled` · `forbidden` · `locked` · `invalid` · `not_found` · `wrong_password` · `unavailable` · `timeout` · `disconnected`
 
 A worked pattern — a Start button that confirms, writes, and tells the operator either way:
 
