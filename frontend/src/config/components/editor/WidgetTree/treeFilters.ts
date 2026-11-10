@@ -8,7 +8,13 @@ import type {
 } from '@shared/types/config';
 import { SHELL_REGION_IDS, shellSectionIdForRegion } from '@shared/types/config';
 import { isContainerHostType, resolveWidgetMetadata } from '@hmi/registry/widgetRegistry';
-import { allPageRootNodes, isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  isPageGroup,
+  pageHasExplicitSections,
+  pageSectionGroups,
+  resolvePageTitle,
+} from '@shared/utils/pageTree';
 import { mapPageSections } from '@shared/utils/pageContent';
 import {
   EDITOR_NODE_IDS,
@@ -150,19 +156,21 @@ export function collectContainerIds(components: WidgetConfig[]): string[] {
 
 function collectPageCollapsibleIds(page: PageConfig): string[] {
   const ids: string[] = [page.id];
-  for (const widgets of Object.values(page.sections)) {
-    for (const widget of widgets) {
-      if (isContainerHostType(widget.type)) {
-        ids.push(widget.id);
-        if (widget.children?.length) ids.push(...collectContainerIds(widget.children));
-      }
-    }
+  if (pageHasExplicitSections(page)) {
+    for (const { id } of pageSectionGroups(page)) ids.push(makePageSectionId(page.id, id));
   }
+  for (const widgets of Object.values(page.sections)) ids.push(...collectContainerIds(widgets));
   return ids;
 }
 
 function collectPageGroupCollapsibleIds(group: PageGroupConfig): string[] {
-  const ids: string[] = [group.id];
+  const ids: string[] = [
+    group.id,
+    makePageGroupAreaId(group.id, 'header'),
+    makePageGroupAreaId(group.id, 'footer'),
+    ...collectContainerIds(group.header ?? []),
+    ...collectContainerIds(group.footer ?? []),
+  ];
   for (const child of group.children) {
     if (isPageGroup(child)) ids.push(...collectPageGroupCollapsibleIds(child));
     else ids.push(...collectPageCollapsibleIds(child));
