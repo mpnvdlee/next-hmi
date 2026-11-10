@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import contextlib
+import json
 import os
 import signal
 import subprocess
@@ -49,9 +50,13 @@ BACKEND_PORT = 8001
 # Make `backend/` importable so we can share the banner module with launcher.py.
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
-from core import net, runtime_home, tls_settings  # noqa: E402
-from core.banner import BannerFields, print_banner  # noqa: E402
-from core.version import app_version  # noqa: E402
+PIP_INSTALL_HINT = "pip install -r backend/requirements.txt (with .venv active)"
+try:
+    from core import net, runtime_home, tls_settings
+    from core.banner import BannerFields, print_banner
+    from core.version import app_version
+except ImportError as exc:
+    sys.exit(f"start-dev.py: {exc}. Install the backend dependencies: {PIP_INSTALL_HINT}")
 
 
 def pids_on_port(port: int) -> list[int]:
@@ -385,10 +390,85 @@ def _warn_if_dist_stale() -> None:
         )
 
 
+# Runs inside the backend's interpreter, which may not be the one running this
+# script. pip vendors `packaging`, so the check works on a bare venv too.
+_PYTHON_DEPS_CHECK = """
+import sys
+from importlib.metadata import PackageNotFoundError, version
+try:
+    from packaging.requirements import Requirement
+except ImportError:
+    from pip._vendor.packaging.requirements import Requirement
+problems = []
+for line in open(sys.argv[1], encoding="utf-8"):
+    line = line.split("#")[0].strip()
+    if not line or line.startswith("-"):
+        continue
+    req = Requirement(line)
+    try:
+        installed = version(req.name)
+    except PackageNotFoundError:
+        problems.append(f"{req.name} is missing")
+        continue
+    if not req.specifier.contains(installed, prereleases=True):
+        problems.append(f"{req.name} {installed} does not match {req.specifier}")
+print("\\n".join(problems))
+"""
+
+
+def _python_dependency_problems(python_exe: str) -> list[str]:
+    result = subprocess.run(
+        [python_exe, "-c", _PYTHON_DEPS_CHECK, str(BACKEND_DIR / "requirements.txt")],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return [result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "check failed"]
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def _node_dependency_problems() -> list[str]:
+    # The lockfile's mtime changes on every branch switch, so compare the
+    # versions npm installed with the ones package-lock.json pins.
+    lock_path = FRONTEND_DIR / "package-lock.json"
+    if not (FRONTEND_DIR / "node_modules").is_dir():
+        return ["frontend/node_modules is missing"]
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    root = lock["packages"][""]
+    problems = []
+    for name in {**root.get("dependencies", {}), **root.get("devDependencies", {})}:
+        pinned = lock["packages"].get(f"node_modules/{name}", {}).get("version")
+        manifest = FRONTEND_DIR / "node_modules" / name / "package.json"
+        if not manifest.is_file():
+            problems.append(f"{name} is missing")
+            continue
+        installed = json.loads(manifest.read_text(encoding="utf-8")).get("version")
+        if pinned and installed != pinned:
+            problems.append(f"{name} {installed} does not match the lockfile's {pinned}")
+    return problems
+
+
+def _check_dependencies(python_exe: str) -> None:
+    """Stop with the install command when a dependency is missing or outdated,
+    rather than let a child crash on an import or run against a stale tree."""
+    sections = [
+        (_python_dependency_problems(python_exe), PIP_INSTALL_HINT),
+        (_node_dependency_problems(), "cd frontend && npm install"),
+    ]
+    report = [
+        "\n".join([*(f"  - {p}" for p in problems), f"  fix: {hint}"])
+        for problems, hint in sections
+        if problems
+    ]
+    if report:
+        sys.exit("start-dev.py: dependencies are not up to date.\n" + "\n".join(report))
+
+
 def start(*, quiet: bool, edition: str) -> None:
     if edition == "ee":
         _check_enterprise()
     python_exe = str(VENV_PYTHON) if VENV_PYTHON.exists() else sys.executable
+    _check_dependencies(python_exe)
     tls = _resolve_tls()
 
     frontend_proc = _spawn_frontend(quiet=quiet, tls=tls, edition=edition)
