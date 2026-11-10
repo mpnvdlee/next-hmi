@@ -6,17 +6,19 @@ server, so all three resolve, contain and generate certificates the same way.
 """
 
 import datetime
+import hashlib
 import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from asyncua import Client, ua
-from asyncua.crypto import security_policies
+from asyncua.crypto import security_policies, uacrypto
 from asyncua.crypto.uacrypto import CertProperties
 from core.cert_info import log_expiry_warning
 from core.exceptions import DatasourceValidationError
 from core.storage import active_certs_dir, active_project_root, write_bytes_atomic
+from cryptography.hazmat.primitives.serialization import Encoding
 
 logger = logging.getLogger(__name__)
 
@@ -216,16 +218,81 @@ def _resolve_security_settings(config: dict) -> SecuritySettings | None:
     )
 
 
-async def apply_client_security(client: Client, config: dict) -> bool:
+@dataclass(frozen=True)
+class ServerCertificate:
+    """The certificate a secured endpoint presented, judged against the pin.
+
+    ``status`` is ``"trusted"`` when it is the datasource's
+    ``server_certificate``, ``"changed"`` when a different one is pinned, and
+    ``"untrusted"`` when none is.
+    """
+
+    der: bytes
+    status: str
+
+    @property
+    def fingerprint(self) -> str:
+        return hashlib.sha256(self.der).hexdigest()
+
+
+class ServerCertificateNotTrusted(RuntimeError):
+    """A connect stopped before its session: the server is not the trusted one."""
+
+    def __init__(self, certificate: ServerCertificate) -> None:
+        self.certificate = certificate
+        super().__init__(
+            "The server certificate changed since it was trusted. The connection stays "
+            "stopped until you review the new certificate in the datasource properties."
+            if certificate.status == "changed"
+            else "The server certificate is not trusted yet. The username and password "
+            "are sent only after you trust it in the datasource properties."
+        )
+
+
+async def _presented_certificate(
+    client: Client, policy_uri: str, mode: ua.MessageSecurityMode,
+) -> bytes:
+    """The leaf certificate the endpoint advertises, as DER.
+
+    Fetched over an unsecured GetEndpoints, the only way to learn it, so
+    nothing about it is authentic until it is compared with the pin.
+    """
+    endpoints = await client.connect_and_get_server_endpoints()
+    endpoint = Client.find_endpoint(endpoints, mode, policy_uri)
+    certificate = uacrypto.x509_from_der(endpoint.ServerCertificate)
+    if certificate is None:
+        raise RuntimeError("The server advertises no certificate for this secured endpoint")
+    return certificate.public_bytes(Encoding.DER)
+
+
+async def _pinned_certificate(path: str) -> bytes | None:
+    # Missing reads as never pinned: an exported project leaves certs/ behind,
+    # and the trust card is how the receiver pins the server again.
+    if not path or not Path(path).is_file():
+        return None
+    certificate = await uacrypto.load_certificate(path, _pem_or_der(path))
+    return certificate.public_bytes(Encoding.DER)
+
+
+async def apply_client_security(client: Client, config: dict) -> ServerCertificate | None:
     """Put a client into secure-channel mode from datasource settings.
 
-    Returns ``False`` when the datasource runs unsecured. Bypasses asyncua's
+    Returns ``None`` when the datasource runs unsecured, else the server's
+    certificate and whether it is the trusted one. Bypasses asyncua's
     ``set_security_string`` so each file's format comes from its bytes rather
     than its extension — see :func:`_pem_or_der`.
+
+    Raises :class:`ServerCertificateNotTrusted`, before any session exists,
+    when the certificate differs from the pinned one, or when none is pinned
+    and the datasource signs in with a username: that password must only ever
+    be encrypted to a server an engineer confirmed. An anonymous session to an
+    unpinned server still connects — it carries no secret, and refusing it
+    would take down every anonymous secured connection on update for no gain
+    over the NoSecurity a datasource may use anyway.
     """
     settings = _resolve_security_settings(config)
     if settings is None:
-        return False
+        return None
 
     log_expiry_warning(Path(settings.certificate), "opcua client")
     if settings.server_certificate:
@@ -233,6 +300,16 @@ async def apply_client_security(client: Client, config: dict) -> bool:
 
     policy_class = getattr(security_policies, f"SecurityPolicy{settings.policy}")
     mode = getattr(ua.MessageSecurityMode, settings.mode)
+
+    presented = await _presented_certificate(client, policy_class.URI, mode)
+    pinned = await _pinned_certificate(settings.server_certificate)
+    if pinned is None:
+        status = "untrusted"
+    else:
+        status = "trusted" if presented == pinned else "changed"
+    server_certificate = ServerCertificate(presented, status)
+    if status == "changed" or (status == "untrusted" and config.get("username")):
+        raise ServerCertificateNotTrusted(server_certificate)
 
     await client.set_security(
         policy_class,
@@ -242,14 +319,10 @@ async def apply_client_security(client: Client, config: dict) -> bool:
             extension=_pem_or_der(settings.private_key),
             password=settings.private_key_password or None,
         ),
-        server_certificate=(
-            CertProperties(
-                settings.server_certificate,
-                extension=_pem_or_der(settings.server_certificate),
-            )
-            if settings.server_certificate
-            else None
-        ),
+        # The certificate just judged, not a fresh fetch: asyncua encrypts the
+        # OpenSecureChannel to it and refuses a CreateSession answered with any
+        # other, so a server swapped in after the check never sees credentials.
+        server_certificate=presented,
         mode=mode,
     )
-    return True
+    return server_certificate

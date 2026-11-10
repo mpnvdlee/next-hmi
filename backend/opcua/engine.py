@@ -17,14 +17,18 @@ from asyncua.common.subscription import DataChangeEvent, StatusChangeEvent
 from core import telemetry
 from core.number_utils import get_config_float
 from core.value_types import is_array_shape, to_simple_type
-from models.datasource import build_var_key, is_present_on_server, is_subscribable
+from models.datasource import build_var_key, is_subscribable
 
 from .browse import SERVER_OBJECT_NODE_ID, AddressSpaceBrowser, BrowseProgressSink
 from .compat import apply_asyncua_watchdog_log_patch
 from .discovery import _short_probe_error
 from .limits import OperationLimits, read_operation_limits
 from .routing import _collect_struct_leaf_paths, _struct_field_routes
-from .security import apply_client_security
+from .security import (
+    ServerCertificate,
+    ServerCertificateNotTrusted,
+    apply_client_security,
+)
 from .values import normalize_value
 
 apply_asyncua_watchdog_log_patch()
@@ -120,6 +124,9 @@ class DatasourceOpcuaEngine:
         # against a torn-down engine after shutdown.
         self._status_close_task: asyncio.Task | None = None
         self._config: dict = {}
+        # What a secured endpoint presented on the last check, kept through a
+        # refused connect so the editor can show it for trusting.
+        self._server_certificate: ServerCertificate | None = None
         # Server OperationLimits, read on connect. Owned here rather than by
         # the browser: reads and monitored-item creation are batched too.
         self._operation_limits = OperationLimits()
@@ -175,6 +182,11 @@ class DatasourceOpcuaEngine:
     def error(self) -> str | None:
         """Reason the last connect attempt failed, or ``None`` while healthy."""
         return self._error
+
+    @property
+    def server_certificate(self) -> ServerCertificate | None:
+        """The secured endpoint's certificate as last checked, or ``None``."""
+        return self._server_certificate
 
     @property
     def operation_limits(self) -> OperationLimits:
@@ -504,7 +516,11 @@ class DatasourceOpcuaEngine:
         request_timeout_s = get_config_float(self._config, "request_timeout_s", 30.0, minimum=1.0, maximum=300.0)
         client = Client(url, timeout=request_timeout_s, watchdog_intervall=request_timeout_s)
 
-        await apply_client_security(client, self._config)
+        try:
+            self._server_certificate = await apply_client_security(client, self._config)
+        except ServerCertificateNotTrusted as exc:
+            self._server_certificate = exc.certificate
+            raise
 
         if username:
             client.set_user(username)
@@ -1107,15 +1123,15 @@ class DatasourceOpcuaEngine:
         to_demote = actual_priority_paths - desired_leaf_paths
 
         # ── Batch promote: bg → priority ──────────────────────────────────────
-        # Visible page bindings should be promotable even when they are not part of
-        # the datasource's background-enabled set. Stale vars (present_on_server=False)
-        # are skipped: subscribing to them only generates "Subscribe rejected" warnings.
+        # Enabled variables only: the keys come from any client's set_context, a
+        # folder key expands to every leaf under it, and a promoted value is
+        # broadcast to every client. Stale vars (present_on_server=False) are
+        # skipped too: subscribing to them only generates "Subscribe rejected"
+        # warnings.
         promote_items: list[tuple[str, Any]] = []   # (path, node)
         for path in to_promote:
             entry = ds_entry.registry.get(path)
-            if not entry:
-                continue
-            if not is_present_on_server(entry):
+            if not entry or not is_subscribable(entry):
                 continue
             node_id = entry.get("node_id", "")
             if not node_id:

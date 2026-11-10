@@ -10,28 +10,64 @@ network without host networking, mDNS blocked by the LAN), ``start()`` logs a
 warning and the runtime keeps working — manual peer entries still resolve.
 
 Design notes:
-- A per-process ``runtimeId`` UUID is encoded into the TXT record so two
-  runtimes on the same host (different ports) don't shadow each other.
+- A ``runtimeId`` UUID is encoded into the TXT record so two runtimes on the
+  same host (different ports) don't shadow each other. It is minted once per
+  runtime home (``.peer-identity.json``) and kept across restarts, because a
+  peer pins this device's certificate — and remembers its pairing — by it.
+  Like everything else in a TXT record it is only a claim; the pinned
+  certificate is what proves it (see ``core.peer_trust``).
 - The browser filters out our own service by ``runtimeId``, not by name.
 - Resolution timing: zeroconf's ``add_service`` callback fires before the
   service's A record has arrived. We re-resolve via ``AsyncServiceInfo`` in
   a task so the public ``discovered()`` list only contains usable entries.
+- Anything on the LAN can announce services, so what an announcement costs
+  is bounded: at most ``_MAX_NAMES`` names are tracked (resolving or
+  resolved, the unresolved and then the longest-seen evicted first), at most
+  ``_MAX_CONCURRENT_RESOLVES`` resolve at once, and a name that fails to
+  resolve is dropped and not tried again until its backoff has passed.
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import socket
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from core import net
+from core import net, runtime_home
 from core.manifest import PeerScheme
+from core.storage import write_text_atomic
+from core.time_utils import iso_now
 
 logger = logging.getLogger(__name__)
 
 SERVICE_TYPE = "_nexthmi._tcp.local."
+_IDENTITY_FILENAME = ".peer-identity.json"
+_MAX_NAMES = 256
+_MAX_CONCURRENT_RESOLVES = 4
+_RESOLVE_TIMEOUT_MS = 3000
+_RETRY_AFTER_FAILURE_SECONDS = 5.0
+_MAX_RETRY_SECONDS = 300.0
+
+
+def _persistent_runtime_id() -> str:
+    """This runtime home's ``runtimeId``, minted on first use."""
+    path = runtime_home.runtime_home_path() / _IDENTITY_FILENAME
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8")).get("runtimeId")
+    except (FileNotFoundError, OSError, ValueError, AttributeError):
+        stored = None
+    if isinstance(stored, str) and stored:
+        return stored
+    minted = uuid.uuid4().hex
+    write_text_atomic(
+        path,
+        json.dumps({"version": 1, "runtimeId": minted, "createdAt": iso_now()}, indent=2),
+    )
+    return minted
 
 # Quietly tolerate a missing zeroconf install — peer discovery becomes a no-op
 # but the rest of the runtime keeps working. Importing eagerly so failures land
@@ -88,12 +124,18 @@ class PeerDiscovery:
         self._aiozc: Any = None
         self._browser: Any = None
         self._service_info: Any = None
-        # Peers keyed by their advertised runtime_id so two runtimes on the
-        # same host (different ports) don't collide.
+        # Keyed by service name, which carries the runtimeId prefix so two
+        # runtimes on the same host (different ports) don't collide. Oldest
+        # first: an update moves a peer to the end.
         self._peers: dict[str, DiscoveredPeer] = {}
-        self._resolve_tasks: set[asyncio.Task] = set()
-        self._lock = asyncio.Lock()
+        self._resolving: dict[str, asyncio.Task] = {}
+        self._resolve_slots = asyncio.Semaphore(_MAX_CONCURRENT_RESOLVES)
+        # Name -> (monotonic time before which it is not resolved again, delay).
+        self._backoff: dict[str, tuple[float, float]] = {}
+        # Replaced by the runtime home's persistent id in ``start()``; a
+        # process that never starts discovery has nothing to be pinned by.
         self._runtime_id = uuid.uuid4().hex
+        self._hostname: str | None = None
         self._port = 8000
         self._started = False
 
@@ -101,10 +143,22 @@ class PeerDiscovery:
     def runtime_id(self) -> str:
         return self._runtime_id
 
+    @property
+    def hostname(self) -> str:
+        """The name this runtime advertises — the same one its TXT record carries."""
+        return self._hostname or _safe_hostname()
+
     async def start(self, *, port: int = 8000, host_label: str | None = None) -> None:
         """Begin advertising + browsing. Idempotent; second call is a no-op."""
         if self._started:
             return
+        # Before the zeroconf checks: the id is also served by the peer info
+        # endpoint, which works without mDNS.
+        try:
+            self._runtime_id = _persistent_runtime_id()
+        except OSError as exc:
+            logger.warning("peer_discovery: could not persist runtimeId: %s", exc)
+        self._hostname = host_label or _safe_hostname()
         if not _ZEROCONF_AVAILABLE:
             logger.warning("peer_discovery: zeroconf not installed — discovery disabled")
             return
@@ -116,7 +170,7 @@ class PeerDiscovery:
             self._aiozc = None
             return
 
-        hostname = host_label or _safe_hostname()
+        hostname = self._hostname
         service_name = f"{_slug(hostname)}-{self._runtime_id[:6]}.{SERVICE_TYPE}"
         # The same resolver the startup banner prints from, binding included:
         # advertising anything else publishes an address this runtime does not
@@ -181,6 +235,10 @@ class PeerDiscovery:
                 logger.debug("peer_discovery: close error: %s", exc)
         self._aiozc = None
         self._service_info = None
+        for task in self._resolving.values():
+            task.cancel()
+        self._resolving.clear()
+        self._backoff.clear()
         self._peers.clear()
 
     def discovered(self) -> list[dict[str, Any]]:
@@ -209,25 +267,59 @@ class PeerDiscovery:
         """Bridge sync zeroconf callback into the async resolution path."""
         if state_change == ServiceStateChange.Removed:
             self._peers.pop(name, None)
+            task = self._resolving.pop(name, None)
+            if task is not None:
+                task.cancel()
             return
         if state_change not in (ServiceStateChange.Added, ServiceStateChange.Updated):
             return
+        if name in self._resolving:
+            return
+        retry_at, _delay = self._backoff.get(name, (0.0, 0.0))
+        if time.monotonic() < retry_at:
+            return
+        self._make_room(name)
         task = asyncio.ensure_future(self._resolve_and_store(zeroconf, service_type, name))
-        self._resolve_tasks.add(task)
-        task.add_done_callback(self._resolve_tasks.discard)
+        self._resolving[name] = task
+        task.add_done_callback(lambda done: self._resolve_finished(name, done))
+
+    def _make_room(self, name: str) -> None:
+        """Keep the names tracked under ``_MAX_NAMES``, counting the one arriving."""
+        while len(self._resolving) + len(self._peers) - (name in self._peers) >= _MAX_NAMES:
+            if self._resolving:
+                oldest = next(iter(self._resolving))
+                self._resolving.pop(oldest).cancel()
+            else:
+                del self._peers[next(iter(self._peers))]
+
+    def _resolve_finished(self, name: str, task: asyncio.Task) -> None:
+        if self._resolving.get(name) is task:
+            del self._resolving[name]
+
+    def _resolve_failed(self, name: str) -> None:
+        self._peers.pop(name, None)
+        _retry_at, delay = self._backoff.pop(name, (0.0, 0.0))
+        delay = min(max(delay * 2, _RETRY_AFTER_FAILURE_SECONDS), _MAX_RETRY_SECONDS)
+        self._backoff[name] = (time.monotonic() + delay, delay)
+        while len(self._backoff) > _MAX_NAMES:
+            del self._backoff[next(iter(self._backoff))]
 
     async def _resolve_and_store(
         self, zeroconf: Any, service_type: str, name: str,
     ) -> None:
         info = AsyncServiceInfo(service_type, name)
-        try:
-            await info.async_request(zeroconf, 3000)
-        except Exception as exc:  # pragma: no cover
-            logger.debug("peer_discovery: resolve %s failed: %s", name, exc)
-            return
-        addresses = info.parsed_addresses() if info else []
+        async with self._resolve_slots:
+            try:
+                await info.async_request(zeroconf, _RESOLVE_TIMEOUT_MS)
+            except Exception as exc:
+                logger.debug("peer_discovery: resolve %s failed: %s", name, exc)
+                self._resolve_failed(name)
+                return
+        addresses = info.parsed_addresses()
         if not addresses:
+            self._resolve_failed(name)
             return
+        self._backoff.pop(name, None)
         props = info.properties or {}
         runtime_id_raw = props.get(b"runtimeId") if props else None
         runtime_id = runtime_id_raw.decode() if isinstance(runtime_id_raw, bytes) else ""
@@ -237,15 +329,15 @@ class PeerDiscovery:
         )
         scheme_raw = props.get(b"scheme") if props else None
         scheme = scheme_raw.decode() if isinstance(scheme_raw, bytes) else "http"
-        async with self._lock:
-            self._peers[name] = DiscoveredPeer(
-                name=hostname,
-                host=addresses[0],
-                port=int(info.port or 0),
-                runtime_id=runtime_id,
-                scheme="https" if scheme == "https" else "http",
-                addresses=addresses,
-            )
+        self._peers.pop(name, None)
+        self._peers[name] = DiscoveredPeer(
+            name=hostname,
+            host=addresses[0],
+            port=int(info.port or 0),
+            runtime_id=runtime_id,
+            scheme="https" if scheme == "https" else "http",
+            addresses=addresses,
+        )
 
 
 peer_discovery = PeerDiscovery()

@@ -38,8 +38,7 @@ async def query_history(
     from services.historian_manager import historian_manager
 
     try:
-        series = await asyncio.to_thread(
-            historian_manager.query,
+        series = await historian_manager.query_async(
             variables=variables.split(","),
             start=start,
             end=end,

@@ -105,6 +105,23 @@ def test_unknown_project_is_rejected(tools) -> None:
     assert "not found" in str(excinfo.value).lower()
 
 
+def test_projects_get_unknown_id_keeps_its_message(tools) -> None:
+    # mcp 2.2+ answers any exception but ToolError with a bare "Error executing
+    # tool <name>"; the agent needs to read why the call was refused.
+    with pytest.raises(ToolError, match="Project 'NOPE' not found"):
+        _run(tools.call_tool("projects_get", {"project": "NOPE"}))
+
+
+def test_projects_list_bad_cursor_keeps_its_message(tools) -> None:
+    with pytest.raises(ToolError, match="malformed cursor"):
+        _run(tools.call_tool("projects_list", {"cursor": "%%%"}))
+
+
+def test_scoped_validation_error_keeps_its_message(tools) -> None:
+    with pytest.raises(ToolError, match="Invalid page id"):
+        _run(tools.call_tool("pages_get", {"project": "ON", "page_id": "../config"}))
+
+
 def test_write_refused_when_mcp_disabled(tools, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
         _run(tools.call_tool("pages_create", {"project": "OFF", "title": "X"}))

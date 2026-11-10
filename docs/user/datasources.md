@@ -11,7 +11,7 @@ The connection wizard walks three steps — **Connection**, **Sign-in**, **Sync*
 1. **Enter the server address** — On the **Connection** step, type the endpoint — `opc.tcp://192.168.1.10:4840` (or just `host:port`). Give the datasource a **name** like `LinePLC`; that name becomes the prefix in every binding (`LinePLC:…`).
 2. **Discover endpoints (optional)** — Click **Discover endpoints instead** and then **Discover**. NEXT HMI queries the server and lists each endpoint with its **security policy**, **mode**, and accepted **user tokens**. Pick one — the most secure is preselected — and its security settings fill in for you.
 3. **Choose how to sign in** — On **Sign-in**, pick **Anonymous** or **Username & password**. The wizard offers only what the chosen endpoint actually accepts.
-4. **Test, then create** — On **Sync**, hit **Test connection** — a green *Connected — <server name>* confirms it. Create the datasource; it starts connecting immediately, and you can jump straight to **Browse variables**.
+4. **Test, then create** — On **Sync**, hit **Test connection** — a green *Connected — <server name>* confirms it. Create the datasource; it starts connecting immediately, and you can jump straight to **Browse variables**. On a secured endpoint with a username, the test stops at *The server certificate is not trusted yet* unless you uploaded the server certificate: create the datasource, then [trust the certificate](#trust-the-server-certificate) in its properties.
 
 > [!NOTE]
 > Under the hood an `asyncua` client pool handles the session.
@@ -60,6 +60,45 @@ failing.
 > overwrites the pair in place rather than accumulating files — so an expiring
 > certificate is one click, followed by re-trusting it on the server.
 
+## Trust the server certificate
+
+Trust runs both ways: the PLC checks your certificate, and NEXT HMI checks the
+PLC's. When a secured datasource connects and no server certificate is trusted
+yet, the properties panel shows a **Server certificate** card with what the
+server presented — its **Subject**, **Issuer**, **Valid until** date and
+**SHA-256** fingerprint — and the datasource carries a **Not trusted** chip in
+the tree.
+
+1. **Compare the fingerprint** with the server certificate in the PLC's own
+   OPC UA settings. Every character has to match.
+2. **Click Trust certificate.** NEXT HMI stores exactly that certificate as
+   `certs/<datasource>-server.der`, sets it as the **Server Certificate**, and
+   reconnects. **Not now** folds the card to one line with a **Review
+   certificate** button, and changes nothing.
+
+**The username and password are sent only after you trust the certificate.**
+Until then a datasource that signs in with a username does not connect, and
+the card says the connection waits for you. A machine on the network posing as
+the PLC never gets the password. An anonymous secured connection has no
+password to protect, so it connects while untrusted — but until you trust the
+certificate it cannot tell the PLC from an impostor.
+
+**When the certificate changes, the connection stops**, anonymous or not, and
+the card turns red: *The server certificate changed since you trusted it*. A
+PLC that was reset, re-commissioned or given a renewed certificate does this,
+and so does someone intercepting the connection. Check the new fingerprint
+against the PLC before you trust it.
+
+Uploading the server's certificate as the **Server Certificate** does the same
+as trusting it here.
+
+> [!NOTE]
+> **After an update from an earlier version**, a secured datasource that signs
+> in with a username and has no **Server Certificate** set stops at *not
+> trusted yet* until you trust its certificate — one click per datasource. An
+> imported project arrives without its `certs/` folder, so its secured
+> datasources ask once too.
+
 ## Connect, disconnect, and see why it failed
 
 ![An OPC-UA datasource's properties panel: the header's green dot and Connected state, the Control section's Disconnect button, and the security settings with the Generate certificate / Certificate info pair.](images/datasource-connection.png)
@@ -72,16 +111,28 @@ the change is in flight.
 
 The panel header carries the state beside the datasource name — a green dot and
 **Connected**, or **Disconnected**. When a connect attempt fails, the reason
-from the server is printed underneath it: a refused certificate, a bad
-username, an unreachable host. That message is the first place to look when a
-screen shows no data; [Diagnostics](diagnostics.md) covers the rest.
+from the server is printed underneath it: a refused client certificate, a bad
+username, an unreachable host. A server certificate still to be trusted is the
+exception: the **Server certificate** card says so instead (see
+[above](#trust-the-server-certificate)). That message is the first place to
+look when a screen shows no data; [Diagnostics](diagnostics.md) covers the
+rest.
 
 > [!NOTE]
 > **The local test server is started the same way.** A test-server datasource
-> shows **Running** / **Stopped** instead, with its own start and stop buttons.
+> shows **Running** / **Stopped** instead, with its own start and stop buttons,
+> and **Listening on** with the address a client connects to while it runs.
 > Its **Security Endpoints** checkboxes decide which secured policies it
 > advertises — NoSecurity is always available — which is how you exercise the
 > discovery and certificate flow above without a real PLC on the bench.
+>
+> It listens on this computer only (`127.0.0.1`). Turn **Reachable from the
+> network** on to reach it from another machine — a PLC tool, a second panel —
+> and every device on the network can connect and change its writable values,
+> so use that only on an isolated network. **Listening on** then names the
+> address you opened the editor at, or `<this device's address>` when that
+> was `localhost`. Sign-in is anonymous only, and a client writes exactly what
+> each variable's access level allows.
 
 ## Design offline with a static datasource
 
@@ -109,7 +160,7 @@ Open the datasource and browse. Each variable is recorded with its real OPC-UA *
 
 OPC-UA's many data types collapse to eight simple ones at the HMI boundary — `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time` and `Duration`: every `Int16/UInt32/…` becomes `Integer`, every `Float/Double` becomes `Float` — so a widget field never sees a wire type. A tag binds only to a field of its own simple type, except that an `Integer` tag also fills a `Float` field that only reads; see [Coercion, in short](properties.md#coercion-in-short).
 
-A browsed tag arrives disabled. Tick its enable checkbox before binding it: the variable picker lists only enabled tags, and refuses a disabled one even under **Show all**. Disable a tag that is already bound and the warnings pill reports it as *disabled in its datasource* until you enable it again or rebind the widget.
+A browsed tag arrives disabled. Tick its enable checkbox before binding it: the variable picker lists only enabled tags, and refuses a disabled one even under **Show all**. Disable a tag that is already bound and the warnings pill reports it as *disabled in its datasource* until you enable it again or rebind the widget. The HMI never reads or writes a disabled tag: it gets no value on a screen or in the **⚡ Live** column, and a write to it fails with `disabled`. Enable only what the screens need.
 
 **Browse PLC** starts at the server's *Objects* folder, or at the **Browse Root Node** set in the datasource's properties. From *Objects* it skips the server's own `Server` object — its diagnostics, capabilities and namespace table: hundreds of nodes and no PLC tags. To bind one of those, such as `ServerStatus/CurrentTime`, set **Browse Root Node** to `i=2253` (or to the node inside it you want) and browse again.
 

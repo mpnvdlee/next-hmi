@@ -13,7 +13,10 @@ from __future__ import annotations
 import asyncio
 import json
 
+import pytest
+import services.websocket_manager as websocket_manager_module
 from conftest import FakeDatasourceManager, FakeEngine, FakePool, FakeWebSocket
+from fastapi import WebSocketDisconnect
 from services.websocket_manager import _BOOT_ID, WebSocketManager
 
 
@@ -155,6 +158,30 @@ def test_broadcast_values_shares_one_frame_between_clients_on_the_same_page() ->
     assert manager._client_bytes["a"] == manager._client_bytes["b"] > 0
 
 
+def test_a_runtime_socket_over_the_cap_is_closed_try_again_later(monkeypatch) -> None:
+    """Each socket holds state and can resubscribe and read the PLC; with no
+    ceiling, any number of anonymous sockets could be opened at once."""
+    monkeypatch.setattr(websocket_manager_module, "_MAX_RUNTIME_CONNECTIONS", 2)
+    manager = WebSocketManager()
+
+    async def _run() -> None:
+        first = await manager.connect(FakeWebSocket())
+        await manager.connect(FakeWebSocket())
+        refused = FakeWebSocket()
+        with pytest.raises(WebSocketDisconnect):
+            await manager.connect(refused)
+        assert refused.closed == (1013, "Too many open connections to this project")
+        assert refused.messages == []
+        # The device admin's editor is never refused for the runtime's crowd.
+        await manager.connect(FakeWebSocket(), editor=True)
+        await manager.disconnect(first)
+        await manager.connect(FakeWebSocket())
+
+    asyncio.run(_run())
+
+    assert len(manager._connections) == 3
+
+
 # -- disconnect() ----------------------------------------------------------------
 
 
@@ -181,8 +208,8 @@ def test_disconnect_removes_client_and_demotes_priority_keys() -> None:
     assert "c1" not in manager._client_users
     assert "c1" not in manager._client_connected_at
     assert dm.cleared_clients == ["c1"]
-    # _apply_priority_keys("c1", set()) re-ran the priority union computation
-    # and pushed it (now empty, since dm._client_keys was reset) to the engine.
+    # The disconnect scheduled the priority union computation, which pushed
+    # it (now empty, since dm._client_keys was reset) to the engine.
     assert dm._client_keys == set()
     assert engine.priority_paths[-1] == set()
 

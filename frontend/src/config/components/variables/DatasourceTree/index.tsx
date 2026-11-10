@@ -226,6 +226,19 @@ export default function DatasourceTree({
               onSelect={() => onSelect(ds.name)}
               onContextMenu={(e) => childMenu.open(e, { name: ds.name })}
             >
+              {(ds.server_certificate_status === 'untrusted' ||
+                ds.server_certificate_status === 'changed') && (
+                <span
+                  className="cfg-badge cfg-badge--error"
+                  title={
+                    ds.server_certificate_status === 'changed'
+                      ? 'The server certificate changed since it was trusted'
+                      : 'The server certificate is not trusted yet'
+                  }
+                >
+                  Not trusted
+                </span>
+              )}
               <span
                 title={ds.error ?? undefined}
                 className={`cfg-status-dot cfg-ds-status-dot${

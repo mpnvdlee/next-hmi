@@ -9,9 +9,12 @@ API v1 (also in the manager) signs users in and out on a named panel through
 the ``panels`` hooks: the live connections are here, and so is the throttle the
 WebSocket ``login`` uses, which the password check must share.
 
-This router is only reachable on the child's ``127.0.0.1`` instance port. The
-manager reverse proxy refuses ``/runtime|editor/<id>/api/internal/*`` (see
-``manager.py``), so a browser holding a manager session can never drive it.
+This router is only reachable on the child's ``127.0.0.1`` instance port, and
+a supervisor-spawned child answers only requests carrying its instance secret
+(``core.instance_secret``). The manager reverse proxy refuses
+``/runtime|editor/<id>/api/internal/*`` in every encoding, and any dot segment
+that would collapse onto it on the way out (see ``manager.py``), so a browser
+holding a manager session can never drive it.
 """
 from __future__ import annotations
 
@@ -26,7 +29,7 @@ from core.storage import (
     load_json_or_default,
     read_json,
 )
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from models.alarm import AlarmConfig
 from pydantic import BaseModel, Field
 from services import users_manager
@@ -133,11 +136,15 @@ async def panels() -> dict[str, Any]:
 
 
 @router.post("/panels/login")
-async def panel_login(body: PanelLoginBody) -> dict[str, Any]:
+async def panel_login(body: PanelLoginBody, request: Request) -> dict[str, Any]:
     """Sign *username* in on every connection of the panel, as a WS ``login`` would."""
     _require_panel(body.panel)
-    # The WS login's own check: its throttle raises RateLimitError (429).
-    authenticated = await users_manager.authenticate(body.username, body.password)
+    # The WS login's own check: its throttle raises RateLimitError (429). The
+    # caller is always the manager's API v1, so every panel sign-in shares the
+    # loopback address's budget.
+    authenticated = await users_manager.authenticate(
+        body.username, body.password, request.client.host if request.client else None
+    )
     if authenticated is None:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     identity, doc = authenticated

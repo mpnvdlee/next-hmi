@@ -23,12 +23,24 @@ export const TAB_ID = randomUuid();
 class ApiError extends Error {
   readonly status: number;
   readonly code: string | null;
+  /** Seconds until a `429` lockout lifts, when the server says (`retryAfter`). */
+  readonly retryAfter: number | null;
+  /** The caller's address as the server saw it, on a per-address lockout. */
+  readonly clientAddress: string | null;
 
-  constructor(message: string, status: number, code: string | null = null) {
+  constructor(
+    message: string,
+    status: number,
+    code: string | null = null,
+    retryAfter: number | null = null,
+    clientAddress: string | null = null,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.retryAfter = retryAfter;
+    this.clientAddress = clientAddress;
   }
 }
 
@@ -73,10 +85,19 @@ export function setProjectUnavailableHandler(handler: (() => void) | null): void
 export async function apiErrorFrom(res: Response): Promise<ApiError> {
   let detail: string | undefined;
   let code: string | null = null;
+  let retryAfter: number | null = null;
+  let clientAddress: string | null = null;
   try {
-    const payload = (await res.json()) as { detail?: unknown; code?: unknown };
+    const payload = (await res.json()) as {
+      detail?: unknown;
+      code?: unknown;
+      retryAfter?: unknown;
+      clientAddress?: unknown;
+    };
     if (typeof payload?.detail === 'string' && payload.detail) detail = payload.detail;
     if (typeof payload?.code === 'string' && payload.code) code = payload.code;
+    if (typeof payload?.retryAfter === 'number') retryAfter = payload.retryAfter;
+    if (typeof payload?.clientAddress === 'string') clientAddress = payload.clientAddress;
   } catch {
     // body wasn't JSON — fall through to HTTP code
   }
@@ -87,7 +108,7 @@ export async function apiErrorFrom(res: Response): Promise<ApiError> {
   if (res.status === 401 && code === MANAGER_SESSION_REQUIRED && getArea() !== 'runtime')
     sessionExpiredHandler?.();
   if (res.status === 503) projectUnavailableHandler?.();
-  return new ApiError(detail ?? `HTTP ${res.status}`, res.status, code);
+  return new ApiError(detail ?? `HTTP ${res.status}`, res.status, code, retryAfter, clientAddress);
 }
 
 /**

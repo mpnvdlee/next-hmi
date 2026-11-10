@@ -91,14 +91,18 @@ describe('auth lifecycle', () => {
     expect(useManagerStore.getState().authError).toBe('supervisor down');
   });
 
-  it('setup posts the password and opens the dashboard', async () => {
+  it('setup posts the password with the setup code and opens the dashboard', async () => {
     const calls = stubFetch({});
     useManagerStore.setState({ auth: 'needs-setup', authError: 'stale' });
 
-    await useManagerStore.getState().setup('hunter2');
+    await useManagerStore.getState().setup('hunter2', 'K7PM-3QXD');
 
     expect(calls).toEqual([
-      { url: '/api/manager/auth/setup', method: 'POST', body: { password: 'hunter2' } },
+      {
+        url: '/api/manager/auth/setup',
+        method: 'POST',
+        body: { password: 'hunter2', setupCode: 'K7PM-3QXD' },
+      },
     ]);
     expect(useManagerStore.getState().auth).toBe('authed');
     expect(useManagerStore.getState().authError).toBeNull();
@@ -114,13 +118,26 @@ describe('auth lifecycle', () => {
     expect(useManagerStore.getState().authError).toBeNull();
   });
 
-  it('login records the error and rethrows so the form can react', async () => {
+  it('login rethrows a refusal for the form to show, and keeps it out of authError', async () => {
     stubFetch({ 'POST /api/manager/auth/login': { status: 401, detail: 'Invalid password' } });
 
     await expect(useManagerStore.getState().login('nope')).rejects.toThrow('Invalid password');
 
     expect(useManagerStore.getState().auth).toBe('loading');
-    expect(useManagerStore.getState().authError).toBe('Invalid password');
+    expect(useManagerStore.getState().authError).toBeNull();
+  });
+
+  it('signing out everywhere ends this session too and drops device state', async () => {
+    const calls = stubFetch({});
+    useManagerStore.setState({ auth: 'authed', instances: { p1: instance() } });
+
+    await useManagerStore.getState().logoutEverywhere();
+
+    expect(calls).toEqual([
+      { url: '/api/manager/auth/logout-everywhere', method: 'POST', body: undefined },
+    ]);
+    expect(useManagerStore.getState().auth).toBe('needs-login');
+    expect(useManagerStore.getState().instances).toEqual({});
   });
 
   it('logout drops every piece of authenticated device state', async () => {

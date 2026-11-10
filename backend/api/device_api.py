@@ -7,6 +7,9 @@ import re
 import socket
 import subprocess
 import sys
+import threading
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -19,6 +22,22 @@ _MAC_RE = re.compile(r"([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})")
 # timeout — 35s on CPython 3.14, which reimplemented it on top of getnameinfo.
 # The lookup is best-effort, so cap it rather than hold the response open.
 _HOSTNAME_TIMEOUT_SECONDS = 1.0
+# Lookups run on their own threads, never the default executor: each one for
+# such an address holds its thread for that whole timeout, and a handful of
+# them in the default pool stalls every ``to_thread`` caller (sign-in, alarm
+# acks, historian flushes). While every thread is busy a new address gets no
+# host name rather than a place in a queue that grows with each caller.
+_LOOKUP_THREADS = 2
+_LOOKUP_EXECUTOR = ThreadPoolExecutor(
+    max_workers=_LOOKUP_THREADS, thread_name_prefix="nexthmi-device-lookup"
+)
+_lookup_slots = threading.BoundedSemaphore(_LOOKUP_THREADS)
+# Answers, a missing PTR record included, are kept per address so one caller
+# cannot start a lookup per request.
+_HOSTNAME_TTL_SECONDS = 60.0
+_HOSTNAME_CACHE_MAX = 1024
+_hostnames: dict[str, tuple[float, Future[str | None]]] = {}
+_hostnames_guard = threading.Lock()
 
 
 def _client_ip(request: Request) -> str | None:
@@ -48,18 +67,39 @@ def _resolve_hostname(ip: str) -> str | None:
         return None
 
 
-async def _resolve_hostname_async(ip: str) -> str | None:
-    """Reverse-resolve ``ip`` off the event loop, giving up after the timeout.
+def _hostname_lookup(ip: str) -> Future[str | None] | None:
+    """The cached or running lookup for *ip*, a new one, or ``None`` when all threads are busy."""
+    now = time.monotonic()
+    with _hostnames_guard:
+        cached = _hostnames.get(ip)
+        if cached is not None and cached[0] > now:
+            return cached[1]
+        slots = _lookup_slots
+        if not slots.acquire(blocking=False):
+            return None
+        future = _LOOKUP_EXECUTOR.submit(_resolve_hostname, ip)
+        future.add_done_callback(lambda _: slots.release())
+        _hostnames.pop(ip, None)
+        _hostnames[ip] = (now + _HOSTNAME_TTL_SECONDS, future)
+        if len(_hostnames) > _HOSTNAME_CACHE_MAX:
+            del _hostnames[next(iter(_hostnames))]
+        return future
 
-    The worker thread keeps running until the resolver returns; only this
-    request stops waiting for it.
+
+async def _resolve_hostname_async(ip: str) -> str | None:
+    """Reverse-resolve ``ip`` on the lookup threads, giving up after the timeout.
+
+    The lookup keeps running until the resolver returns, and its answer serves
+    later requests; only this one stops waiting for it.
     """
-    try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(_resolve_hostname, ip), _HOSTNAME_TIMEOUT_SECONDS
-        )
-    except TimeoutError:
+    future = _hostname_lookup(ip)
+    if future is None:
         return None
+    # ``asyncio.wait`` rather than ``wait_for``: a timeout must not cancel the
+    # shared lookup, which every later caller for this address would then get.
+    waiter = asyncio.wrap_future(future)
+    done, _ = await asyncio.wait({waiter}, timeout=_HOSTNAME_TIMEOUT_SECONDS)
+    return waiter.result() if done else None
 
 
 def _lookup_mac(ip: str) -> str | None:

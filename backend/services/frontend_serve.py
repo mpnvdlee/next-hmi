@@ -83,17 +83,32 @@ def read_overrides(override_path: Path) -> dict[str, str]:
     return {key: value for key, value in imports.items() if isinstance(value, str)}
 
 
+def _is_bare_specifier(key: str) -> bool:
+    """Whether an import-map key names a library rather than a URL.
+
+    A URL-like key (``/…``, ``./…``, ``../…``, ``scheme:…``) remaps that URL
+    for every module on the page, so ``/runtime/<id>/builtin-widgets-js/…``
+    would swap a built-in widget for a project file.
+    """
+    return bool(key) and not (
+        key.startswith(("/", "./", "../")) or ":" in key or "\\" in key
+    )
+
+
 def build_import_map(
     libraries_dir: Path, override_path: Path
 ) -> dict[str, dict[str, str]]:
     """``{ imports: { <bare>: <url>, ... } }``. Overrides win over auto-derived
-    entries on key collision, matching the TS plugin's spread order."""
-    return {
-        "imports": {
-            **scan_external_libraries(libraries_dir),
-            **read_overrides(override_path),
-        }
+    entries on key collision, matching the TS plugin's spread order. Keys that
+    are not bare specifiers are logged and left out."""
+    imports = {
+        **scan_external_libraries(libraries_dir),
+        **read_overrides(override_path),
     }
+    for key in [key for key in imports if not _is_bare_specifier(key)]:
+        logger.warning("Import map: ignoring %r, which is not a bare module name", key)
+        del imports[key]
+    return {"imports": imports}
 
 
 # ── index.html templating ────────────────────────────────────────────────────

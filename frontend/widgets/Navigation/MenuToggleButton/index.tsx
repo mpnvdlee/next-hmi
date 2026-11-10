@@ -32,8 +32,7 @@ export default function MenuToggleButton({ properties, layout }: HmiWidgetProps)
 
   const iconName = bound ? iconExpanded : iconCollapsed;
   const IconComp = isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
-  const iconIsCustomAsset = isCustomIconAssetPath(iconName);
-  const customSvg = useInlineSvg(iconIsCustomAsset ? iconName : null);
+  const customIconUrl = isCustomIconAssetPath(iconName) ? withBase(iconName) : null;
 
   function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
     const actions = properties?.actions as ActionsConfig | undefined;
@@ -54,8 +53,14 @@ export default function MenuToggleButton({ properties, layout }: HmiWidgetProps)
         <React.Suspense fallback={null}>
           <IconComp size={20} weight="regular" />
         </React.Suspense>
-      ) : iconIsCustomAsset && customSvg ? (
-        <span className="hmi-menu-toggle__svg" dangerouslySetInnerHTML={{ __html: customSvg }} />
+      ) : customIconUrl || iconName.includes('/') ? (
+        // A path that fails the check draws an empty box rather than its text.
+        <span
+          className="hmi-menu-toggle__svg"
+          style={
+            customIconUrl ? { '--hmi-menu-toggle-icon-url': `url("${customIconUrl}")` } : undefined
+          }
+        />
       ) : (
         <span className="hmi-menu-toggle__glyph">{iconName}</span>
       )}

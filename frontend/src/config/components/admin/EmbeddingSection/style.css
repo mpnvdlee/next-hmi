@@ -1,0 +1,4 @@
+.cfg-embedding__add {
+  display: flex;
+  gap: var(--cfg-space-2);
+}

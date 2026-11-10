@@ -492,6 +492,12 @@ no *labelled* one, since an unlabelled group has no title row to portal into.
 An unlabelled group forwards whatever slot it inherited rather than
 publishing its own, so nesting one inside a labelled group is transparent.
 
+The `notice` prop is a message about the field's value that its widget raises,
+rendered under the box at every tier. A `FieldRowBelow` placed in a collapsed
+tier-3 field's children never renders, so a notice that must show whatever
+the source goes here instead — the Web Frame's warnings
+(`PropertiesPanel/webFrameNotices.tsx`) reach it through `SchemaFieldRow`.
+
 Key classes:
 
 - `cfg-field-group`, `cfg-field-group--tier{1,2,3}`, `--selected`,

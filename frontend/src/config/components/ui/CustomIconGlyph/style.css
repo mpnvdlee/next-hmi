@@ -1,0 +1,10 @@
+/* Same mask as the Icon, Button and Menu Toggle widgets' custom icons. */
+.cfg-custom-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--cfg-custom-icon-size);
+  height: var(--cfg-custom-icon-size);
+  background-color: currentColor;
+  -webkit-mask: var(--cfg-custom-icon-url) center / contain no-repeat;
+  mask: var(--cfg-custom-icon-url) center / contain no-repeat;
+}

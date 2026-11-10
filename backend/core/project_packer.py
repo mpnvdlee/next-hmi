@@ -8,7 +8,8 @@ extraction.
 
 Hardened against zip-bomb size exhaustion (cap via
 ``NEXTHMI_MAX_PROJECT_ZIP_MB``, default 500 MB), path-traversal entries,
-absolute-path entries, and symlink members.
+absolute-path entries, entries with a ``.``, ``..`` or empty path segment,
+and symlink members.
 
 ``widget-build/`` is intentionally skipped during pack — the receiver
 rebuilds it from sources after applying the archive. So is ``.backups/``,
@@ -177,13 +178,26 @@ def _is_symlink_member(info: zipfile.ZipInfo) -> bool:
 
 
 def _safe_extract_path(destination_resolved: Path, member_name: str) -> Path:
-    """Resolve ``member_name`` against ``destination``, rejecting escapes."""
+    """Resolve ``member_name`` against ``destination``, rejecting escapes.
+
+    A member must name its path plainly. One with a ``.``, ``..`` or empty
+    segment is refused even when it resolves inside the destination:
+    ``x/../custom-widgets/Gauge/index.tsx`` lands where its name does not say,
+    and every check made on member names — which a trust prompt reads — would
+    have to normalise exactly as the filesystem does to see it.
+    """
     if not member_name:
         raise UnsafeArchiveError("Empty member name in archive")
     if member_name.startswith(("/", "\\")):
         raise UnsafeArchiveError(f"Absolute path in archive: {member_name!r}")
     if len(member_name) >= 2 and member_name[1] == ":":
         raise UnsafeArchiveError(f"Drive-letter path in archive: {member_name!r}")
+    # A directory member ends in one "/"; that is not an empty segment.
+    segments = member_name.removesuffix("/").replace("\\", "/").split("/")
+    if any(segment in ("", ".", "..") for segment in segments):
+        raise UnsafeArchiveError(
+            f"Archive member with an empty, '.' or '..' path segment: {member_name!r}"
+        )
     candidate = (destination_resolved / member_name).resolve()
     if candidate != destination_resolved and not candidate.is_relative_to(destination_resolved):
         raise UnsafeArchiveError(f"Path traversal in archive: {member_name!r}")

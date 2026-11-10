@@ -4,6 +4,36 @@
   color: var(--cfg-text-muted);
 }
 
+/* Peer pairings sit under the token table, as a part of the same section. */
+.cfg-tokens-paired {
+  gap: var(--cfg-space-3);
+  padding-top: var(--cfg-space-4);
+  border-top: 1px solid var(--cfg-border);
+}
+
+.cfg-tokens-paired__title {
+  margin: 0;
+  font-size: var(--cfg-text-base);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+}
+
+.cfg-tokens-device {
+  display: block;
+  font-weight: var(--cfg-fw-medium);
+}
+
+.cfg-tokens-device__identity {
+  font-family: var(--cfg-font-mono);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-tokens-paired__expiring {
+  color: var(--cfg-warning-fg);
+  font-weight: var(--cfg-fw-medium);
+}
+
 /* The command and JSON snippets run long; cap the dialog so they wrap instead
    of stretching it past the viewport. */
 .cfg-tokens-modal {

@@ -122,13 +122,15 @@ Tokens do **not** expire on their own. One stays valid until it is revoked by id
 | Alarms (definitions) | read + write — groups are UI-only |
 | Translations (languages, keys, cells) | read + write |
 | Assets (icons, images) | read + write |
-| Datasource connections and browsed trees | read only |
+| Datasource connections and browsed trees | read only — passwords (a password written into the server URL included) and the private-key path read as `<redacted>` |
 | Components | read only |
 | Users — names, groups, enabled state | read only, never credentials |
 | Widget-schema manifest | read only |
 | Starting, stopping, creating, deleting projects | never — lifecycle stays an operator action in the dashboard, on purpose |
 
 Destructive operations are two-step — the first call returns a diff to review, and only a second call with `confirm: true` applies it. Page edits also return a `warnings` list for advisory problems such as an incomplete binding or a reference to a variable that doesn't exist; the write still succeeds, so it's worth reading them.
+
+An uploaded icon must be an `.svg`; an image a `.png`, `.jpg`/`.jpeg`, `.webp`, `.gif` or `.svg`, and a picture file must really be one. Every SVG is rebuilt from a safe subset of shapes, gradients and text: scripts, event handlers, embedded HTML, `<style>` blocks and links to other files are dropped, and the agent gets a warning for each removal. An icon drawn with a `<style>` block of CSS classes therefore comes out unstyled; ask the agent to use `fill` and `stroke` attributes instead.
 
 The full tool catalog, argument shapes and limits are in the [MCP reference](../dev/reference/mcp.md).
 
@@ -160,7 +162,9 @@ They are ordinary instructions, not privileged calls — the agent still works t
 | *MCP writes are disabled for project '…'* | The token is fine, the project's **MCP write enabled** tick is not. Step 1 above. |
 | `401` with a token made in version 1.0 or 1.1 | Those tokens named one project. Tokens now cover every project, so an old one is refused rather than widened. Create a new one under **Settings › Tokens**. |
 | `422` *Extra inputs are not permitted* on `projectId` while pairing | Pairing no longer takes a project: a token covers every project. Drop `projectId` from the body. |
-| *Too many failed attempts. Try again in Ns.* | Wrong device-admin password on `/pair`; the same lockout that guards the dashboard login. Wait it out. |
+| `429` · *Too many failed attempts from &lt;address&gt;. Try again in Ns.* | Five wrong device-admin passwords from this machine's address, on `/pair` or wherever else the password is asked; the same lockout that guards the dashboard login. Wait it out; other machines are not affected. |
+| `404` · *Session not found* after a pause | A session idle for 30 minutes is closed. Most clients open a new one on their own; otherwise reconnect the client. |
+| `503` · *Too many open sessions* | 1 000 sessions are open at once, usually a client that starts a new one for every call and never ends it. Idle ones close after 30 minutes; restart that client, or wait. |
 | `404` on `GET`, `405` on `POST`, or a bare `307` | The URL reached the router but not the transport — add the trailing slash (`/mcp/`). A proxy in front can rewrite the path too. |
 | Connection refused on `8443` | HTTPS was never turned on, so nothing listens there. Use the `8000` HTTP endpoint, or enable [HTTPS](install.md#https) first. |
 | Host name doesn't resolve at all | `hmi.local` needs mDNS on the *client* — Bonjour on Windows, `avahi` on Linux. Use the IP address or a `hosts` entry instead. |

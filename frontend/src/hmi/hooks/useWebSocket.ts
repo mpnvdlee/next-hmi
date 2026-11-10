@@ -375,7 +375,6 @@ export function useWebSocket(): void {
       _ws = ws;
 
       ws.onopen = () => {
-        backoff = 500; // reset backoff on successful connect
         setWsConnectedRef.current(true);
         // A fresh backend client knows no context: send the merged one again.
         if (_contextProducers.size) sendMergedContext();
@@ -387,6 +386,10 @@ export function useWebSocket(): void {
 
         switch (msg.type) {
           case 'var_snapshot':
+            // The backend's first message, not `onopen`, resets the backoff:
+            // the manager's proxy opens the socket before the project does,
+            // so one that refuses it (full, `1013`) still fires `onopen`.
+            backoff = 500;
             if (msg.bootId) {
               if (_bootId && msg.bootId !== _bootId) _onBackendRestart?.();
               _bootId = msg.bootId;

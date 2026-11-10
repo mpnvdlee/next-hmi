@@ -149,6 +149,39 @@ class CertInfo(BaseModel):
     names: list[str] = Field(default_factory=list)
 
 
+class ServerCertificateInfo(BaseModel):
+    """Body for GET /api/datasources/{name}/server-certificate.
+
+    The certificate a secured endpoint presented on the engine's last connect
+    attempt, for the editor's trust card. camelCase like :class:`CertInfo`, the
+    same kind of read-only description.
+    """
+
+    status: Literal["trusted", "untrusted", "changed"]
+    subject: str
+    issuer: str
+    expiresAt: str
+    fingerprint: str
+
+
+class TrustCertificateBody(BaseModel):
+    """Body for POST /api/datasources/{name}/server-certificate/trust.
+
+    The SHA-256 fingerprint the engineer compared — the certificate trusted is
+    that one, never whatever the server happens to present by the time the
+    request lands.
+    """
+
+    fingerprint: str
+
+
+class TrustCertificateResult(BaseModel):
+    """The pinned certificate's project-relative path, now the datasource's
+    ``server_certificate`` setting."""
+
+    server_certificate: str
+
+
 # ── Path helpers ──────────────────────────────────────────────────────────────
 
 def build_var_key(datasource: str, path: str) -> str:

@@ -14,10 +14,11 @@ legacy shape and no read-time normalization.
 """
 
 import logging
+import re
 import threading
 
-from core.exceptions import ThemeConflictError, ThemeNotFoundError
-from core.ids import slug_id
+from core.exceptions import ThemeConflictError, ThemeNotFoundError, ThemeValidationError
+from core.ids import slug_id, slugify
 from core.storage import (
     active_config_dir,
     active_themes_dir,
@@ -31,6 +32,22 @@ _lock = threading.RLock()
 
 _PROJECT_KEY = "project"
 _DEFAULT_KEY = "defaultTheme"
+# The id becomes a file name. Anything wider can leave themes/ on Windows:
+# ``D:foo`` is a drive-relative path there and ``..\x`` climbs out.
+THEME_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
+# Windows opens these as devices whatever the extension.
+_WINDOWS_DEVICE_NAMES = frozenset({
+    "con", "prn", "aux", "nul",
+    *(f"com{number}" for number in range(10)),
+    *(f"lpt{number}" for number in range(10)),
+})
+
+
+def _valid_theme_id(theme_id: str) -> bool:
+    return (
+        THEME_ID.fullmatch(theme_id) is not None
+        and theme_id.casefold() not in _WINDOWS_DEVICE_NAMES
+    )
 
 
 def _config_path():
@@ -38,6 +55,9 @@ def _config_path():
 
 
 def _theme_path(theme_id: str):
+    """``themes/<id>.json``; an id that cannot name one is a theme that does not exist."""
+    if not _valid_theme_id(theme_id):
+        raise ThemeNotFoundError(f"Theme '{theme_id}' not found")
     return active_themes_dir() / f"{theme_id}.json"
 
 
@@ -128,6 +148,11 @@ class ThemeManager:
 
     def save(self, theme_id: str, theme: ThemeConfig) -> ThemeConfig:
         """Create or replace the theme at *theme_id*."""
+        if not _valid_theme_id(theme_id):
+            raise ThemeValidationError(
+                "Theme id must be 1-128 letters, digits, '-' or '_', and not a "
+                "Windows device name"
+            )
         with _lock:
             self._ensure_seeded()
             validation = validate_theme(theme)
@@ -144,7 +169,8 @@ class ThemeManager:
             existing = set(self.list_ids())
             if source_id is not None and source_id not in existing:
                 raise ThemeNotFoundError(f"Theme '{source_id}' not found")
-            new_id = slug_id(name, existing)
+            # Short enough for a "-N" suffix to stay within the id limit.
+            new_id = slug_id(slugify(name)[:120], existing | _WINDOWS_DEVICE_NAMES)
             config = self.get(source_id) if source_id else ThemeConfig()
             write_json(_theme_path(new_id), config.model_dump())
             logger.info("Created theme '%s'%s", new_id, f" from '{source_id}'" if source_id else "")

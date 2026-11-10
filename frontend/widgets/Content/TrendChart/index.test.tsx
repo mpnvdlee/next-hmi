@@ -97,6 +97,48 @@ describe('TrendChart', () => {
     );
   });
 
+  it('says why when the historian refuses the query as too large', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({ detail: 'Too many variables' }),
+      }),
+    );
+    renderTrendChart({ variables: 'PLC:Temp' });
+    await waitFor(() =>
+      expect(
+        screen.getByText('This chart asks for too much data. It shows at most 32 variables.'),
+      ).toHaveClass('hmi-trend-chart__refused'),
+    );
+  });
+
+  it('stops polling a refused query until its variables change', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 422, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { rerender } = renderTrendChart({ variables: 'PLC:Temp', refreshInterval: 5 });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      vi.advanceTimersByTime(15000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ series: [] }) });
+    rerender(
+      <MemoryRouter>
+        <TrendChart properties={{ variables: 'PLC:Pressure', refreshInterval: 5 }} />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  });
+
   it('renders the chart once live series data arrives', async () => {
     vi.stubGlobal(
       'fetch',

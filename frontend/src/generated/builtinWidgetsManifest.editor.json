@@ -1625,7 +1625,7 @@
       "allowedOrigins": {
         "label": "Allowed inbound origins",
         "group": "Data",
-        "description": "Comma-separated origins, or * for any. Left empty, every inbound message is ignored."
+        "description": "Comma-separated origins, such as https://example.com. Left empty, every inbound message is ignored. In a sandbox, a page keeps its origin only with Allow same-origin on."
       },
       "inboundVariable": {
         "label": "Inbound variable (write target)",
@@ -1638,7 +1638,7 @@
       "outboundOrigin": {
         "label": "Outbound target origin",
         "group": "Data",
-        "defaultValue": "*"
+        "placeholder": "Same as the URL (default)"
       },
       "onLoad": {
         "label": "On Load",

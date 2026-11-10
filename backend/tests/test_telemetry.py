@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from core import runtime_home, telemetry
+from core import manager_auth, runtime_home, telemetry
 from fastapi.testclient import TestClient
 
 _REAL_MARK = telemetry.mark
@@ -301,7 +301,10 @@ def client(monkeypatch, home: Path) -> TestClient:
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     monkeypatch.setattr(manager.telemetry, "start", lambda: None)
     with TestClient(manager.app) as tc:
-        tc.post("/api/manager/auth/setup", json={"password": "secret"})
+        tc.post(
+            "/api/manager/auth/setup",
+            json={"password": "secret-pw", "setupCode": manager_auth.setup_code()},
+        )
         yield tc
 
 

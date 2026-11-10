@@ -33,8 +33,10 @@ installer, admin rights, Python or Node on the host.
 2. **Unzip** anywhere you can write, and double-click `nexthmi.exe` or
    `nexthmi.command`, or run `./nexthmi` on Linux. A terminal opens and prints
    the URL to visit.
-3. **Open that URL and set the device-admin password.** It gates the whole
-   installation — the dashboard, and every project's runtime and editor.
+3. **Open that URL and set the device-admin password.** The form asks for the
+   one-time setup code the terminal prints next to the URL (with Docker:
+   `docker logs nexthmi`). The password gates the whole installation — the
+   dashboard, and every project's runtime and editor.
    Then **Start** the seeded example project and open its runtime or its
    editor. You have something to click before a PLC is connected.
 

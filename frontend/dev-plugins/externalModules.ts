@@ -121,11 +121,31 @@ export function readOverrides(overridePath: string): Record<string, string> {
   }
 }
 
+/** A URL-like key (`/…`, `./…`, `../…`, `scheme:…`) remaps that URL for every
+ *  module on the page — a built-in widget included — so only bare names count. */
+function isBareSpecifier(key: string): boolean {
+  return (
+    key.length > 0 &&
+    !key.startsWith('/') &&
+    !key.startsWith('./') &&
+    !key.startsWith('../') &&
+    !key.includes(':') &&
+    !key.includes('\\')
+  );
+}
+
 export function buildImportMap(
   externalLibrariesDir: string,
   overridePath: string,
 ): { imports: Record<string, string> } {
-  return {
-    imports: { ...scanExternalLibraries(externalLibrariesDir), ...readOverrides(overridePath) },
+  const imports: Record<string, string> = {};
+  const entries = {
+    ...scanExternalLibraries(externalLibrariesDir),
+    ...readOverrides(overridePath),
   };
+  for (const [key, url] of Object.entries(entries)) {
+    if (isBareSpecifier(key)) imports[key] = url;
+    else console.warn(`[NEXTHMI] import map: ignoring "${key}", which is not a bare module name`);
+  }
+  return { imports };
 }

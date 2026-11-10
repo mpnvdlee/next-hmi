@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import tempfile
 import threading
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -10,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
+from core import runtime_home
 from core.exceptions import ConfigConflictError, ConfigValidationError
 
 TranslationRows = dict[str, dict[str, str]]
@@ -29,7 +29,18 @@ class _HeldTranslationLock:
 def _translation_lock_path(path: Path) -> Path:
     identity = str(path.resolve()).encode("utf-8")
     digest = hashlib.sha256(identity).hexdigest()
-    return Path(tempfile.gettempdir()) / "nexthmi-translation-locks" / f"{digest}.lock"
+    return runtime_home.locks_dir() / f"translation-{digest}.lock"
+
+
+def _open_lock_file(lock_path: Path) -> BinaryIO:
+    """Open *lock_path* private to this account, never through a symlink.
+
+    Under the runtime home, not the shared temp directory: anyone can create a
+    name there first, then hold the lock or point it at a file of their choice.
+    """
+    lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    return os.fdopen(os.open(lock_path, flags, 0o600), "r+b")
 
 
 def _acquire_file_lock(handle: BinaryIO) -> None:
@@ -87,9 +98,7 @@ def translation_transaction(path: Path) -> Iterator[None]:
                 held.depth -= 1
             return
 
-        lock_path = _translation_lock_path(resolved_path)
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        handle = lock_path.open("a+b")
+        handle = _open_lock_file(_translation_lock_path(resolved_path))
         try:
             _acquire_file_lock(handle)
             held_locks[resolved_path] = _HeldTranslationLock(handle=handle)

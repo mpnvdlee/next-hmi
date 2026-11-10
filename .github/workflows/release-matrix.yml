@@ -133,6 +133,12 @@ jobs:
           echo "::error::manager never answered 200 on published port" && exit 1
       - name: Seed created under mounted volume
         run: test -f "$RUNNER_TEMP/project-data/projects.json" && test -d "$RUNNER_TEMP/project-data/Default-Project"
+      # The runner made the folder, so the entrypoint had to hand it over
+      # before the app, as uid 10001, could seed it.
+      - name: App runs unprivileged and owns the volume
+        run: |
+          test "$(docker exec nexthmi-smoke stat -c %u /proc/1)" = 10001
+          test "$(stat -c %u "$RUNNER_TEMP/project-data/projects.json")" = 10001
       - name: Graceful stop (SIGTERM)
         run: docker stop -t 10 nexthmi-smoke
       - name: Restart against the same volume — no re-seed/duplication
@@ -207,6 +213,12 @@ jobs:
           echo "::error::manager never answered 200 on published port" && exit 1
       - name: Seed created under mounted volume
         run: test -f "$RUNNER_TEMP/project-data/projects.json" && test -d "$RUNNER_TEMP/project-data/Default-Project"
+      # The runner made the folder, so the entrypoint had to hand it over
+      # before the app, as uid 10001, could seed it.
+      - name: App runs unprivileged and owns the volume
+        run: |
+          test "$(docker exec nexthmi-smoke stat -c %u /proc/1)" = 10001
+          test "$(stat -c %u "$RUNNER_TEMP/project-data/projects.json")" = 10001
       - name: Graceful stop (SIGTERM)
         run: docker stop -t 10 nexthmi-smoke
       - name: Restart against the same volume — no re-seed/duplication

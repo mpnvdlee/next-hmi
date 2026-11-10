@@ -1671,8 +1671,7 @@
             "key": "outboundOrigin",
             "label": "Outbound target origin",
             "type": "String",
-            "group": "Data",
-            "defaultValue": "*"
+            "group": "Data"
           },
           {
             "key": "onLoad",

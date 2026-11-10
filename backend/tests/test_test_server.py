@@ -1,12 +1,14 @@
 """Tests for the OPC-UA test-server pool's port-conflict handling."""
 import errno
+import socket
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import opcua.test_server as test_server_module
 import pytest
-from asyncua import ua
+from asyncua import Client, ua
+from asyncua.ua.uaerrors import BadIdentityTokenRejected, BadUserAccessDenied
 from core.exceptions import DatasourceConflictError, DatasourceValidationError
 from opcua.test_server import TestServerInstance as ServerInstance
 from opcua.test_server import TestServerPool as ServerPool
@@ -21,6 +23,8 @@ class _FakeServer:
     async def init(self) -> None: ...
     def set_endpoint(self, _endpoint: str) -> None: ...
     def set_server_name(self, _name: str) -> None: ...
+    def set_identity_tokens(self, _tokens) -> None: ...
+    def allow_remote_admin(self, _allow: bool) -> None: ...
     def set_security_policy(self, _policy) -> None: ...
     async def register_namespace(self, _uri: str) -> int:
         return 2
@@ -214,6 +218,114 @@ async def test_start_sanitizes_the_datasource_name_into_the_cert_path(monkeypatc
         assert Path(server.private_key_path).parent == tmp_path
     finally:
         await instance.stop()
+
+
+# ── Reach and sign-in (real asyncua server) ─────────────────────────────────
+
+
+def _free_port() -> int:
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+def _live_config(port: int, **settings: Any) -> dict:
+    return {
+        "name": "ts-live",
+        "type": "opcua-test-server",
+        "settings": {"port": port, "endpoint_path": "/nexthmi/test/", **settings},
+        "variables": [
+            {"kind": "variable", "display_name": "Setpoint", "data_type": "Double", "writable": True},
+            {"kind": "variable", "display_name": "Level", "data_type": "Double", "writable": False},
+        ],
+    }
+
+
+def _bound_hosts(instance: ServerInstance) -> set[str]:
+    return {sock.getsockname()[0] for sock in instance._server.bserver._server.sockets}
+
+
+@pytest.mark.asyncio
+async def test_listens_on_loopback_only_by_default():
+    instance = ServerInstance("ts-live")
+    await instance.start(_live_config(_free_port()))
+    try:
+        assert _bound_hosts(instance) == {"127.0.0.1"}
+    finally:
+        await instance.stop()
+
+
+@pytest.mark.asyncio
+async def test_reachable_from_the_network_binds_every_interface():
+    instance = ServerInstance("ts-live")
+    await instance.start(_live_config(_free_port(), reachable_from_network=True))
+    try:
+        assert _bound_hosts(instance) == {"0.0.0.0"}
+    finally:
+        await instance.stop()
+
+
+@pytest.mark.asyncio
+async def test_signing_in_as_admin_with_any_password_is_refused():
+    """asyncua's default user manager made ``admin`` + anything an Admin, which
+    writes past AccessLevel and may add or delete nodes."""
+    port = _free_port()
+    instance = ServerInstance("ts-live")
+    await instance.start(_live_config(port))
+    client = Client(f"opc.tcp://127.0.0.1:{port}/nexthmi/test/")
+    client.set_user("admin")
+    client.set_password("anything")
+    try:
+        with pytest.raises(BadIdentityTokenRejected):
+            await client.connect()
+    finally:
+        await instance.stop()
+
+
+@pytest.mark.asyncio
+async def test_an_anonymous_client_writes_only_what_access_levels_allow():
+    port = _free_port()
+    config = _live_config(port)
+    instance = ServerInstance("ts-live")
+    await instance.start(config)
+    setpoint_id, level_id = (entry["node_id"] for entry in config["variables"])
+    try:
+        async with Client(f"opc.tcp://127.0.0.1:{port}/nexthmi/test/") as client:
+            await client.get_node(setpoint_id).write_value(ua.Variant(4.2, ua.VariantType.Double))
+            assert await client.get_node(setpoint_id).read_value() == 4.2
+
+            with pytest.raises(ua.UaStatusCodeError):
+                await client.get_node(level_id).write_value(ua.Variant(1.0, ua.VariantType.Double))
+            with pytest.raises(BadUserAccessDenied):
+                await client.nodes.objects.add_variable(2, "Injected", 1.0)
+            with pytest.raises(BadUserAccessDenied):
+                await client.delete_nodes([client.get_node(level_id)])
+    finally:
+        await instance.stop()
+
+
+@pytest.mark.asyncio
+async def test_the_paired_client_reaches_a_loopback_server(monkeypatch):
+    started: list[tuple[str, dict]] = []
+
+    class _RecordingPool:
+        async def start(self, name, settings):
+            started.append((name, settings))
+
+        async def stop(self, _name): ...
+
+    port = _free_port()
+    pool = ServerPool()
+    pool.set_opcua_pool(_RecordingPool())
+    await pool.start("ts-live", _live_config(port))
+    try:
+        [(_name, client_settings)] = started
+        async with Client(client_settings["server_url"]) as client:
+            assert await client.get_namespace_array()
+    finally:
+        await pool.stop("ts-live")
 
 
 # ── _populate_nodes array encoding ──────────────────────────────────────────

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import AdminSection from '../AdminSection';
 import Button from '@config/components/ui/Button';
 import BoolButtonGroup from '@config/components/ui/BoolButtonGroup';
+import ConfirmModal from '@config/components/ui/ConfirmModal';
 import { ContentSpinner } from '@shared/components/Spinner';
 import { describeError } from '@config/store/projectsStore';
 import { withBase } from '@shared/utils/runtimeBase';
+import { formatFingerprint } from '@shared/utils/formatFingerprint';
 import './style.css';
 
 export type TlsMode = 'generated' | 'custom';
@@ -184,6 +186,7 @@ export default function HttpsSection({
   const [restartTarget, setRestartTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingMode, setPendingMode] = useState<TlsMode | null>(null);
+  const [confirmingHttps, setConfirmingHttps] = useState(false);
   const certificateInput = useRef<HTMLInputElement>(null);
   const keyInput = useRef<HTMLInputElement>(null);
 
@@ -302,11 +305,26 @@ export default function HttpsSection({
           className={`cfg-admin-https__choice${tls.enabled ? ' cfg-admin-https__choice--active' : ''}`}
           aria-pressed={tls.enabled}
           disabled={busy}
-          onClick={() => void applyAndRestart(true)}
+          onClick={() => (tls.enabled ? void applyAndRestart(true) : setConfirmingHttps(true))}
         >
           HTTPS
         </button>
       </div>
+
+      {confirmingHttps && (
+        <ConfirmModal
+          title="Turn on HTTPS?"
+          message={`Everyone who is signed in, you included, signs in again at ${
+            new URL(reopenTarget(true, tls).url).origin
+          }. Sessions started over plain HTTP stop working.`}
+          confirmLabel="Turn on HTTPS"
+          onConfirm={() => {
+            setConfirmingHttps(false);
+            void applyAndRestart(true);
+          }}
+          onCancel={() => setConfirmingHttps(false)}
+        />
+      )}
 
       <fieldset className="cfg-admin-https__modes" disabled={busy}>
         <legend className="cfg-admin-https__legend">Certificate</legend>
@@ -367,7 +385,9 @@ export default function HttpsSection({
           </div>
           <div className="cfg-admin-https__cert-row">
             <span className="cfg-admin-https__cert-label">SHA-256</span>
-            <code className="cfg-admin-https__fingerprint">{active.fingerprint}</code>
+            <code className="cfg-admin-https__fingerprint">
+              {formatFingerprint(active.fingerprint)}
+            </code>
           </div>
           {active.expiring && (
             <p

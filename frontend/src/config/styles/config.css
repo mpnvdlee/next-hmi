@@ -1802,6 +1802,17 @@
   font-size: var(--cfg-font-size-base);
 }
 
+.cfg-ds-props__warning {
+  margin: 0 0 var(--cfg-space-2);
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border: 1px solid var(--cfg-warning-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-warning-bg);
+  color: var(--cfg-warning-fg);
+  font-size: var(--cfg-text-sm);
+  line-height: 1.45;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cfg-tree-item__row-btn,
   .cfg-row,

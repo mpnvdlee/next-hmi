@@ -29,6 +29,8 @@ A saved change reaches a running project's panels at once: a removed user, or on
 > **A user with no password set cannot sign in at all.** Nobody can log in as that account — not with a blank password, not with any password — until you give it one. It still works as the **auto-login user**, which is how `guest` (an account that can never have a password) is the identity a panel starts out as. So a half-finished account is never a way in.
 >
 > **Repeated wrong passwords lock that username out for a minute.** Five in a row and even the right password is refused until the minute is up; the operator sees the login action fail with `rate_limited` rather than `invalid_credentials`. Other users are unaffected. A live view is reachable by anyone who can reach the panel, so this is what stands between it and someone guessing at an account all afternoon.
+>
+> **A device that keeps getting passwords wrong is refused too.** Sixty wrong passwords within a minute from one address, whatever usernames they try, refuse every sign-in from that address for 30 seconds; other panels and PCs sign in as usual. Only 300 wrong passwords within a minute from all addresses together pause every sign-in for 30 seconds. Behind a reverse proxy on another host, list it in `NEXTHMI_FORWARDED_ALLOW_IPS`, or every browser counts as the proxy's one address.
 
 ## Settings: auto-login
 
@@ -110,7 +112,7 @@ Two more sources read the identity directly, for labels and lists rather than ga
 
 ## What the server enforces
 
-The server does not restrict who may write a writable variable. Groups decide what the panel shows and lets an operator press; once a write reaches the server, the only check is whether the variable is marked **writable** in its datasource — a read-only variable is refused with `read_only` for everyone.
+The server does not restrict who may write a writable variable. Groups decide what the panel shows and lets an operator press; once a write reaches the server, the only checks are whether the variable is enabled and marked **writable** in its datasource — a disabled variable is refused with `disabled`, a read-only one with `read_only`, for everyone.
 
 So hiding or blocking the button — **Visible** / **Interactable** on the widget — is how a project stops operators changing a value. A setpoint no button writes cannot be changed from the panel.
 

@@ -99,6 +99,17 @@ it('leaves the modal open once a push transfer completes, so the result shows', 
   const user = userEvent.setup();
   useProjectsStore.setState({
     loadPeers: vi.fn().mockResolvedValue({ discovered: [], manual: [] }),
+    probePeer: vi.fn().mockResolvedValue({
+      host: '10.0.0.4',
+      port: 8000,
+      address: '10.0.0.4',
+      scheme: 'https',
+      hostname: 'line-2-panel',
+      runtimeId: 'rid-line-2',
+      fingerprint: 'ab'.repeat(32),
+      trust: 'pinned',
+      remembered: false,
+    }),
     pairPeer: vi.fn().mockResolvedValue({ token: 'tok' }),
     listPeerProjects: vi.fn().mockResolvedValue([]),
     beginPeerTransfer: vi.fn().mockResolvedValue({
@@ -122,8 +133,9 @@ it('leaves the modal open once a push transfer completes, so the result shows', 
 
   await user.click(await screen.findByRole('button', { name: 'Transfer' }));
   await user.type(screen.getByPlaceholderText('192.168.1.20'), '10.0.0.4');
-  await user.type(screen.getByLabelText(/device-admin password/i), 'secret');
-  await user.click(screen.getByRole('button', { name: 'Pair & continue' }));
+  await user.click(screen.getByRole('button', { name: 'Verify device' }));
+  await user.type(await screen.findByLabelText(/device-admin password/i), 'secret');
+  await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
   await user.type(await screen.findByLabelText(/Destination folder/i), 'landing');
   const submitButtons = screen.getAllByRole('button', { name: 'Transfer' });

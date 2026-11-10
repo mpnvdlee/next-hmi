@@ -135,14 +135,14 @@ Config-domain stores (`frontend/src/config/store/`):
 - `alarmConfigStore.ts`, `recipeConfigStore.ts`, `historianConfigStore.ts`, `componentEditorStore.ts`
 - `adminViewStore.ts`
   - Live subscriptions (polled every 2 s), alarm triggers, historian paths, custom-widget build status + recompile, connected runtimes and the `$http` allowed origins (`httpOrigins`) — every `AdminView` section. **System info, runtime home, logs, HTTPS, tokens and the device-admin password are not here**: those sections live on the manager's `/settings` page and are fed by `managerStore` / `projectsStore`.
-  - Not here either: the **Tokens** section. A token covers every project, so it lives on the manager's `/settings` page; `admin/TokensSection/tokensApi.ts` calls `/api/manager/mcp-tokens` through `managerApiJson`.
+  - Not here either: the **Tokens** section. A token covers every project, so it lives on the manager's `/settings` page; `admin/TokensSection/tokensApi.ts` calls `/api/manager/mcp-tokens` through `managerApiJson`, and `/api/manager/peer-tokens` for the section's **Paired devices** part (`PairedDevices.tsx`).
 
 Manager store:
 
 - `manager/managerStore.ts`
-  - device-admin auth (`auth/status`, `setup`, `login`, `logout`) and the running-instance list (`GET /api/manager/running`, per-project `start`/`stop`). Drives the dashboard; no project pipeline state.
+  - device-admin auth (`auth/status`, `setup`, `login`, `logout`, `logout-everywhere`) and the running-instance list (`GET /api/manager/running`, per-project `start`/`stop`). Drives the dashboard; no project pipeline state.
 - `config/store/projectsStore.ts`
-  - the project list (`GET /api/projects`), create/import/export/locate/delete, and the manager peer-transfer flow: `loadPeers` (mDNS + manual), `pairPeer`/`listPeerProjects` (session-proxied `POST /api/manager/peer-pair` and `/peer-projects`), and `beginPeerTransfer`/`beginPeerPull` plus their `get*`/`cancel*` counterparts (`/api/manager/transfers` and `/api/manager/pulls`). Used for generic project CRUD from both the manager dashboard and the config app; the peer-transfer slice specifically is manager-only — `PeerTransferModal` (`config/components/projects/ProjectsView/PeerTransferModal.tsx`) is mounted from `manager/ManagerApp.tsx` and drives both the push and pull direction off this store. The bearer token from pairing lives only in the modal's component state, never in the store or web storage.
+  - the project list (`GET /api/projects`), create/import/export/locate/delete, and the manager peer-transfer flow: `loadPeers` (mDNS + manual), `probePeer`/`pairPeer`/`listPeerProjects` (session-proxied `POST /api/manager/peer-probe`, `/peer-pair` and `/peer-projects`), and `beginPeerTransfer`/`beginPeerPull` plus their `get*`/`cancel*` counterparts (`/api/manager/transfers` and `/api/manager/pulls`). Used for generic project CRUD from both the manager dashboard and the config app; the peer-transfer slice specifically is manager-only — `PeerTransferModal` (`config/components/projects/ProjectsView/PeerTransferModal.tsx`) is mounted from `manager/ManagerApp.tsx` and drives both the push and pull direction off this store. The bearer token from pairing lives only in the modal's component state, never in the store or web storage; a device the operator chose to remember has its token kept by the manager instead, and the modal passes only the peer's `runtimeId`. A refusal of that token carries `PEER_PAIRING_REFUSED` (on the error, or on the transfer status), and the modal's **Pair again** calls `forgetPeerPairing`.
 - `themeViewStore.ts` (config)
   - multi-theme editor state: theme ids, default-theme id, selected theme, last-saved configs + dirty per-id drafts; `create`/`delete`/`setDefaultTheme` over `/api/themes` + `/api/default-theme`
   - imports `applyThemeTokens`, `defaultTheme`, `LS_THEME_PREVIEW`/`LS_THEME_SAVED` from `themeTokens.ts`
@@ -267,9 +267,11 @@ page has settled, `useProjectWidgetWarmup` warms the widget code of every other
 page in the project (with a 3 s fallback when no ack comes), so a first visit
 is as fast as a revisit; the editor's preview iframe instead idle-warms every
 built-in once `ComponentsReadyGate` opens. A module already in memory renders
-without suspending (`settledLazy`), and `useInlineSvg` keeps each recoloured
-custom SVG icon per URL for the rest of the page load, so a revisited page
-draws its icons on the first frame. A page's variables do not gate the reveal
+without suspending (`settledLazy`). A built-in widget draws a custom SVG icon
+as a CSS mask image, which the browser's image cache serves to a revisited
+page; `useInlineSvg`, for a custom widget that inlines one, keeps each
+recoloured icon per URL for the rest of the page load, so a revisited page
+draws it on the first frame. A page's variables do not gate the reveal
 at all, so a slow OPC-UA read never stalls a navigation.
 
 **Marking** is a data question, and it can only start once data has stopped

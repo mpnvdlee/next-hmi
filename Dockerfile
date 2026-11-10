@@ -153,6 +153,15 @@ ENV ESBUILD_BINARY_PATH=/usr/local/bin/esbuild \
     NEXTHMI_WIDGET_BUILD_DIR=/data/.widget-build \
     WATCHFILES_FORCE_POLLING=1
 
+# The app runs as this user: the entrypoint starts as root only to hand /data
+# over, then drops to it with setpriv (util-linux). The uid is fixed so an
+# operator can give a folder they bind-mount to it from the host. /data is
+# owned before VOLUME, so a new named volume starts out writable by it.
+RUN groupadd --system --gid 10001 nexthmi \
+  && useradd --system --uid 10001 --gid nexthmi --create-home --shell /usr/sbin/nologin nexthmi \
+  && mkdir -p /data && chown nexthmi:nexthmi /data \
+  && command -v setpriv >/dev/null
+
 VOLUME ["/data"]
 # 8000 serves the app over HTTP; with HTTPS enabled it only redirects to 8443,
 # which is where the app then binds.

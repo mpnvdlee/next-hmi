@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import mimetypes
 import re
 from pathlib import Path
 from typing import Any
+from xml.parsers import expat
+from xml.sax.saxutils import escape, quoteattr
 
+from api.widgets_api import _ICON_EXTENSIONS, _IMAGE_EXTENSIONS
 from core.exceptions import (
     ConfigConflictError,
     ConfigNotFoundError,
@@ -20,7 +24,6 @@ from core.storage import (
     component_files,
     read_json,
     write_bytes_atomic,
-    write_text_atomic,
 )
 
 from .. import idempotency, locks
@@ -34,31 +37,152 @@ _MAX_SVG_BYTES = 5 * 1024 * 1024
 _MAX_IMAGE_BYTES = 5 * 1024 * 1024
 _ASSET_REF_TYPES = frozenset({"image", "icon", "video"})
 
-# SVG payloads are rendered inline in the HMI; strip the elements/attrs that
-# would let an uploaded asset run script in the host page.
-_SVG_FORBIDDEN_TAG_RE = re.compile(
-    r"<\s*(?:script|foreignObject)\b[^>]*>.*?<\s*/\s*(?:script|foreignObject)\s*>",
-    re.IGNORECASE | re.DOTALL,
-)
-_SVG_FORBIDDEN_SELF_CLOSING_RE = re.compile(
-    r"<\s*(?:script|foreignObject)\b[^>]*/?>",
-    re.IGNORECASE,
-)
-_SVG_ON_ATTR_RE = re.compile(
-    r"""\s+on[a-zA-Z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""",
-)
-_SVG_JS_HREF_RE = re.compile(
-    r"""(\s+(?:xlink:)?href\s*=\s*['"])\s*javascript:[^'"]*""",
-    re.IGNORECASE,
+# The same lists the editor's asset picker shows; a file with any other
+# extension (.html, .js) would only be reachable by URL, as active content.
+_UPLOAD_EXTENSIONS = {"icons": _ICON_EXTENSIONS, "images": _IMAGE_EXTENSIONS}
+_RASTER_MAGIC = {
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".gif": (b"GIF87a", b"GIF89a"),
+}
+
+# Icons are inlined into the HMI page, so an SVG keeps only shapes, paint
+# servers and structure. Anything else (script, foreignObject, style, a, image,
+# animate/set, …) is dropped together with its subtree.
+_SVG_NS = "http://www.w3.org/2000/svg"
+_XLINK_NS = "http://www.w3.org/1999/xlink"
+_SVG_ELEMENTS = frozenset({
+    "svg", "g", "path", "circle", "ellipse", "rect", "line", "polyline", "polygon",
+    "defs", "linearGradient", "radialGradient", "stop", "clipPath", "mask",
+    "symbol", "use", "title", "desc", "text", "tspan",
+})
+# A reference out of the icon, in any attribute (a presentation attribute is
+# CSS too): a url() that is not a `#fragment`, an @import, image(), image-set()
+# or src() that can name a URL as a plain string, a backslash, since a CSS
+# escape can spell `url(` unseen, or an old-IE expression(). OUTSIDE_REF in
+# frontend/src/hmi/utils/useInlineSvg.ts drops the same values on inlining.
+_OUTSIDE_REF = re.compile(
+    r"""\\|@import|url\(\s*(?!['"]?\s*#)|image(?:-set)?\(|src\(|expression""", re.IGNORECASE,
 )
 
 
-def _sanitize_svg(svg: str) -> str:
-    svg = _SVG_FORBIDDEN_TAG_RE.sub("", svg)
-    svg = _SVG_FORBIDDEN_SELF_CLOSING_RE.sub("", svg)
-    svg = _SVG_ON_ATTR_RE.sub("", svg)
-    svg = _SVG_JS_HREF_RE.sub(r"\1", svg)
-    return svg
+def _has_raster_signature(ext: str, data: bytes) -> bool:
+    if ext == ".webp":
+        return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    # An extension the asset picker gains later has no known signature: refused.
+    return data.startswith(_RASTER_MAGIC.get(ext, ()))
+
+
+def _attribute_problem(name: str, value: str) -> str | None:
+    """Why an attribute is dropped, or ``None`` to keep it. Runs on the parsed
+    value, so character references such as ``jav&#x61;script:`` are decoded.
+    Names compare case-insensitively: the HTML parser that inlines an icon
+    lowercases them."""
+    name = name.lower()
+    if name.startswith("on"):
+        return "event handler"
+    if name == "href" and not value.strip().startswith("#"):
+        return "link outside the file"
+    if _OUTSIDE_REF.search(value):
+        return "reference outside the file"
+    return None
+
+
+def _sanitize_svg(data: str | bytes) -> tuple[str, dict[str, int]]:
+    """Re-serialize *data* keeping only allowlisted SVG markup.
+
+    Returns the clean SVG and a count per kind of removed item. Rejects input
+    that is not well-formed XML, has no ``<svg>`` root, declares a DTD internal
+    subset (entities) or references an undefined entity. Linear in the input:
+    expat parses once and each event does constant work.
+    """
+    out: list[str] = []
+    removed: dict[str, int] = {}
+    stack: list[str] = []
+    skip_depth = 0  # > 0 while inside a dropped element
+    open_tag = False  # out[-1] is a start tag that may still become self-closing
+
+    def note(what: str) -> None:
+        removed[what] = removed.get(what, 0) + 1
+
+    def start(name: str, attrs: dict[str, str]) -> None:
+        nonlocal skip_depth, open_tag
+        if skip_depth:
+            skip_depth += 1
+            return
+        namespace, _, local = name.rpartition(" ")
+        if not stack and (namespace not in ("", _SVG_NS) or local != "svg"):
+            raise ConfigValidationError("SVG root element must be <svg>")
+        if namespace not in ("", _SVG_NS) or local not in _SVG_ELEMENTS:
+            note(f"<{local}> element")
+            skip_depth = 1
+            return
+        kept: dict[str, str] = {}
+        for key, value in attrs.items():
+            attr_ns, _, attr = key.rpartition(" ")
+            if attr_ns == _XLINK_NS and attr == "href":
+                # SVG 2 ``href`` wins over ``xlink:href`` when both are set.
+                if (problem := _attribute_problem("href", value)) is None:
+                    kept.setdefault("href", value)
+                    continue
+            elif attr_ns:
+                problem = "namespaced attribute"
+            else:
+                problem = _attribute_problem(attr, value)
+                if problem is None:
+                    kept[attr] = value
+                    continue
+            note(f"{attr} on <{local}> ({problem})")
+        if not stack:
+            kept = {"xmlns": _SVG_NS, **kept}
+        rendered = "".join(f" {k}={quoteattr(v)}" for k, v in kept.items())
+        out.append(f"<{local}{rendered}>")
+        stack.append(local)
+        open_tag = True
+
+    def end(_name: str) -> None:
+        nonlocal skip_depth, open_tag
+        if skip_depth:
+            skip_depth -= 1
+            return
+        local = stack.pop()
+        if open_tag:
+            out[-1] = out[-1][:-1] + "/>"
+        else:
+            out.append(f"</{local}>")
+        open_tag = False
+
+    def text(chunk: str) -> None:
+        nonlocal open_tag
+        if stack and not skip_depth:
+            out.append(escape(chunk))
+            open_tag = False
+
+    def doctype(_name: str, _system: str | None, _public: str | None, internal_subset: int) -> None:
+        if internal_subset:
+            raise ConfigValidationError("SVG must not declare a DTD internal subset or entities")
+        note("DOCTYPE")
+
+    def skipped_entity(name: str, _is_parameter: int) -> None:
+        raise ConfigValidationError(f"SVG references an undefined entity '&{name};'")
+
+    def processing_instruction(target: str, _data: str) -> None:
+        note(f"<?{target}?> processing instruction")
+
+    parser = expat.ParserCreate(namespace_separator=" ")
+    parser.buffer_text = True
+    parser.StartElementHandler = start
+    parser.EndElementHandler = end
+    parser.CharacterDataHandler = text
+    parser.StartDoctypeDeclHandler = doctype
+    parser.SkippedEntityHandler = skipped_entity
+    parser.ProcessingInstructionHandler = processing_instruction
+    try:
+        parser.Parse(data, True)
+    except expat.ExpatError as exc:
+        raise ConfigValidationError(f"SVG is not well-formed XML: {exc}") from exc
+    return "".join(out), removed
 
 
 def _validate_name(name: str) -> None:
@@ -210,13 +334,24 @@ async def assets_upload(
     overwrite: bool = False,
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
-    """Upload an asset. ``group`` is ``icons`` or ``images``.
+    """Upload an asset. ``group`` is ``icons`` (``.svg``) or ``images``
+    (``.png``, ``.jpg``, ``.jpeg``, ``.webp``, ``.gif``, ``.svg``); the file
+    extension in ``name`` must be one of these.
 
     ``encoding`` selects the payload format:
-    - ``"svg"``  — ``content`` is UTF-8 SVG markup; sanitized before write.
-      ``mime`` defaults to ``image/svg+xml``.
-    - ``"base64"`` — ``content`` is base64-encoded binary (png/jpg/webp).
-      ``mime`` is required and round-tripped in the response.
+    - ``"svg"``  — ``content`` is UTF-8 SVG markup. ``mime`` defaults to
+      ``image/svg+xml``.
+    - ``"base64"`` — ``content`` is base64-encoded binary. ``mime`` is
+      required and round-tripped in the response.
+
+    A raster image must start with its format's signature. Every SVG, in either
+    encoding, is rebuilt from an allowlist: shapes, gradients, clip paths,
+    masks, ``use``/``symbol``, ``title``/``desc`` and text; no script,
+    ``foreignObject``, ``style`` element, event handler, DOCTYPE, or link or
+    CSS reference (``url()``, ``image-set()``, a ``\\`` escape, …) outside
+    the file. Each removal is listed in ``warnings`` (code
+    ``svg-sanitized``), so check them: the stored icon may differ from the
+    upload.
     """
     label = get_agent_label()
     if idempotency_key:
@@ -226,43 +361,61 @@ async def assets_upload(
     _validate_name(name)
     target = _resolve_target(group, name)
     rel_path = f"{group}/{name}"
+    ext = target.suffix.lower()
+    if ext not in _UPLOAD_EXTENSIONS[group]:
+        allowed = ", ".join(sorted(_UPLOAD_EXTENSIONS[group]))
+        raise ConfigValidationError(f"'{group}' accepts {allowed} files, not '{name}'")
 
+    data: str | bytes
     if encoding == "svg":
         if len(content.encode("utf-8")) > _MAX_SVG_BYTES:
             raise ConfigValidationError("SVG payload exceeds 5 MB limit")
-        sanitized = _sanitize_svg(content)
+        data = content
         resolved_mime = mime or "image/svg+xml"
-        async with locks.acquire(("asset", rel_path)):
-            if target.exists() and not overwrite:
-                raise ConfigConflictError(
-                    f"Asset '{rel_path}' already exists; pass overwrite=true to replace"
-                )
-            write_text_atomic(target, sanitized)
-            response = applied_response(
-                f"Uploaded SVG '{rel_path}'", None, {"path": rel_path, "mime": resolved_mime}
-            )
-            response["path"] = rel_path
     elif encoding == "base64":
         if not mime:
             raise ConfigValidationError("mime is required when encoding='base64'")
         try:
-            decoded = base64.b64decode(content, validate=True)
+            data = base64.b64decode(content, validate=True)
         except Exception as exc:
             raise ConfigValidationError(f"Invalid base64 payload: {exc}") from exc
-        if len(decoded) > _MAX_IMAGE_BYTES:
+        if len(data) > _MAX_IMAGE_BYTES:
             raise ConfigValidationError("Image payload exceeds 5 MB limit")
-        async with locks.acquire(("asset", rel_path)):
-            if target.exists() and not overwrite:
-                raise ConfigConflictError(
-                    f"Asset '{rel_path}' already exists; pass overwrite=true to replace"
-                )
-            write_bytes_atomic(target, decoded)
-            response = applied_response(
-                f"Uploaded image '{rel_path}' ({mime})", None, {"path": rel_path, "mime": mime}
-            )
-            response["path"] = rel_path
+        resolved_mime = mime
     else:
         raise ConfigValidationError("encoding must be 'svg' or 'base64'")
+
+    warnings: list[dict[str, Any]] = []
+    if ext == ".svg":
+        # Off the event loop: the manager serves every project's proxy from it.
+        svg, removed = await asyncio.to_thread(_sanitize_svg, data)
+        payload = svg.encode("utf-8")
+        summary = f"Uploaded SVG '{rel_path}'" + (" (sanitized)" if removed else "")
+        warnings = [
+            {
+                "path": rel_path,
+                "message": f"Removed {what}" + (f" ({count}x)" if count > 1 else ""),
+                "severity": "warning",
+                "code": "svg-sanitized",
+            }
+            for what, count in removed.items()
+        ]
+    elif isinstance(data, bytes) and _has_raster_signature(ext, data):
+        payload = data
+        summary = f"Uploaded image '{rel_path}' ({resolved_mime})"
+    else:
+        raise ConfigValidationError(f"Content is not a {ext[1:].upper()} image")
+
+    async with locks.acquire(("asset", rel_path)):
+        if target.exists() and not overwrite:
+            raise ConfigConflictError(
+                f"Asset '{rel_path}' already exists; pass overwrite=true to replace"
+            )
+        write_bytes_atomic(target, payload)
+        response = applied_response(
+            summary, None, {"path": rel_path, "mime": resolved_mime}, warnings=warnings
+        )
+        response["path"] = rel_path
 
     await emit_change(
         artifact_type="asset",

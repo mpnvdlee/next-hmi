@@ -24,7 +24,6 @@ RAW_WRITE_EXEMPT: dict[tuple[str, str], str] = {
     ("backend/core/manifest.py", "_manifest_guard"): "lock file handle, not data",
     ("backend/core/project_migrations.py", "_write_backup_zip"): "streams to .partial, then os.replace",
     ("backend/core/project_packer.py", "unpack_project"): "streams extracted entries",
-    ("backend/core/translations.py", "translation_transaction"): "lock file handle, not data",
     ("backend/services/supervisor.py", "_spawn_locked"): "append-only child-process log",
 }
 

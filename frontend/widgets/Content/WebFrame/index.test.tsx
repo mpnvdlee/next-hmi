@@ -3,6 +3,8 @@ import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { __resetForTests } from '@hmi/utils/actionDispatcher';
+import { useHmiStore } from '@hmi/store/hmiStore';
+import { useVariableStore } from '@hmi/store/variableStore';
 import WebFrame from './index';
 
 vi.mock('@hmi/hooks/useWebSocket', () => ({
@@ -21,6 +23,8 @@ describe('WebFrame', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __resetForTests();
+    useHmiStore.setState({ pendingToasts: [] });
+    useVariableStore.setState({ values: {}, varMeta: {} });
   });
 
   afterEach(() => {
@@ -121,6 +125,35 @@ describe('WebFrame', () => {
     });
   });
 
+  it.each([
+    ['*', 'https://evil.example'],
+    ['https://example.com, *', 'https://evil.example'],
+    // A sandbox without allow-same-origin gives every page in it this origin.
+    ['null', 'null'],
+  ])('never treats %s as a site that may send messages', (allowedOrigins, origin) => {
+    const onMessage = [{ type: 'showToast', message: 'got it' }];
+    const { container } = renderFrame({
+      url: 'https://example.com/',
+      allowedOrigins,
+      inboundVariable: { $var: { path: 'PLC:Frame/Message' } },
+      onMessage: { onMessage },
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: 'from-a-site-the-frame-navigated-to',
+          origin,
+          source: iframe.contentWindow,
+        }),
+      );
+    });
+
+    expect(sendWsMessage).not.toHaveBeenCalled();
+    expect(useHmiStore.getState().pendingToasts).toEqual([]);
+  });
+
   it('ignores a message from an origin that is not allowed', () => {
     const { container } = renderFrame({
       url: 'https://example.com/',
@@ -140,5 +173,50 @@ describe('WebFrame', () => {
     });
 
     expect(sendWsMessage).not.toHaveBeenCalled();
+  });
+
+  describe('outbound value', () => {
+    /** Renders the frame, then sets the outbound variable, and returns what
+     *  the frame's window was handed. */
+    function sendOutbound(properties: Record<string, unknown>) {
+      const { container } = renderFrame({
+        ...properties,
+        outboundVariable: { $var: { path: 'PLC:Frame/Out' } },
+      });
+      const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+      const postMessage = vi.spyOn(iframe.contentWindow as Window, 'postMessage');
+      act(() => {
+        useVariableStore.setState({ values: { 'PLC:Frame/Out': 'recipe-42' } });
+      });
+      return postMessage;
+    }
+
+    it.each([
+      ['unset', undefined],
+      ['*', '*'],
+    ])('goes only to the origin of the URL when the target is %s', (_label, outboundOrigin) => {
+      const postMessage = sendOutbound({
+        url: 'https://portal.example.com/orders?line=3',
+        outboundOrigin,
+      });
+      expect(postMessage).toHaveBeenCalledTimes(1);
+      expect(postMessage).toHaveBeenCalledWith('recipe-42', 'https://portal.example.com');
+    });
+
+    it('goes to a target origin the project names', () => {
+      const postMessage = sendOutbound({
+        url: 'https://portal.example.com/',
+        outboundOrigin: 'https://other.example',
+      });
+      expect(postMessage).toHaveBeenCalledWith('recipe-42', 'https://other.example');
+    });
+
+    it.each(['about:blank', '/local/page.html', 'data:text/html,<p>hi</p>'])(
+      'is not sent when the URL has no origin of its own (%s)',
+      (url) => {
+        const postMessage = sendOutbound({ url });
+        expect(postMessage).not.toHaveBeenCalled();
+      },
+    );
   });
 });

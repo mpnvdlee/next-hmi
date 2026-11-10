@@ -200,6 +200,30 @@ describe('Button', () => {
     expect(btn).not.toHaveAttribute('aria-label');
   });
 
+  it('draws a custom SVG icon as a mask, without inserting its markup', () => {
+    renderButton({ label: 'Pump', iconName: '/assets/icons/pump.svg' });
+
+    const box = screen
+      .getByRole('button', { name: 'Pump' })
+      .querySelector<HTMLElement>('.hmi-button__icon-svg')!;
+    expect(box.style.getPropertyValue('--hmi-btn-icon-url')).toBe('url("/assets/icons/pump.svg")');
+    expect(box.childNodes).toHaveLength(0);
+  });
+
+  // The value can come from a String tag any client may write over /ws.
+  it('draws an empty icon box for a path that leaves the icons folder', () => {
+    useVariableStore.setState({
+      values: { 'PLC:Icon': '/assets/icons/../../api/historian/query?variables=%3Csvg%3E' },
+    });
+    renderButton({ label: 'Pump', iconName: { $var: { path: 'PLC:Icon' } } });
+
+    const box = screen
+      .getByRole('button', { name: 'Pump' })
+      .querySelector<HTMLElement>('.hmi-button__icon-svg')!;
+    expect(box.style.getPropertyValue('--hmi-btn-icon-url')).toBe('');
+    expect(box.childNodes).toHaveLength(0);
+  });
+
   it('stays a plain text button with neither icon nor label', () => {
     renderButton({ label: '' });
 

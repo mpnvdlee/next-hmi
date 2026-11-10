@@ -242,3 +242,72 @@ def test_shipped_seed_theme_matches_canonical_defaults():
     )
     seed = json.loads((repo_root / "project-seed/themes/light.json").read_text(encoding="utf-8"))
     assert seed == defaults
+
+
+# Each names a file outside themes/ once ".json" is appended (on another drive,
+# up a level, in a subfolder), or a device on Windows.
+_INVALID_THEME_IDS = ["D:foo", "..\\x", "../outside", "a/b", "..", "dark.v2", "con", "x" * 129]
+
+
+@pytest.mark.parametrize("theme_id", _INVALID_THEME_IDS)
+def test_an_invalid_theme_id_is_a_theme_that_does_not_exist(live_project_root, theme_id):
+    from core.exceptions import ThemeNotFoundError, ThemeValidationError
+    from services.theme_manager import theme_manager
+
+    storage.ensure_active_project_dirs()
+    outside = theme_api_module.ThemeConfig().model_dump()
+    (live_project_root / "outside.json").write_text(json.dumps(outside), encoding="utf-8")
+    with pytest.raises(ThemeNotFoundError):
+        theme_manager.get(theme_id)
+    with pytest.raises(ThemeNotFoundError):
+        theme_manager.delete(theme_id)
+    with pytest.raises(ThemeNotFoundError):
+        theme_manager.set_default_id(theme_id)
+    with pytest.raises(ThemeValidationError):
+        theme_manager.save(theme_id, theme_api_module.ThemeConfig())
+
+
+@pytest.mark.parametrize("theme_id", ["D:foo", "..%5Cx", "con", "x" * 129])
+def test_the_api_refuses_an_invalid_theme_id(theme_client, theme_id):
+    client, root = theme_client
+    client.get("/api/themes")  # seed
+    assert client.get(f"/api/themes/{theme_id}").status_code == 404
+    assert client.delete(f"/api/themes/{theme_id}").status_code == 404
+    assert client.put(f"/api/themes/{theme_id}", json=_valid_theme()).status_code == 422
+    assert [path.name for path in (root / "themes").iterdir()] == ["default.json"]
+
+
+@pytest.mark.parametrize(
+    ("theme_id", "public"),
+    [("dark", True), ("Dark_2-b", True), ("D:foo", False), ("..\\x", False), ("x" * 129, False)],
+)
+def test_the_manager_serves_only_a_valid_theme_id_without_a_session(theme_id, public):
+    import manager
+
+    assert manager._is_gated(f"/runtime/plant/api/themes/{theme_id}", "GET") is not public
+
+
+def test_created_ids_are_valid_whatever_the_name(theme_client):
+    client, _ = theme_client
+    client.get("/api/themes")  # seed
+    created = [
+        client.post("/api/themes", json={"name": name}).json()["id"]
+        for name in ("Con", "ﬃ" * 100, "x" * 300, "x" * 300, "!!!")
+    ]
+    assert created[0] == "con-1"
+    assert len(set(created)) == len(created)
+    for theme_id in created:
+        assert client.get(f"/api/themes/{theme_id}").status_code == 200
+
+
+def test_shipped_theme_ids_are_valid():
+    from services.theme_manager import _valid_theme_id
+
+    repo_root = Path(__file__).resolve().parents[2]
+    shipped = [
+        path.stem
+        for template in ("project-seed", "project-example")
+        for path in (repo_root / template / "themes").glob("*.json")
+    ]
+    assert shipped
+    assert all(_valid_theme_id(theme_id) for theme_id in [*shipped, "default"])

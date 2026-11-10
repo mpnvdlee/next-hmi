@@ -263,6 +263,18 @@ def test_variables_list_filters_by_enabled_false():
     assert [item["path"] for item in result["items"]] == ["Motor/Running"]
 
 
+def test_variables_list_reports_a_missing_enabled_flag_as_disabled():
+    # As the runtime reads it: a variable without the flag is never subscribed.
+    (storage.active_datasources_dir() / "PLC.json").write_text(
+        json.dumps({"name": "PLC", "variables": [
+            {"kind": "variable", "display_name": "Browsed", "data_type": "Float"},
+        ]}),
+        encoding="utf-8",
+    )
+    assert [item["enabled"] for item in variables_tools.variables_list()["items"]] == [False]
+    assert variables_tools.variables_list(enabled=True)["items"] == []
+
+
 def test_variables_list_filters_combine_with_and():
     _seed_two_datasources()
     result = variables_tools.variables_list(datasource="PLC", data_type="Bool")

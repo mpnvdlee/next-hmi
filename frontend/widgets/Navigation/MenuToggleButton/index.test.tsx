@@ -1,5 +1,5 @@
 import '../../testSdk';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useVariableStore } from '@hmi/store/variableStore';
@@ -98,20 +98,26 @@ describe('MenuToggleButton', () => {
     expect(frame.requestId).toBeTruthy();
   });
 
-  it('renders a custom SVG icon fetched and stripped of hardcoded fill colors', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, text: async () => '<svg fill="red"><path/></svg>' }),
-    );
-    const { container } = renderToggle({
-      bound: false,
-      iconCollapsed: '/assets/icons/menu.svg',
-    });
+  it('draws a custom SVG icon as a mask, without inserting its markup', () => {
+    renderToggle({ bound: false, iconCollapsed: '/assets/icons/menu.svg' });
 
-    await waitFor(() => {
-      expect(container.querySelector('svg')).not.toBeNull();
-    });
-    expect(container.querySelector('svg')?.outerHTML).not.toContain('fill="red"');
-    expect(container.querySelector('svg')?.outerHTML).toContain('currentColor');
+    const box = screen.getByRole('button').querySelector<HTMLElement>('.hmi-menu-toggle__svg')!;
+    expect(box.style.getPropertyValue('--hmi-menu-toggle-icon-url')).toBe(
+      'url("/assets/icons/menu.svg")',
+    );
+    expect(box.childNodes).toHaveLength(0);
+  });
+
+  // The value can come from a String tag any client may write over /ws.
+  it('draws an empty box, not the text, for a path that leaves the icons folder', () => {
+    const escape = '/assets/icons/../../api/historian/query?variables=%3Csvg%3E';
+    useVariableStore.setState({ values: { 'PLC:Icon': escape } });
+    renderToggle({ bound: false, iconCollapsed: { $var: { path: 'PLC:Icon' } } });
+
+    const btn = screen.getByRole('button');
+    const box = btn.querySelector<HTMLElement>('.hmi-menu-toggle__svg')!;
+    expect(box.style.getPropertyValue('--hmi-menu-toggle-icon-url')).toBe('');
+    expect(box.childNodes).toHaveLength(0);
+    expect(btn).not.toHaveTextContent(escape);
   });
 });

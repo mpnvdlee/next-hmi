@@ -45,7 +45,7 @@ Add a **Trend Chart** widget ([catalog](catalog.md#trend-chart)) and set:
 - **Show zoom buttons** — adds the range controls so the operator can widen or narrow the window themselves.
 - **Line colors** — comma-separated colours matched to the variable list in order (`#2563eb, #dc2626`). Leave it empty to use the theme's series colours.
 
-Long windows are **downsampled** before they reach the browser — a 30-day query returns a few hundred points, not a million — so the widget stays responsive at any range.
+Long windows are **downsampled** before they reach the browser — a 30-day query returns a few hundred points, not a million — so the widget stays responsive at any range. A chart reads at most 32 variables; with more it shows the warning *This chart asks for too much data. It shows at most 32 variables.* instead of drawing, and stops asking the historian until its variables or range change.
 
 ## Read the history from outside
 
@@ -55,4 +55,6 @@ The same store is queryable over REST, which is the route for a report generator
 GET /api/historian/query?variables=LinePLC:Motor1/Speed&start=-8h&end=now&maxPoints=500
 ```
 
-`start` and `end` take an ISO-8601 timestamp, a relative offset (`-30m`, `-2h`, `-7d`), or `now`. The response is one series per variable, each a list of `{ t, v }` points.
+`start` and `end` take an ISO-8601 timestamp, a relative offset (`-30m`, `-2h`, `-7d`), or `now`. The response is one series per variable, each a list of `{ t, v }` points. A range holding more than `maxPoints` samples is cut into `maxPoints` equal slices of time, each giving its first sample.
+
+Anyone who reaches the panel can ask, so one request is bounded: at most **32 variables**, and variables × `maxPoints` at most **100 000** points. A bigger request is refused with HTTP `422` and a `detail` saying which limit it passed; split it into several. The panel answers two queries at a time and the rest wait their turn, so a burst of them slows trends down but not the rest of the panel. The [API](api.md) `history` endpoint pages through raw samples instead.

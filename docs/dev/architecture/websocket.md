@@ -31,7 +31,9 @@ limits (reverse-proxy `Host`, dev proxy, DNS rebinding) are in
 [rest-api.md](../reference/rest-api.md#authentication).
 
 The manager opens a fresh upstream connection per browser socket and forwards
-none of the browser's headers. On the editor prefix only, it sets
+none of the browser's headers. It sets `X-Forwarded-For` to the address it saw,
+which the child's uvicorn (trusting loopback) turns into the socket's client
+address for the sign-in throttle. On the editor prefix only, it sets
 `x-nexthmi-editor: 1` (`core.audit.EDITOR_HEADER`) on that upstream
 upgrade; the child marks such a connection as an editor socket
 (`websocket_manager.connect(editor=True)`). A browser cannot forge the mark on
@@ -55,6 +57,14 @@ when it came through the editor.
 Inbound frames are capped at **64 KiB**; oversized or non-JSON frames are logged
 and dropped. Unknown client `type` values are ignored. Composite keys use the
 form `"<datasource>:<path>"` (`models/datasource.py:build_var_key`).
+
+A child serves at most **500** runtime sockets at once
+(`_MAX_RUNTIME_CONNECTIONS`); one more is accepted and closed at once with
+`1013` (Try Again Later) and the reason "Too many open connections to this
+project", before any message. Editor sockets do not count and are never
+refused. The runtime client resets its reconnect backoff on the first
+`var_snapshot`, not on `open` — through the manager the socket opens before
+the child answers — so a refused tab backs off to one try every 10 s.
 
 ## Handshake
 
@@ -140,7 +150,7 @@ leaving a half-initialised socket registered.
 | `alarm_ack_response` | `{ type, requestId }` | A correlated `alarm_ack` / `alarm_ack_all` succeeded. |
 | `alarm_ack_error` | `{ type, requestId, reason }` | A correlated `alarm_ack` / `alarm_ack_all` failed: `not_found` (no active instance with that id), `bad_request` (no `instanceId`), `alarms_unavailable`. |
 | `user_identity` | `{ type, scope, username, groups, groupLabels, sessionToken? }` | After `login`, `logout`, or `request_identity`. Also unprompted, with no `requestId`: for every scope on a named panel's connections when [API v1](../reference/rest-api.md#panel-sessions) signs that panel in or out, and for a scope whose user a `users` reload deleted, regrouped or gave a new password (see [Internal API](../reference/rest-api.md#internal-api)). `sessionToken` is present while the identity is a resumable login (see `request_identity`). |
-| `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username off. |
+| `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username or this connection's address off. |
 | `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` or `toggle_field` succeeded — see [Action result correlation](#action-result-correlation). |
 | `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` or `toggle_field` failed. |
 | `restarting` | `{ type, reason }` | Right before the backend SIGTERMs itself for `POST /api/system/restart`. Clients disconnect and poll `/api/system/info` for the new process. |
@@ -213,6 +223,34 @@ integer digits keeps them too — and writes it back as a string.
   - `var_update` frames are per client: a client receives the keys its last
     `set_context` resolved to, the elements of any struct array it binds
     whole, and every recipe parameter — nothing else.
+  - Only enabled variables are answered or subscribed. A key naming a variable
+    that is not enabled in its datasource (or that a re-browse found gone from
+    the server) gets no value, cached or freshly read, and no fast
+    subscription; a struct folder's key subscribes only its enabled leaves.
+  - Before anything is stored, every key — explicit or resolved from a page —
+    that names no enabled variable or folder of a loaded datasource is
+    dropped, so a connection holds at most the keys it can be answered for.
+    A page bound to a variable added later gets its fast subscription on its
+    next `set_context`.
+  - The fast-subscription set is the union of every connection's keys, kept
+    as a count per key. A `set_context` (or a disconnect) that adds no key to
+    the union and removes none costs only that connection's own keys and
+    changes no subscription. One that moves it schedules a recompute; those
+    run one at a time, at least 250 ms apart however many connections move
+    the union (`schedule_priority_recompute`), so the PLC sees at most a few
+    resubscriptions a second.
+  - Paced per connection: one `set_context` is applied at once, and any that
+    arrive within 250 ms of the last applied one wait, only the latest being
+    applied when the interval is up. Superseded contexts get no
+    `context_ready`.
+  - Values not cached are read from the PLC in the background, one read per
+    connection at a time: a context applied while its read runs waits for it,
+    the latest winning. At most four such reads run at once across all
+    connections, and each reads only what is still not cached when its turn
+    comes, so connections opening one page together share its reads.
+  - The page tree is resolved per page id once per config version (dropped by
+    `invalidate_runtime_pages_config_cache`); an id that no page or group
+    carries costs nothing.
 
   Current producers: `HmiView` (active page + open overlays), `PreviewView`
   (preview page/overlay context), `DatasourceVariableTable` (explicit
@@ -253,12 +291,13 @@ integer digits keeps them too — and writes it back as a string.
     a type with no bits, or of an array element is `bad_path`; a value that is
     not a Boolean is `invalid_value`.
   - The server does not check who is writing: any connection may write any
-    writable variable. A variable entry may still carry the retired
+    enabled, writable variable. A variable entry may still carry the retired
     `interactableByGroups` key from an older project; it is ignored.
-  - Values are coerced per the
-    [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix), then
-    refused as `read_only` unless the variable written is marked `writable: true`,
-    then checked against its `min`/`max`.
+  - The variable written is refused as `disabled` unless it is enabled in its
+    datasource, then as `read_only` unless it is marked `writable: true`; then
+    the value is coerced per the
+    [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix) and
+    checked against its `min`/`max`.
   - `static` datasources are updated in-process; OPC-UA datasources route through
     the pool engine.
   - `requestId` is optional. When supplied the backend replies with
@@ -281,8 +320,8 @@ integer digits keeps them too — and writes it back as a string.
     `toggleDataVariable` action's `target` is resolved the same way. The backend reads
     the current value itself (a fresh node read for OPC-UA, the cache for a
     static datasource) and writes its inverse through `write_service.write_value`,
-    so the read-only check, range check, audit record and reply are the same
-    as a `write_field`. The client never sends the value: its copy may be stale.
+    so the enabled and read-only checks, range check, audit record and reply
+    are the same as a `write_field`. The client never sends the value: its copy may be stale.
   - A `.N` bit path toggles that bit of its word.
   - A variable whose `data_type` is not Boolean fails with `invalid_value`; one
     whose current value is not a boolean (never read, read failed) fails with
@@ -380,8 +419,11 @@ integer digits keeps them too — and writes it back as a string.
     12 hours; the user's groups are re-read. Tokens live in backend memory, so a
     backend restart ends every login.
 
-All `scope` values must be non-empty strings; empty / missing scopes cause the
-message to be ignored silently.
+All `scope` values must be non-empty strings of at most 64 characters; an
+empty, missing or longer scope causes the message to be ignored silently. A
+connection keeps the identity of at most 16 scopes: storing a 17th (a
+`login`, `logout` or `request_identity` naming a new scope) drops the one
+stored longest ago, never the scope just named.
 
 ## Action result correlation
 
@@ -407,13 +449,14 @@ stable contract the frontend `$switch`es on:
 | Reason | Meaning |
 | --- | --- |
 | `invalid_credentials` | Login: username/password mismatch — including every account with no password set, which can never be signed in as |
-| `rate_limited`        | Login: too many failed attempts for this username (or across all of them); the right password is refused too until the lockout expires. `users_manager.authenticate` raises `RateLimitError`, which the REST credential routes answer as HTTP `429` |
+| `rate_limited`        | Login: too many failed attempts for this username, from this connection's address, or (a safety net) from all addresses together; the right password is refused too until the lockout expires. `users_manager.authenticate` raises `RateLimitError`, which the REST credential routes answer as HTTP `429` |
 | `bad_request`         | Write: missing required field in the request payload |
 | `bad_path`            | Write: datasource/path is unknown to the registry |
 | `bad_field`           | Write: field cannot be resolved to an OPC-UA node id |
 | `invalid_value`       | Write: value cannot be coerced to the variable's data type |
 | `value_out_of_range`  | Write: the numeric value, as entered (before any Float32 rounding), falls outside the variable's persisted `min`/`max` |
 | `read_only`           | Write / toggle: the variable written — for an element, its array; for a struct field, that member — does not have `writable: true`. Nothing is written |
+| `disabled`            | Write / toggle: the variable written is not enabled in its datasource — a browsed tag left unticked — or a re-browse found it gone from the server. Nothing is read or written |
 | `opcua_unreachable`   | Write: no engine for the datasource (not yet connected, or static-only) |
 | `write_failed`        | Write: the OPC-UA `write_node` call raised |
 | `array_index_out_of_bounds` | Write: an indexed write exceeds a fixed array's declared length |
@@ -423,7 +466,7 @@ stable contract the frontend `$switch`es on:
 
 `invalid_value` follows the documented [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix). The REST variable-write endpoint uses project-user HTTP Basic credentials, then calls the same request parser, coercer, and dispatcher.
 
-`read_only` is checked in `write_service.write_value` (and in `toggle_value`, before the Boolean check and the read), so the WebSocket, REST and recipe-download writes refuse it alike; a recipe download reports it per parameter in `failures`. It comes after `bad_path` and `bad_field` and before everything about the index or the value — `array_index_out_of_bounds`, `invalid_value`, `value_out_of_range` — since no other value could make the write succeed. A whole-struct payload names a folder with no access of its own and stays `invalid_value`. `useWriteVariable` pre-flights it in the same order: a variable whose metadata says `writable: false` is reported `read_only` before its value is coerced. A variable that states no access at all is read-only, the same reading the editor and the runtime overlay give it.
+`disabled` is checked just before `read_only`, in the same places and on the same variable (for a bit, its word), and before any read: a tag nobody enabled is still in the datasource's registry, and any connection can name it. `read_only` is checked in `write_service.write_value` (and in `toggle_value`, before the Boolean check and the read), so the WebSocket, REST and recipe-download writes refuse it alike; a recipe download reports it per parameter in `failures`. It comes after `bad_path` and `bad_field` and before everything about the index or the value — `array_index_out_of_bounds`, `invalid_value`, `value_out_of_range` — since no other value could make the write succeed. A whole-struct payload names a folder with no access of its own and stays `invalid_value`. `useWriteVariable` pre-flights it in the same order: a variable whose metadata says `writable: false` is reported `read_only` before its value is coerced. A variable that states no access at all is read-only, the same reading the editor and the runtime overlay give it.
 
 `value_out_of_range` is checked only after coercion succeeds, against the variable's own (or, for a struct field, that field's own) persisted `min`/`max` — a hard operator-write constraint enforced identically for REST, WebSocket, and recipe writes since all three share `write_service.write_value`. It judges the value as entered: a `Float` (float32) write is rounded to the nearest float32 only after the check, so 19.9 against a minimum of 19.9 is accepted although it is stored as 19.89999962. A whole-array write is rejected if any element is out of range; an indexed element write is checked the same way. A persisted `min > max` is a contract violation, not a range: it is left unenforced (the write proceeds as if no range were configured) and logged once as a warning when the datasource loads.
 

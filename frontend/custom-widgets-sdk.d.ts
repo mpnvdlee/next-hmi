@@ -921,22 +921,33 @@ type PhosphorIconComponent = ((props: PhosphorIconProps) => JSX.Element) & {
 };
 declare function isBuiltinIconId(value: string): boolean;
 declare function getBuiltinIconComponent(iconId: string): PhosphorIconComponent | null;
-/** True when an icon value points at a workspace SVG rather than a built-in id. */
+/**
+ * True when an icon value is a `.svg` file inside the project's icons folder
+ * (`/assets/icons/…`, also under the `/runtime/<slug>/` base) — the only icon
+ * value to load as a URL, through `withBase(value)`. False for anything that
+ * could reach another URL: a `.`/`..` segment (also percent-encoded), an encoded
+ * `/`, a backslash, a query, a hash, a relative path or another origin. An icon
+ * field can be bound to a tag any client may write, so check every value.
+ */
 declare function isCustomIconAssetPath(value: string): boolean;
 /**
- * Fetches an SVG asset and returns its markup *rewritten for tinting*: every
- * `fill`, `stroke` and `color` attribute is stripped and a
- * `*{fill:currentColor!important;stroke:none!important}` style block is injected,
- * so the glyph takes the CSS `color` of its parent. A multi-colour source comes
- * back monochrome and stroke-drawn artwork comes back unstroked — fetch the
- * asset yourself (with `withBase`) when you need it to keep its own palette.
+ * Fetches a custom icon and returns its markup *rewritten for tinting*: every
+ * `fill` / `stroke` paint is repointed at `currentColor`, a `color` attribute
+ * is dropped, and a root that declares no fill gets `fill="currentColor"`, so
+ * the glyph takes the CSS `color` of its parent. A multi-colour source comes
+ * back monochrome — fetch the asset yourself (with `withBase`) when it has to
+ * keep its own palette.
  *
- * Returns `''` for a null/empty url, while the fetch is in flight, *and* when
- * the fetch fails — the three are indistinguishable, so treat `''` as "nothing
- * to draw" rather than as a loading state.
+ * Only a value `isCustomIconAssetPath` accepts is fetched, and the markup is
+ * sanitised first: anything but drawing elements (`script`, `foreignObject`,
+ * `a`, `image`, animation, filters), every `on…` attribute, any `href` other
+ * than a `#fragment`, and any attribute or `<style>` that loads from outside
+ * the file is removed.
  *
- * Render the result with `dangerouslySetInnerHTML`: the markup comes from the
- * project's own asset folder, an editor-writable surface that is already trusted.
+ * Returns `''` for a null/empty or rejected url, while the fetch is in flight,
+ * *and* when the fetch fails or the file is not well-formed SVG — these are
+ * indistinguishable, so treat `''` as "nothing to draw" rather than as a
+ * loading state. Render the result with `dangerouslySetInnerHTML`.
  */
 declare function useInlineSvg(url: string | null | undefined): string;
 

@@ -17,15 +17,10 @@ import { BUILTIN_ICON_ALLOWLIST } from '@shared/config/iconAllowlist';
 // accessor in phosphorIcons.tsx.
 import { BUILTIN_ICON_COMPONENTS } from '@shared/utils/phosphorIconComponents';
 import type { IconValue } from '@shared/types/config';
+import CustomIconGlyph from '../../ui/CustomIconGlyph';
 import AssetPickerShell from '../AssetPickerShell';
 import FolderBreadcrumb from '../FolderBreadcrumb';
-import {
-  assetName,
-  assetUrl,
-  filterBySearch,
-  folderContents,
-  useWorkspaceAssets,
-} from '../assetPickerUtils';
+import { assetName, filterBySearch, folderContents, useWorkspaceAssets } from '../assetPickerUtils';
 
 type Tab = 'builtin' | 'custom';
 
@@ -143,7 +138,7 @@ export default function IconSourcePicker() {
         })()}
       {selPath && (
         <>
-          <img src={assetUrl(selPath)} width={16} height={16} alt="" />
+          <CustomIconGlyph path={selPath} size={16} />
           <span>{assetName(selPath)}</span>
         </>
       )}
@@ -160,6 +155,25 @@ export default function IconSourcePicker() {
   const customEmpty = isSearching
     ? visibleCustom.length === 0
     : subfolders.length === 0 && visibleFolderFiles.length === 0;
+  // Previewed as the widgets draw it, with the file name the grid otherwise
+  // would not show: a mask in one colour hides what told two files apart.
+  const customIconGrid = (items: { name: string; path: string }[]) => (
+    <div className="cfg-asset-picker-grid cfg-asset-picker-grid--named">
+      {items.map((item) => (
+        <button
+          key={item.path}
+          title={item.path}
+          className={`cfg-asset-picker-icon-btn cfg-asset-picker-icon-btn--named${selPath === item.path ? ' cfg-asset-picker-icon-btn--selected' : ''}`}
+          type="button"
+          onClick={() => setSelected({ type: 'custom', path: item.path })}
+          onDoubleClick={() => handleConfirm({ type: 'custom', path: item.path })}
+        >
+          <CustomIconGlyph path={item.path} size={20} />
+          <span className="cfg-asset-picker-icon-btn__name">{item.name}</span>
+        </button>
+      ))}
+    </div>
+  );
   const confirmTopMatch = () => {
     if (showBuiltin) {
       const icon = visibleBuiltin[0];
@@ -225,20 +239,7 @@ export default function IconSourcePicker() {
                   : 'This folder is empty.'}
             </p>
           ) : isSearching ? (
-            <div className="cfg-asset-picker-grid">
-              {visibleCustom.map((item) => (
-                <button
-                  key={item.path}
-                  title={item.path}
-                  className={`cfg-asset-picker-icon-btn${selPath === item.path ? ' cfg-asset-picker-icon-btn--selected' : ''}`}
-                  type="button"
-                  onClick={() => setSelected({ type: 'custom', path: item.path })}
-                  onDoubleClick={() => handleConfirm({ type: 'custom', path: item.path })}
-                >
-                  <img src={assetUrl(item.path)} alt={item.name} width={20} height={20} />
-                </button>
-              ))}
-            </div>
+            customIconGrid(visibleCustom)
           ) : (
             <>
               {subfolders.length > 0 && (
@@ -260,22 +261,7 @@ export default function IconSourcePicker() {
               {subfolders.length > 0 && visibleFolderFiles.length > 0 && (
                 <hr className="cfg-asset-picker-divider" />
               )}
-              {visibleFolderFiles.length > 0 && (
-                <div className="cfg-asset-picker-grid">
-                  {visibleFolderFiles.map((item) => (
-                    <button
-                      key={item.path}
-                      title={item.path}
-                      className={`cfg-asset-picker-icon-btn${selPath === item.path ? ' cfg-asset-picker-icon-btn--selected' : ''}`}
-                      type="button"
-                      onClick={() => setSelected({ type: 'custom', path: item.path })}
-                      onDoubleClick={() => handleConfirm({ type: 'custom', path: item.path })}
-                    >
-                      <img src={assetUrl(item.path)} alt={item.name} width={20} height={20} />
-                    </button>
-                  ))}
-                </div>
-              )}
+              {visibleFolderFiles.length > 0 && customIconGrid(visibleFolderFiles)}
             </>
           )}
         </>

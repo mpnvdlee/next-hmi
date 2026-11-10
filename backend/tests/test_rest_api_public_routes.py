@@ -31,8 +31,9 @@ def _documented_public_routes() -> set[tuple[str, tuple[str, ...]]]:
 def test_public_runtime_routes_match_the_rest_api_table() -> None:
     import manager
 
+    # A segment the gate matches by pattern (a theme id) is one wildcard here.
     in_code = {
-        (method, pattern)
+        (method, tuple("*" if isinstance(seg, re.Pattern) else seg for seg in pattern))
         for method, patterns in manager._RUNTIME_PUBLIC_ROUTES.items()
         for pattern in patterns
     }
