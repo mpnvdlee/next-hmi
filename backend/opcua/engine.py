@@ -13,8 +13,10 @@ from typing import Any
 
 from asyncua import Client, ua
 from asyncua.common.node import Node
+from asyncua.common.subscription import DataChangeEvent, StatusChangeEvent
 from core import telemetry
 from core.number_utils import get_config_float
+from core.value_types import is_array_shape, to_simple_type
 from models.datasource import build_var_key, is_present_on_server, is_subscribable
 
 from .browse import SERVER_OBJECT_NODE_ID, AddressSpaceBrowser, BrowseProgressSink
@@ -28,6 +30,19 @@ from .values import normalize_value
 apply_asyncua_watchdog_log_patch()
 
 logger = logging.getLogger(__name__)
+
+# Background CreateMonitoredItems batch cap. Larger batches save round trips
+# but hold the transition lock (and the server) longer per request.
+BG_SUBSCRIBE_CHUNK = 1000
+# Datachange notifications handled between event-loop yields.
+CONSUME_YIELD_EVERY = 500
+
+
+def _is_numeric_scalar(var_entry: dict | None) -> bool:
+    """A deadband applies to a number, never to an array, string or bool."""
+    if not var_entry or is_array_shape(var_entry):
+        return False
+    return to_simple_type(var_entry.get("data_type", ""), as_array_suffix=False) in ("Float", "Integer", "Byte")
 
 
 class _DsSubHandler:
@@ -118,6 +133,13 @@ class DatasourceOpcuaEngine:
         self._background_sub = None
         self._priority_sub = None
         self._sub_handler: _DsSubHandler | None = None
+        # One drain task per subscription (iterator mode): asyncua's handler
+        # mode spawns a task per notification, which is what a 100k-variable
+        # initial burst or a fast-churning server turns into seconds of pure
+        # task-scheduling overhead on the event loop.
+        self._sub_consumer_tasks: list[asyncio.Task] = []
+        # Set once this server refused a deadband filter; reset per connection.
+        self._deadband_refused = False
         # Maps for routing datachange callbacks (keyed by NodeId object, not string)
         self._node_to_path: dict = {}       # NodeId → path
         self._node_to_field: dict = {}      # NodeId → (folder_path, field_name, leaf_path)
@@ -136,7 +158,7 @@ class DatasourceOpcuaEngine:
         self._current_priority_paths: set[str] = set()
         self._requested_bg_publish_interval_ms = 1000.0
         self._requested_priority_publish_interval_ms = 50.0
-        self._requested_priority_sampling_interval_ms = 20.0
+        self._requested_priority_sampling_interval_ms = 50.0
         self._requested_priority_ws_batch_ms = 10.0
         self._revised_bg_publish_interval_ms: float | None = None
         self._revised_priority_publish_interval_ms: float | None = None
@@ -197,13 +219,63 @@ class DatasourceOpcuaEngine:
         return get_config_float(self._config, "priority_publish_interval_ms", 50.0, minimum=10.0, maximum=5_000.0)
 
     def _priority_sampling_interval_ms(self) -> float:
-        return get_config_float(self._config, "priority_sampling_interval_ms", 20.0, minimum=0.0, maximum=5_000.0)
+        return get_config_float(self._config, "priority_sampling_interval_ms", 50.0, minimum=0.0, maximum=5_000.0)
+
+    def _deadband_abs(self) -> float:
+        return get_config_float(self._config, "deadband_abs", 0.001, minimum=0.0, maximum=1e12)
 
     def _priority_ws_batch_ms(self) -> float:
         return get_config_float(self._config, "priority_ws_batch_ms", 10.0, minimum=0.0, maximum=1_000.0)
 
     def _is_priority_path(self, path: str) -> bool:
         return path in self._priority_path_handles or path in self._current_priority_paths
+
+    async def _create_items(
+        self, sub: Any, items: list[tuple[str, Any]], ds_entry: Any, sampling_interval: float,
+    ) -> list[Any]:
+        """CreateMonitoredItems for *items* (``(path, node)``) on *sub*: one
+        handle, or the refusing StatusCode, per item, in order.
+
+        Numeric scalars carry an absolute deadband (``deadband_abs``), so a
+        value jittering below it is never published — the cheapest
+        notification is the one the server does not send. Other types take no
+        filter (a server subtracts to apply one). All items go in one request;
+        an item the server refuses with the filter is created again without
+        it, and from then on this connection asks for no filter at all.
+        """
+        nodes = [node for _, node in items]
+        deadband = self._deadband_abs()
+        if deadband <= 0 or ds_entry is None or self._deadband_refused:
+            return await sub.subscribe_data_change(nodes, sampling_interval=sampling_interval)
+        data_filter = ua.DataChangeFilter(
+            Trigger=ua.DataChangeTrigger.StatusValue,
+            DeadbandType=ua.DeadbandType.Absolute,
+            DeadbandValue=deadband,
+        )
+        filtered = [_is_numeric_scalar(ds_entry.registry.get(path)) for path, _ in items]
+        if not any(filtered):
+            return await sub.subscribe_data_change(nodes, sampling_interval=sampling_interval)
+        requests = [
+            sub._make_monitored_item_request(
+                node, ua.AttributeIds.Value, data_filter if numeric else None, 0,
+                ua.MonitoringMode.Reporting, sampling_interval,
+            )
+            for node, numeric in zip(nodes, filtered, strict=True)
+        ]
+        handles = list(await sub.create_monitored_items(requests))
+        refused = [i for i, h in enumerate(handles) if filtered[i] and isinstance(h, ua.StatusCode)]
+        if refused:
+            logger.info(
+                "%s refuses the deadband filter (%s); creating items without it from now on",
+                self.datasource_name, handles[refused[0]],
+            )
+            self._deadband_refused = True
+            retried = await sub.subscribe_data_change(
+                [nodes[i] for i in refused], sampling_interval=sampling_interval,
+            )
+            for i, handle in zip(refused, retried, strict=False):
+                handles[i] = handle
+        return handles
 
     def _register_node_route(
         self, path: str, node_id: Any, field_routes: dict[str, tuple[str, str]],
@@ -296,25 +368,29 @@ class DatasourceOpcuaEngine:
 
     async def _subscribe_priority_nodes_with_revised_sampling(
         self,
-        nodes: list[Node],
+        items: list[tuple[str, Any]],
+        ds_entry: Any,
     ) -> tuple[list[Any], list[float]]:
-        """Subscribe nodes on priority subscription and return handles + revised sampling."""
+        """Subscribe ``(path, node)`` items on the priority subscription and
+        return handles + revised sampling."""
         sub = self._priority_sub
         if sub is None:
             return [], []
 
-        handles = await sub.subscribe_data_change(
-            nodes,
-            sampling_interval=self._requested_priority_sampling_interval_ms,
+        handles = await self._create_items(
+            sub, items, ds_entry, self._requested_priority_sampling_interval_ms,
         )
 
+        # The revised sampling interval is diagnostics only, and a server
+        # revises every item of one request the same way — so sample it from
+        # the first item instead of spending one ModifyMonitoredItems round
+        # trip per variable, which made a page open cost O(N) requests.
         revised_samples: list[float] = []
-        for handle in handles:
-            if isinstance(handle, ua.StatusCode):
-                continue
+        first = next((h for h in handles if not isinstance(h, ua.StatusCode)), None)
+        if first is not None:
             try:
                 result = await sub.modify_monitored_item(
-                    handle,
+                    first,
                     self._requested_priority_sampling_interval_ms,
                     new_queuesize=0,
                     mod_filter_val=-1,
@@ -325,7 +401,7 @@ class DatasourceOpcuaEngine:
                 logger.debug(
                     "Could not read revised sampling for %s/%s: %s",
                     self.datasource_name,
-                    handle,
+                    first,
                     exc,
                 )
         return handles, revised_samples
@@ -407,10 +483,10 @@ class DatasourceOpcuaEngine:
                     continue
                 try:
                     await client.get_namespace_array()
-                except Exception:
+                except Exception as exc:
                     logger.warning(
-                        "OPC-UA connection lost for %s — retrying",
-                        self.datasource_name,
+                        "OPC-UA connection lost for %s — retrying (%s)",
+                        self.datasource_name, _short_probe_error(exc),
                     )
                     await self._close_client()
 
@@ -418,7 +494,15 @@ class DatasourceOpcuaEngine:
         url = self._config.get("server_url", "opc.tcp://localhost:4840")
         username = self._config.get("username", "")
         password = self._config.get("password", "")
-        client = Client(url)
+        # asyncua's 4 s default fails a 1000-item CreateMonitoredItems on a
+        # busy server and then falls back to one request per variable. Its
+        # watchdog probes the server every second with that same 1 s as the
+        # deadline, so a server busy with our own subscription burst (or a
+        # neighbour's) reads as "lost" and the connect→subscribe→lost loop
+        # never finishes. The transport still reports a real drop at once;
+        # our own reconnect loop probes every reconnect_interval_s.
+        request_timeout_s = get_config_float(self._config, "request_timeout_s", 30.0, minimum=1.0, maximum=300.0)
+        client = Client(url, timeout=request_timeout_s, watchdog_intervall=request_timeout_s)
 
         await apply_client_security(client, self._config)
 
@@ -550,12 +634,70 @@ class DatasourceOpcuaEngine:
 
     async def _setup_subscriptions(self) -> None:
         async with self._subscription_transition_lock:
-            await self._setup_subscriptions_locked()
+            pending = await self._setup_subscriptions_locked()
+        if not pending:
+            return
+        ds_entry, field_routes, enabled_items = pending
+        # Subscribe the background set chunk by chunk, taking the lock per
+        # chunk: a page context change (set_priority_paths) then waits for one
+        # request instead of the whole tree — tens of seconds for 100k nodes.
+        chunk_size = min(self._operation_limits.monitored_items_budget(), BG_SUBSCRIBE_CHUNK)
+        for i in range(0, len(enabled_items), chunk_size):
+            async with self._subscription_transition_lock:
+                if self._background_sub is None or self._client is None:
+                    return  # torn down while we were subscribing
+                # A path promoted to the priority subscription in the meantime
+                # must not land on the background one as well.
+                chunk = [
+                    item for item in enabled_items[i : i + chunk_size]
+                    if item[0] not in self._priority_path_handles
+                ]
+                await self._subscribe_bg_chunk(chunk, i // chunk_size, ds_entry, field_routes)
+        logger.info(
+            "Background subscription complete for %s: %d paths",
+            self.datasource_name, len(self._bg_path_handles),
+        )
 
-    async def _setup_subscriptions_locked(self) -> None:
+    async def _subscribe_bg_chunk(
+        self, chunk: list[tuple[str, Any]], chunk_index: int, ds_entry: Any, field_routes: dict,
+    ) -> None:
+        """One CreateMonitoredItems request for *chunk* on the background subscription."""
+        if not chunk:
+            return
+        try:
+            # sampling_interval=-1 → server samples at the publishing interval,
+            # not the asyncua default of 50 ms.  For 500 variables at 1000 ms
+            # this saves the server ~20x unnecessary sampling work.
+            handles = await self._create_items(self._background_sub, chunk, ds_entry, -1)
+            for (path, node), handle in zip(chunk, handles, strict=False):
+                # handle may be ua.StatusCode when the server refuses a node
+                if isinstance(handle, ua.StatusCode):
+                    logger.warning(
+                        "Subscribe rejected for %s/%s: %s",
+                        self.datasource_name, path, handle,
+                    )
+                    continue
+                self._bg_path_handles[path] = [handle]
+                nid = node.nodeid
+                self._register_node_route(path, nid, field_routes)
+                self._path_to_node_ids.setdefault(path, set()).add(nid)
+        except Exception as exc:
+            if not self._connected:
+                return  # the session is gone; the reconnect resubscribes everything
+            logger.warning(
+                "Batch subscribe failed for %s (chunk %d): %s — falling back to per-path",
+                self.datasource_name, chunk_index, exc,
+            )
+            for path, _node in chunk:
+                var_entry = ds_entry.registry.get(path, {})
+                await self._subscribe_path(path, var_entry, ds_entry, field_routes)
+
+    async def _setup_subscriptions_locked(self) -> tuple[Any, dict, list[tuple[str, Any]]] | None:
+        """Create both subscriptions and return what the background one still
+        has to subscribe, as ``(ds_entry, field_routes, [(path, node), …])``."""
         dm = self._datasource_manager
         if dm is None or self._client is None:
-            return
+            return None
         self._sub_handler = _DsSubHandler(self)
         disable_bg = bool(self._config.get("disable_background_sync", False))
         bg_interval = self._background_publish_interval_ms()
@@ -565,22 +707,31 @@ class DatasourceOpcuaEngine:
         self._requested_priority_publish_interval_ms = priority_interval
         self._requested_priority_sampling_interval_ms = priority_sampling
         self._requested_priority_ws_batch_ms = self._priority_ws_batch_ms()
+        self._deadband_refused = False
         self._priority_revised_sampling_count = 0
         self._priority_revised_sampling_sum_ms = 0.0
         self._priority_revised_sampling_min_ms = None
         self._priority_revised_sampling_max_ms = None
+        # handler=None → iterator mode, drained by _consume_subscription;
+        # queue_maxsize=0 is unbounded, so the initial burst is never dropped.
         if not disable_bg:
             self._background_sub = await self._client.create_subscription(
-                self._make_sub_params(bg_interval, priority=0), self._sub_handler,
+                self._make_sub_params(bg_interval, priority=0), None, queue_maxsize=0,
             )
             self._revised_bg_publish_interval_ms = float(
                 self._background_sub.parameters.RequestedPublishingInterval,
             )
+            self._sub_consumer_tasks.append(
+                asyncio.create_task(self._consume_subscription(self._background_sub))
+            )
         self._priority_sub = await self._client.create_subscription(
-            self._make_sub_params(priority_interval, priority=200), self._sub_handler,
+            self._make_sub_params(priority_interval, priority=200), None, queue_maxsize=0,
         )
         self._revised_priority_publish_interval_ms = float(
             self._priority_sub.parameters.RequestedPublishingInterval,
+        )
+        self._sub_consumer_tasks.append(
+            asyncio.create_task(self._consume_subscription(self._priority_sub))
         )
         self._node_to_path.clear()
         self._node_to_field.clear()
@@ -591,60 +742,11 @@ class DatasourceOpcuaEngine:
 
         ds_entry = dm.get(self.datasource_name)
         if ds_entry is None:
-            return
-
-        field_routes = _struct_field_routes(ds_entry)
-
-        if not disable_bg:
-            # Collect all enabled (path, node) pairs first, then batch-subscribe
-            # in chunks so we send one CreateMonitoredItems request per chunk
-            # instead of one per variable — much faster for large variable trees.
-            enabled_items: list[tuple[str, Any]] = []
-            for path, var_entry in ds_entry.registry.items():
-                if not is_subscribable(var_entry):
-                    continue
-                node_id = var_entry.get("node_id", "")
-                if not node_id:
-                    continue
-                enabled_items.append((path, self._client.get_node(node_id)))
-
-            chunk_size = self._operation_limits.monitored_items_budget()
-            for i in range(0, len(enabled_items), chunk_size):
-                chunk = enabled_items[i : i + chunk_size]
-                nodes = [node for _, node in chunk]
-                try:
-                    # sampling_interval=-1 → server samples at the publishing interval,
-                    # not the asyncua default of 50 ms.  For 500 variables at 1000 ms
-                    # this saves the server ~20x unnecessary sampling work.
-                    handles = await self._background_sub.subscribe_data_change(
-                        nodes, sampling_interval=-1,
-                    )
-                    if not isinstance(handles, list):
-                        handles = [handles]
-                    for (path, node), handle in zip(chunk, handles, strict=False):
-                        # handle may be ua.StatusCode when the server refuses a node
-                        if isinstance(handle, ua.StatusCode):
-                            logger.warning(
-                                "Subscribe rejected for %s/%s: %s",
-                                self.datasource_name, path, handle,
-                            )
-                            continue
-                        self._bg_path_handles[path] = [handle]
-                        nid = node.nodeid
-                        self._register_node_route(path, nid, field_routes)
-                        self._path_to_node_ids.setdefault(path, set()).add(nid)
-                except Exception as exc:
-                    logger.warning(
-                        "Batch subscribe failed for %s (chunk %d): %s — falling back to per-path",
-                        self.datasource_name, i // chunk_size, exc,
-                    )
-                    for path, _node in chunk:
-                        var_entry = ds_entry.registry.get(path, {})
-                        await self._subscribe_path(path, var_entry, ds_entry, field_routes)
+            return None
 
         logger.info(
             "Subscriptions set up for %s: bg requested=%sms revised=%sms enabled=%s, "
-            "priority requested=%sms revised=%sms sampling requested=%sms revised avg/min/max=%s/%s/%s, bg paths=%d",
+            "priority requested=%sms revised=%sms sampling requested=%sms",
             self.datasource_name,
             self._requested_bg_publish_interval_ms,
             self._revised_bg_publish_interval_ms,
@@ -652,11 +754,45 @@ class DatasourceOpcuaEngine:
             self._requested_priority_publish_interval_ms,
             self._revised_priority_publish_interval_ms,
             self._requested_priority_sampling_interval_ms,
-            self._priority_revised_sampling_avg_ms(),
-            self._priority_revised_sampling_min_ms,
-            self._priority_revised_sampling_max_ms,
-            len(self._bg_path_handles),
         )
+        if disable_bg:
+            return None
+
+        field_routes = _struct_field_routes(ds_entry)
+        # Collect all enabled (path, node) pairs; _setup_subscriptions sends one
+        # CreateMonitoredItems request per chunk instead of one per variable.
+        enabled_items: list[tuple[str, Any]] = []
+        for path, var_entry in ds_entry.registry.items():
+            if not is_subscribable(var_entry):
+                continue
+            node_id = var_entry.get("node_id", "")
+            if not node_id:
+                continue
+            enabled_items.append((path, self._client.get_node(node_id)))
+        return ds_entry, field_routes, enabled_items
+
+    async def _consume_subscription(self, sub: Any) -> None:
+        """Drain one subscription's event queue into the datachange handler.
+
+        Ends when the subscription is deleted (asyncua closes the iterator).
+        Yields to the loop every so often so a long burst cannot starve the
+        WebSocket side; one notification is still one synchronous call.
+        """
+        handler = self._sub_handler
+        if handler is None:
+            return
+        n = 0
+        try:
+            async for event in sub:
+                if isinstance(event, DataChangeEvent):
+                    handler.datachange_notification(event.node, event.value, event.data)
+                elif isinstance(event, StatusChangeEvent):
+                    await handler.status_change_notification(event.notification)
+                n += 1
+                if n % CONSUME_YIELD_EVERY == 0:
+                    await asyncio.sleep(0)
+        except Exception:
+            logger.exception("Subscription consumer failed for %s", self.datasource_name)
 
     async def _subscribe_path(
         self,
@@ -677,11 +813,7 @@ class DatasourceOpcuaEngine:
             if not node_id:
                 return
             node = self._client.get_node(node_id)
-            handles = await self._background_sub.subscribe_data_change(
-                [node], sampling_interval=-1,
-            )
-            if not isinstance(handles, list):
-                handles = [handles]
+            handles = await self._create_items(self._background_sub, [(path, node)], ds_entry, -1)
             valid = [h for h in handles if not isinstance(h, ua.StatusCode)]
             if not valid:
                 return
@@ -704,6 +836,9 @@ class DatasourceOpcuaEngine:
             if sub is not None:
                 with contextlib.suppress(Exception):
                     await sub.delete()
+        for task in self._sub_consumer_tasks:
+            task.cancel()
+        self._sub_consumer_tasks = []
         self._background_sub = None
         self._priority_sub = None
         self._sub_handler = None
@@ -1008,10 +1143,9 @@ class DatasourceOpcuaEngine:
             # nodes simply stay on the background sub (no data loss) instead
             # of also landing on the priority sub.
             if bg_unsubscribe_ok:
-                nodes = [node for _, node in promote_items]
                 try:
                     handles, revised_samples = await self._subscribe_priority_nodes_with_revised_sampling(
-                        nodes,
+                        promote_items, ds_entry,
                     )
                     self._record_priority_revised_sampling(revised_samples)
                     for (path, node), handle in zip(promote_items, handles, strict=False):
@@ -1027,11 +1161,13 @@ class DatasourceOpcuaEngine:
                         self._register_node_route(path, nid, field_routes)
                         self._path_to_node_ids.setdefault(path, set()).add(nid)
                 except Exception as exc:
+                    if not self._connected:
+                        return  # a lost session: one request per path would only fail 1000 times more
                     logger.warning("Bulk promote failed for %s: %s — retrying per-path", self.datasource_name, exc)
                     for path, node in promote_items:
                         try:
                             handles, revised_samples = await self._subscribe_priority_nodes_with_revised_sampling(
-                                [node],
+                                [(path, node)], ds_entry,
                             )
                             self._record_priority_revised_sampling(revised_samples)
                             handles_list = [x for x in handles if isinstance(x, int)]
@@ -1094,24 +1230,21 @@ class DatasourceOpcuaEngine:
             # 2. Bulk-resubscribe to background — only after the priority
             # side was actually cleared.
             if demote_items and prio_unsubscribe_ok:
-                nodes = [node for _, node in demote_items]
                 try:
-                    handles = await self._background_sub.subscribe_data_change(
-                        nodes, sampling_interval=-1,
-                    )
-                    if not isinstance(handles, list):
-                        handles = [handles]
+                    handles = await self._create_items(self._background_sub, demote_items, ds_entry, -1)
                     for (path, _), handle in zip(demote_items, handles, strict=False):
                         if isinstance(handle, ua.StatusCode):
                             logger.warning("Demote-resub rejected for %s/%s: %s", self.datasource_name, path, handle)
                             continue
                         self._bg_path_handles[path] = [handle]
                 except Exception as exc:
+                    if not self._connected:
+                        return
                     logger.warning("Bulk demote failed for %s: %s — retrying per-path", self.datasource_name, exc)
                     for path, node in demote_items:
                         try:
-                            h = await self._background_sub.subscribe_data_change([node], sampling_interval=-1)
-                            self._bg_path_handles[path] = [h] if isinstance(h, int) else [x for x in h if isinstance(x, int)]
+                            h = await self._create_items(self._background_sub, [(path, node)], ds_entry, -1)
+                            self._bg_path_handles[path] = [x for x in h if isinstance(x, int)]
                         except Exception as e2:
                             logger.warning("Per-path demote failed %s/%s: %s", self.datasource_name, path, e2)
             elif demote_items:

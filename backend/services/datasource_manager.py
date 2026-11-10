@@ -12,7 +12,9 @@ import hashlib
 import logging
 import re
 import threading
+from bisect import bisect_left
 from collections.abc import Callable, Iterable
+from functools import cached_property
 from typing import Any, ClassVar
 
 from core.exceptions import DatasourceValidationError
@@ -64,6 +66,68 @@ class DatasourceEntry:
         # Pre-computed sets/dicts that depend only on the config (not on live values)
         self._enabled_cache_keys: set[str] = set()  # composite keys valid for snapshot
         self._build_registry()
+
+    @cached_property
+    def metadata_index(self) -> tuple[dict[str, dict[str, Any]], list[str]]:
+        """This datasource's full variable metadata and its sorted keys, built
+        once per entry — an edit replaces the entry, so nothing invalidates it.
+        100k variables take ~80 ms to describe; a page context then costs a
+        few bisects into the sorted keys (``DatasourceManager.variable_metadata``)."""
+        result: dict[str, dict[str, Any]] = {}
+        # Scalar / plain-array variables
+        for path, var_entry in self.registry.items():
+            if not is_subscribable(var_entry):
+                continue
+            key = build_var_key(self.name, path)
+            var_is_array = is_array_shape(var_entry)
+            var_type: dict[str, Any] = {
+                "kind": "scalar",
+                "base": to_simple_type(
+                    var_entry.get("data_type", ""),
+                    as_array_suffix=False,
+                ),
+                "array": var_is_array,
+            }
+            if var_is_array and is_fixed_array(var_entry):
+                var_type["length"] = var_entry.get("array_length")
+            meta: dict[str, Any] = {
+                "type": var_type,
+                "writable": var_entry.get("writable") is True,
+            }
+            if var_entry.get("min") is not None:
+                meta["min"] = var_entry["min"]
+            if var_entry.get("max") is not None:
+                meta["max"] = var_entry["max"]
+            result[key] = meta
+        # Struct and array-of-struct folders
+        for folder_path, fentry in self.folder_registry.items():
+            key = build_var_key(self.name, folder_path)
+            is_array = DatasourceEntry.is_aggregate_boundary(fentry)
+            # Collect field names from direct children + nested structs
+            fields = list(fentry.get("fields", {}).keys())
+            fields += list(fentry.get("_nested_fields", {}).keys())
+            field_ranges = fentry.get("field_ranges", {})
+            # For arrays, use fields from the first element
+            if is_array:
+                elem_paths = fentry.get("_element_paths", [])
+                if elem_paths:
+                    first_elem = self.folder_registry.get(elem_paths[0])
+                    if first_elem:
+                        fields = list(first_elem.get("fields", {}).keys())
+                        fields += list(first_elem.get("_nested_fields", {}).keys())
+                        field_ranges = first_elem.get("field_ranges", {})
+            struct_meta: dict[str, Any] = {
+                "type": {
+                    "kind": "struct",
+                    "name": fentry.get("display_name") or "struct",
+                    "array": is_array,
+                    "fields": fields,
+                },
+            }
+            if field_ranges:
+                struct_meta["fieldRanges"] = field_ranges
+            result[key] = struct_meta
+        return result, sorted(result)
 
     def _build_registry(self) -> None:
         """Build flat registry and folder maps from the variable tree."""
@@ -1192,8 +1256,12 @@ class DatasourceManager:
                 self._append_snapshot_values(entry, result)
         return result
 
-    def variable_metadata(self) -> dict[str, dict[str, Any]]:
-        """Return shape metadata for every enabled variable/folder across all datasources.
+    def variable_metadata(self, keys: set[str] | None = None) -> dict[str, dict[str, Any]]:
+        """Return shape metadata for every enabled variable/folder across all datasources,
+        or, with *keys*, for what a client holding those composite keys reads: each
+        key, its ancestor folders (the array an element sits in) and its descendants
+        (a struct's members, an array's elements). A page context then costs a few
+        bisects into a per-datasource cache instead of describing 100k variables.
 
         Each entry is keyed by composite key (``datasource:path``) and contains:
         - ``type``: the canonical structured type — array-ness, base/struct-name,
@@ -1212,63 +1280,41 @@ class DatasourceManager:
 
         Disabled variables are excluded.
         """
-        result: dict[str, dict[str, Any]] = {}
         with self._lock:
-            for entry in self.datasources.values():
-                # Scalar / plain-array variables
-                for path, var_entry in entry.registry.items():
-                    if not is_subscribable(var_entry):
-                        continue
-                    key = build_var_key(entry.name, path)
-                    var_is_array = is_array_shape(var_entry)
-                    var_type: dict[str, Any] = {
-                        "kind": "scalar",
-                        "base": to_simple_type(
-                            var_entry.get("data_type", ""),
-                            as_array_suffix=False,
-                        ),
-                        "array": var_is_array,
-                    }
-                    if var_is_array and is_fixed_array(var_entry):
-                        var_type["length"] = var_entry.get("array_length")
-                    meta: dict[str, Any] = {
-                        "type": var_type,
-                        "writable": var_entry.get("writable") is True,
-                    }
-                    if var_entry.get("min") is not None:
-                        meta["min"] = var_entry["min"]
-                    if var_entry.get("max") is not None:
-                        meta["max"] = var_entry["max"]
-                    result[key] = meta
-                # Struct and array-of-struct folders
-                for folder_path, fentry in entry.folder_registry.items():
-                    key = build_var_key(entry.name, folder_path)
-                    is_array = DatasourceEntry.is_aggregate_boundary(fentry)
-                    # Collect field names from direct children + nested structs
-                    fields = list(fentry.get("fields", {}).keys())
-                    fields += list(fentry.get("_nested_fields", {}).keys())
-                    field_ranges = fentry.get("field_ranges", {})
-                    # For arrays, use fields from the first element
-                    if is_array:
-                        elem_paths = fentry.get("_element_paths", [])
-                        if elem_paths:
-                            first_elem = entry.folder_registry.get(elem_paths[0])
-                            if first_elem:
-                                fields = list(first_elem.get("fields", {}).keys())
-                                fields += list(first_elem.get("_nested_fields", {}).keys())
-                                field_ranges = first_elem.get("field_ranges", {})
-                    struct_meta: dict[str, Any] = {
-                        "type": {
-                            "kind": "struct",
-                            "name": fentry.get("display_name") or "struct",
-                            "array": is_array,
-                            "fields": fields,
-                        },
-                    }
-                    if field_ranges:
-                        struct_meta["fieldRanges"] = field_ranges
-                    result[key] = struct_meta
+            entries = list(self.datasources.values())
+        result: dict[str, dict[str, Any]] = {}
+        if keys is None:
+            for entry in entries:
+                result.update(entry.metadata_index[0])
+            return result
+        by_datasource: dict[str, list[str]] = {}
+        for key in keys:
+            ds_name, _path = parse_var_key(key)
+            by_datasource.setdefault(ds_name, []).append(key)
+        for entry in entries:
+            wanted = by_datasource.get(entry.name)
+            if not wanted:
+                continue
+            meta, sorted_keys = entry.metadata_index
+            for key in wanted:
+                if key in meta:
+                    result[key] = meta[key]
+                # Ancestors: the array an element sits in, the struct a leaf is a member of.
+                colon = key.find(":")
+                cut = key.rfind("/")
+                while cut > colon:
+                    parent = key[:cut]
+                    if parent in meta:
+                        result[parent] = meta[parent]
+                    cut = key.rfind("/", 0, cut)
+                # Descendants: a struct's members, an array's elements and theirs.
+                prefix = key + "/"
+                i = bisect_left(sorted_keys, prefix)
+                while i < len(sorted_keys) and sorted_keys[i].startswith(prefix):
+                    result[sorted_keys[i]] = meta[sorted_keys[i]]
+                    i += 1
         return result
+
 
     def get_cached_values(self, keys: set[str]) -> dict[str, Any]:
         """Return cached values for a specific set of composite keys.
@@ -1335,6 +1381,24 @@ class DatasourceManager:
             else:
                 self._interest_keys.pop(owner, None)
             self._rebuild_wanted_keys()
+
+    def client_page_keys(self, client_id: str) -> set[str]:
+        """The composite keys a client's active page promotes."""
+        with self._lock:
+            return set(self._active_pages.get(client_id, ()))
+
+    def element_keys(self, key: str, positions: Iterable[int] | None = None) -> set[str]:
+        """The composite keys of a struct array's elements — all of them, or
+        the given positions (an index past the end is skipped). Empty for a
+        key that is not an array-of-struct folder."""
+        datasource, path = parse_var_key(key)
+        entry = self._get_datasource_entry(datasource)
+        folder = entry.folder_registry.get(path) if entry is not None else None
+        if not folder or not DatasourceEntry.is_aggregate_boundary(folder):
+            return set()
+        element_paths = folder.get("_element_paths", [])
+        chosen = range(len(element_paths)) if positions is None else [i for i in positions if 0 <= i < len(element_paths)]
+        return {build_var_key(datasource, element_paths[i]) for i in chosen}
 
     def get_priority_keys(self) -> set[str]:
         """Return union of composite keys across all clients' active pages."""

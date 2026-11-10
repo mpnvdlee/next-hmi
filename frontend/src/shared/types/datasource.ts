@@ -32,6 +32,10 @@ export interface OpcuaClientSettings {
   client_private_key_password: string;
   server_certificate: string;
   reconnect_interval_s: number;
+  /** Seconds one OPC-UA request may take before it fails; default 30. */
+  request_timeout_s?: number;
+  /** Absolute deadband on numeric scalars: a change below it is not published; 0 = off. */
+  deadband_abs?: number;
   bg_publish_interval_ms?: number;
   priority_publish_interval_ms?: number;
   priority_sampling_interval_ms?: number;
@@ -208,9 +212,11 @@ function defaultSettings(type: DatasourceType): DatasourceSettings {
         client_private_key_password: '',
         server_certificate: '',
         reconnect_interval_s: 5,
+        request_timeout_s: 30,
+        deadband_abs: 0.001,
         bg_publish_interval_ms: 1000,
         priority_publish_interval_ms: 50,
-        priority_sampling_interval_ms: 20,
+        priority_sampling_interval_ms: 50,
         priority_ws_batch_ms: 10,
       };
     case 'static':

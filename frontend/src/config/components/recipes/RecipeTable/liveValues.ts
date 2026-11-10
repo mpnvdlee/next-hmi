@@ -1,9 +1,5 @@
 import { useEffect } from 'react';
-import { sendWsMessage } from '@hmi/hooks/useWebSocket';
-
-function sendPriorityContext(priorityKeys: string[]) {
-  sendWsMessage({ type: 'set_context', currentPageIds: [], priorityKeys });
-}
+import { clearContextProducer, setContextProducer } from '@hmi/hooks/useWebSocket';
 
 /**
  * Keep a recipe's bound variables hot while the Live column is on.
@@ -21,8 +17,8 @@ export function useRecipePriorityContext(paths: string[], enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
-    sendPriorityContext(paths);
-    return () => sendPriorityContext([]);
+    setContextProducer('recipe-table', { priorityKeys: paths });
+    return () => clearContextProducer('recipe-table');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, key]);
 }

@@ -134,6 +134,12 @@ class FakeDatasourceManager:
     def set_client_page(self, client_id: str, keys: set[str]) -> None:
         self._client_keys = set(keys)
 
+    def client_page_keys(self, client_id: str) -> set[str]:
+        return set(self._client_keys)
+
+    def element_keys(self, key: str, positions=None) -> set[str]:
+        return set()
+
     def get_priority_keys(self) -> set[str]:
         return set(self._client_keys)
 
@@ -143,8 +149,10 @@ class FakeDatasourceManager:
     def snapshot(self) -> dict[str, Any]:
         return dict(self.snapshot_values)
 
-    def variable_metadata(self) -> dict[str, dict[str, Any]]:
-        return dict(self.metadata)
+    def variable_metadata(self, keys: set[str] | None = None) -> dict[str, dict[str, Any]]:
+        if keys is None:
+            return dict(self.metadata)
+        return {key: meta for key, meta in self.metadata.items() if key in keys}
 
     def clear_client(self, client_id: str) -> None:
         self.cleared_clients.append(client_id)

@@ -371,6 +371,32 @@ def _make_array_var(name: str, data_type: str, length: int) -> dict:
     }
 
 
+def test_variable_metadata_for_keys_returns_the_context_closure():
+    """A client holding a key reads it, the folders above it and everything
+    below it — and nothing else of a 100k-variable datasource."""
+    def var(name: str, node_id: str) -> dict:
+        return {"kind": "variable", "display_name": name, "node_id": node_id,
+                "data_type": "Float", "enabled": True}
+    mgr = DatasourceManager()
+    mgr.datasources["DS"] = DatasourceEntry({"name": "DS", "type": "opcua-client", "variables": [
+        {"kind": "folder", "name": "Motors", "is_array": True, "children": [
+            {"kind": "folder", "name": f"[{i}]", "children": [var("Speed", f"ns=2;s=M{i}")]} for i in range(2)
+        ]},
+        {"kind": "folder", "name": "Pump", "children": [var("Flow", "ns=2;s=F"), var("Head", "ns=2;s=H")]},
+        var("Lonely", "ns=2;s=L"),
+    ]})
+
+    element = mgr.variable_metadata({build_var_key("DS", "Motors/[1]")})
+    assert set(element) == {"DS:Motors", "DS:Motors/[1]", "DS:Motors/[1]/Speed"}
+
+    leaf = mgr.variable_metadata({build_var_key("DS", "Pump/Flow")})
+    assert set(leaf) == {"DS:Pump", "DS:Pump/Flow"}
+
+    assert set(mgr.variable_metadata({"DS:Lonely", "Other:X"})) == {"DS:Lonely"}
+    # The per-entry cache serves the full map too.
+    assert set(mgr.variable_metadata()) >= set(element) | set(leaf)
+
+
 def test_variable_metadata_emits_simple_scalar_types():
     config = {
         "name": "DS",

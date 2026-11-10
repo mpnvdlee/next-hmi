@@ -151,6 +151,8 @@ type WriteTarget =
  *  makes the matching source evaluate to absent. */
 interface EvaluationContext {
   resolveVariable?: (datasource: string, path: string) => unknown;
+  /** One element of an array variable: a struct array's element under its own key when known, else the whole value sliced. */
+  resolveElement?: (datasource: string, path: string, index: number) => unknown;
   resolveTranslation?: (key: string) => string;
   getUrlParam?: (name: string) => string | undefined;
   isPageActive?: (pageId: string) => boolean;

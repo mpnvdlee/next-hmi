@@ -649,7 +649,7 @@ Base prefix: `/api/system`.
   - Project instance only. Broadcasts `{type: "restarting", reason}` over `/ws`, then raises `SIGTERM` so uvicorn's lifespan teardown runs. A grace timer applies the restart and hard-exits if shutdown stalls. The manager's supervisor (`services/supervisor.py`) respawns the exited child; see [backend.md § Health And Restart](../architecture/backend.md#health-and-restart).
   - Returns `202 { "status": "restarting", "reason": "..." }`. Frontends should poll `/api/system/info` to detect when the new process is ready.
 - `GET /api/system/runtimes`
-  - Returns `{ "runtimes": [ { clientId, scope, username, groups, connectedAt } ] }` for every currently-connected WebSocket scope that starts with `runtime:`. Diagnostics only.
+  - Returns `{ "runtimes": [ { clientId, scope, username, groups, connectedAt, keys, bytesSent } ] }` for every currently-connected WebSocket scope that starts with `runtime:` — `keys` is the number of composite keys the socket's last `set_context` resolved to, `bytesSent` the value-frame bytes it has received. Diagnostics only.
 - `GET /api/system/runtime-home`
   - Returns `{ "path": "<runtime home>" }`, resolved fresh per call from env var / bootstrap config / platform default so the answer always matches what `core.storage` sees.
   - The manifest's `defaultProjectsRoot` is *not* here — read it from `GET /api/projects/_runtime-home`, which returns both values.

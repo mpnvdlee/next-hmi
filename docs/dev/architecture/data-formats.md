@@ -747,6 +747,8 @@ Example shape:
     "client_private_key_password": "",
     "server_certificate": "",
     "reconnect_interval_s": 5,
+    "request_timeout_s": 30,
+    "deadband_abs": 0.001,
     "bg_publish_interval_ms": 1000,
     "disable_background_sync": false,
     "browse_root_node": ""

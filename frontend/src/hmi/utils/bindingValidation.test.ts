@@ -276,11 +276,13 @@ describe('checkBindingSpec — base types and struct members', () => {
 
   it("judges a struct array's members on the bound element, else the lowest one", () => {
     const s = slice({
+      // Element values live under the element folder's own name, as the
+      // backend ships them.
       values: {
         'PLC:Motors': [],
-        'PLC:Motors/[0]': {},
-        'PLC:Motors/[1]': {},
-        'PLC:Motors/[7]': {},
+        'PLC:Motors/Line[0]': {},
+        'PLC:Motors/Line[1]': {},
+        'PLC:Motors/Line[7]': {},
       },
       varMeta: motorsMeta(0),
     });

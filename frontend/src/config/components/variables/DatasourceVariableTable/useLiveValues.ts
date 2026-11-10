@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { useVariableStore } from '@hmi/store/variableStore';
-import { sendWsMessage } from '@hmi/hooks/useWebSocket';
+import { setContextProducer } from '@hmi/hooks/useWebSocket';
 import { buildVarKey } from '@shared/types/datasource';
 import { byteHex } from '@shared/utils/valueTypes';
 import type { RowItem } from '@config/components/ui/datasourceTreeHelpers';
@@ -16,7 +16,7 @@ interface Params {
 }
 
 function sendPriorityContext(priorityKeys: string[]) {
-  sendWsMessage({ type: 'set_context', currentPageIds: [], priorityKeys });
+  setContextProducer('variable-table', { priorityKeys });
 }
 
 function sameValues(a: Record<string, string>, b: Record<string, string>): boolean {
