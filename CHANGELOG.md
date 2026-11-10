@@ -13,6 +13,14 @@ heading.
 
 ### Added
 
+- **Pick the browse root from the tree.** The OPC-UA **Browse Root Node**
+  field suggests every folder from an earlier browse, by its path, and says
+  what a node id looks like and where to find one.
+
+- **`start-dev.py` checks the dependencies.** It stops with the install
+  command when a backend package or a frontend package is missing or does not
+  match `requirements.txt` or `package-lock.json`.
+
 - **A Dropdown writes to a variable.** A Dropdown gains **Value**: bound to a
   variable, the choice is written there and read back, as on a Button Row, so
   a PLC enum parameter becomes a dropdown. It keeps showing what the variable
@@ -25,6 +33,14 @@ heading.
   custom widget.
 
 ### Fixed
+
+- **The page tree opens fully collapsed.** A page's Header, Content and
+  Footer rows and a page group's Header and Footer folders stayed open after
+  loading a project, so expanding a page showed them all.
+
+- **Browse uses the settings you just typed.** Browse with unsaved OPC-UA
+  connection settings saves them first and browses once the datasource has
+  reconnected, instead of walking the server with the old settings.
 
 - **A Repeater over a PLC array that counts from 1.** Over a struct array
   `A[1..500]`, the first two copies both showed `A[1]` and `A[500]` was never
