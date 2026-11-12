@@ -340,6 +340,27 @@ def load_json_or_default(  # noqa: UP047 -- PEP 695 type-param syntax is a manua
         return default_factory()
 
 
+_REPLACE_ATTEMPTS = 5
+
+
+def _commit_tempfile(tmp_path: Path, path: Path) -> None:
+    """os.replace *tmp_path* over *path*, retrying a brief PermissionError.
+
+    On Windows the replace fails with WinError 5 while any other handle has
+    the target open, and a virus scanner or indexer opens a freshly written
+    file for a moment. A burst of rewrites (one status write per compiled
+    widget) hit that often enough to fail a built-in widgets build.
+    """
+    for attempt in range(_REPLACE_ATTEMPTS):
+        try:
+            os.replace(tmp_path, path)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
 def write_json(path: str | Path, data: Any) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -354,9 +375,11 @@ def write_json(path: str | Path, data: Any) -> None:
                 dir=path.parent,
                 delete=False,
             ) as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
                 tmp_path = Path(f.name)
-            os.replace(tmp_path, path)
+                # One write of the whole document: json.dump streams it in
+                # thousands of small writes, 4x slower for a 15 MB datasource.
+                f.write(json.dumps(data, indent=2, ensure_ascii=False))
+            _commit_tempfile(tmp_path, path)
         except OSError as exc:
             logger.error("Failed to write JSON file %s: %s", path, exc)
             if tmp_path is not None and tmp_path.exists():
@@ -395,7 +418,7 @@ def write_text_atomic(path: str | Path, data: str, encoding: str = "utf-8") -> N
             ) as f:
                 f.write(data)
                 tmp_path = Path(f.name)
-            os.replace(tmp_path, path)
+            _commit_tempfile(tmp_path, path)
         except OSError as exc:
             logger.error("Failed to write text file %s: %s", path, exc)
             if tmp_path is not None and tmp_path.exists():
@@ -419,7 +442,7 @@ def write_bytes_atomic(path: str | Path, data: bytes) -> None:
             ) as f:
                 f.write(data)
                 tmp_path = Path(f.name)
-            os.replace(tmp_path, path)
+            _commit_tempfile(tmp_path, path)
         except OSError as exc:
             logger.error("Failed to write binary file %s: %s", path, exc)
             if tmp_path is not None and tmp_path.exists():
@@ -455,7 +478,7 @@ def write_csv(path: str | Path, rows: list[list[str]]) -> None:
             ) as f:
                 f.write(buf.getvalue())
                 tmp_path = Path(f.name)
-            os.replace(tmp_path, path)
+            _commit_tempfile(tmp_path, path)
         except OSError as exc:
             logger.error("Failed to write CSV file %s: %s", path, exc)
             if tmp_path is not None and tmp_path.exists():

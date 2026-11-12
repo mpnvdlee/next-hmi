@@ -74,6 +74,9 @@ heading.
   Connected Runtimes table shows per browser how many keys its context holds
   and how much it has been sent.
 
+- **On Windows, a save or widget build could fail while a virus scanner held
+  the file.** The write now retries briefly.
+
 - **A translation key with `?` or `#` in it reached the instance cut off**, so
   deleting the key `Start?` deleted `Start`.
 
