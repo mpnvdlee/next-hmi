@@ -659,7 +659,7 @@ describe('createBindingStatusSelector', () => {
     const specA: BindingSpec = { id: 'PLC:A', accept: [] };
 
     let recomputeCount = 0;
-    const selector = createBindingStatusSelector([specA], () => {
+    const selector = createBindingStatusSelector([specA], true, () => {
       recomputeCount++;
     });
 
@@ -687,7 +687,7 @@ describe('createBindingStatusSelector', () => {
     const specA: BindingSpec = { id: 'PLC:A', accept: [] };
 
     let recomputeCount = 0;
-    const selector = createBindingStatusSelector([specA], () => {
+    const selector = createBindingStatusSelector([specA], true, () => {
       recomputeCount++;
     });
 

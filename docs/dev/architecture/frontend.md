@@ -254,6 +254,13 @@ Current producers:
   - sends `set_context` with `priorityKeys` for currently visible rows after scroll settle
 - `RecipeTable` (`config/components/recipes/RecipeTable/liveValues.ts`)
   - sends `set_context` with `priorityKeys` for every bound recipe parameter while its Live column is on
+- `VariableBindingPicker`
+  - sends `set_context` with `priorityKeys` for dynamic arrays while it is open
+
+Each registers with `setContextProducer` (`hmi/hooks/useWebSocket.ts`), which
+merges them into the one `set_context` the socket sends and skips a merge
+identical to the last one sent; a reconnect, or a `config_changed` for a
+datasource or its variables, sends it again.
 
 ### Page reveal and data settling
 
@@ -282,7 +289,10 @@ that signal never comes. The latch is per *wait*, not per key: navigating back
 to a page this long-lived gate already saw, or a reconnect clearing
 `contextReadyPageIds`, has to earn a fresh grace. It is reset during render
 rather than from an effect so a new wait never shows a frame of the previous
-one's verdict.
+one's verdict. A binding missing from the metadata is judged on the ack, or on
+`metaCurrent` — the metadata frame echoed the latest context's id — whichever
+comes first: until then the metadata in hand may still be the previous page's,
+so the grace running out marks it amber, not red.
 
 `aggregateBindingStatus` then resolves one widget-level status —
 `disconnected` (socket or datasource down, authoritative even while values

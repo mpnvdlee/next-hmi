@@ -362,6 +362,7 @@ export function checkBindingSpec(
 export function aggregateBindingStatus(
   bindingSpecs: BindingSpec[],
   s: BindingStoreSlice,
+  metaAuthoritative = true,
 ): BindingStatus {
   if (bindingSpecs.length === 0) return 'ok';
 
@@ -377,7 +378,7 @@ export function aggregateBindingStatus(
   let allPresent = true;
 
   for (const spec of bindingSpecs) {
-    const result = checkBindingSpec(spec, s, s.metadataReceived);
+    const result = checkBindingSpec(spec, s, s.metadataReceived && metaAuthoritative);
     if (result === 'invalid') return 'disabled';
     if (result === 'pending') allPresent = false;
   }
@@ -397,10 +398,12 @@ export function aggregateBindingStatus(
  * datasource's opcua flag, the global ws/snapshot flags). Any other update
  * returns the cached result without scanning at all.
  *
- * `onRecompute` is test instrumentation only.
+ * `metaAuthoritative` false: a key missing from the metadata is not yet known
+ * to be wrong (see `useBindingStatus`). `onRecompute` is test instrumentation only.
  */
 export function createBindingStatusSelector(
   bindingSpecs: BindingSpec[],
+  metaAuthoritative = true,
   onRecompute?: () => void,
 ): (s: BindingStoreSlice) => BindingStatus {
   if (bindingSpecs.length === 0) return () => 'ok';
@@ -440,7 +443,7 @@ export function createBindingStatusSelector(
     if (!relevantChange) return cache!.result;
 
     onRecompute?.();
-    const result = aggregateBindingStatus(bindingSpecs, s);
+    const result = aggregateBindingStatus(bindingSpecs, s, metaAuthoritative);
     cache = {
       values: s.values,
       varMeta: s.varMeta,
@@ -460,6 +463,13 @@ export function createBindingStatusSelector(
  * 'ok': a page reveals without waiting for its variables, so marking there would
  * flash a mark over the whole page for one OPC-UA read. The selector still runs,
  * so the answer is live the moment the window closes.
+ *
+ * A key missing from the metadata waits too, and longer: until this page's data
+ * has arrived, not until the grace runs out. Metadata is sent per context, so
+ * right after a navigation the store still holds the previous page's: every
+ * binding of the new page would read as unknown and flash the red cross until
+ * the new page's metadata landed. A binding the metadata does describe is still
+ * judged at once.
  */
 export function useBindingStatus(
   properties: Record<string, unknown> | undefined,
@@ -475,9 +485,12 @@ export function useBindingStatus(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [properties, schema, branchSig],
   );
-  const selector = useMemo(() => createBindingStatusSelector(bindingSpecs), [bindingSpecs]);
+  const { settling, metaSettled } = useDataSettling();
+  const selector = useMemo(
+    () => createBindingStatusSelector(bindingSpecs, metaSettled),
+    [bindingSpecs, metaSettled],
+  );
   const status = useVariableStore(selector);
-  const settling = useDataSettling();
   // Only "no value yet" waits. A wrong binding is wrong whatever the datasource
   // is doing, and a reconnect reopens this window — holding 'disconnected' would
   // clear every overlay the instant the backend went down.

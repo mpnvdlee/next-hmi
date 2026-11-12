@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { DataSettleContext } from '../context/DataSettleContext';
 import { useVariableStore } from '../store/variableStore';
 
@@ -16,6 +16,9 @@ interface DataSettleGateProps {
    *  For a page that is `context_ready` echoing its id: the client applies it
    *  behind the value frames it acks, so the values are already in the store. */
   done: boolean;
+  /** True once the store's metadata answers the latest context sent, which
+   *  holds this surface's keys: its bindings can be judged before `done`. */
+  metaCurrent?: boolean;
   children: ReactNode;
 }
 
@@ -29,7 +32,12 @@ interface DataSettleGateProps {
  * the reveal is a config-and-code question (PageGroupPageView), the marking is
  * a data question, and they no longer have to share one spinner.
  */
-export default function DataSettleGate({ settleKey, done, children }: DataSettleGateProps) {
+export default function DataSettleGate({
+  settleKey,
+  done,
+  metaCurrent = false,
+  children,
+}: DataSettleGateProps) {
   // The latch is per *wait*, not per key: a key that already spent its grace
   // once has to get a fresh one when it starts waiting again. Both ways in
   // matter — navigating back to a page visited earlier (this gate is long-lived
@@ -55,7 +63,16 @@ export default function DataSettleGate({ settleKey, done, children }: DataSettle
     return () => clearTimeout(t);
   }, [settleKey, done]);
   const settling = !done && settleKey !== undefined && !wait.closed;
-  return <DataSettleContext.Provider value={settling}>{children}</DataSettleContext.Provider>;
+  // The backend sends a context's metadata ahead of its `context_ready`, so
+  // `done` means this page's metadata is in; the grace timer proves nothing.
+  // That holds only while `contextReadyPageIds` is trimmed when a new
+  // `set_context` goes out: an id left over from an earlier ack would read as
+  // done before the new context's metadata had landed. `metaCurrent` says so
+  // without the ack, which a context the backend failed to apply never gets.
+  const metaSettled = done || settleKey === undefined || metaCurrent;
+  // Memoised: every bound widget reads this context.
+  const value = useMemo(() => ({ settling, metaSettled }), [settling, metaSettled]);
+  return <DataSettleContext.Provider value={value}>{children}</DataSettleContext.Provider>;
 }
 
 /**
@@ -78,8 +95,9 @@ export function PageDataSettleGate({
   const done = useVariableStore(
     (s) => pageId !== undefined && s.contextReadyPageIds.includes(pageId),
   );
+  const metaCurrent = useVariableStore((s) => s.metaCurrent);
   return (
-    <DataSettleGate settleKey={pageId} done={done}>
+    <DataSettleGate settleKey={pageId} done={done} metaCurrent={metaCurrent}>
       {children}
     </DataSettleGate>
   );

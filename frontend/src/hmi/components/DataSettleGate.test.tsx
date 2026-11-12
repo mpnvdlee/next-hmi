@@ -164,9 +164,83 @@ describe('DataSettleGate', () => {
     expect(container.querySelector('.hmi-binding-overlay--disconnected')).not.toBeNull();
   });
 
-  it('still marks a variable no datasource knows while the window is open', () => {
+  it('holds a variable missing from the metadata until the page settles', () => {
+    // Right after a navigation the metadata in hand is the previous page's, so
+    // "not in it" is not yet "no datasource knows it" — no red flash per switch.
     useVariableStore.setState({ varMeta: {} });
-    const { container } = renderGated('p1', false);
+    const { container, rerender } = renderGated('p1', false);
+    expect(container.querySelector('.hmi-binding-overlay')).toBeNull();
+
+    rerender(
+      <MemoryRouter>
+        <DataSettleGate settleKey="p1" done>
+          <WidgetRenderer node={NODE} />
+        </DataSettleGate>
+      </MemoryRouter>,
+    );
+    expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
+  });
+
+  it('does not take the metadata as final when only the grace has run out', () => {
+    // The metadata in hand can still be the previous page's: only this page's
+    // context_ready proves its own has landed.
+    vi.useFakeTimers();
+    try {
+      useVariableStore.setState({ varMeta: {} });
+      const { container, rerender } = renderGated('p1', false);
+      act(() => {
+        vi.advanceTimersByTime(3100);
+      });
+      expect(container.querySelector('.hmi-binding-overlay--nodata')).not.toBeNull();
+
+      rerender(
+        <MemoryRouter>
+          <DataSettleGate settleKey="p1" done>
+            <WidgetRenderer node={NODE} />
+          </DataSettleGate>
+        </MemoryRouter>,
+      );
+      expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('takes the metadata as final at once without a key to wait on', () => {
+    // No ack will ever come for an undefined key, so waiting on `done` alone
+    // would hold a wrong binding amber for good.
+    useVariableStore.setState({ varMeta: {} });
+    const { container } = renderGated(undefined, false);
+    expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
+  });
+
+  it('shows the last value a previous visit left behind while the page settles', () => {
+    useVariableStore.setState({ values: { 'PLC:Speed': 12.5 }, varMeta: {} });
+    const { container } = render(
+      <MemoryRouter>
+        <DataSettleGate settleKey="p1" done={false}>
+          <WidgetRenderer
+            node={{ ...NODE, properties: { label: { $var: { path: 'PLC:Speed' } } } }}
+          />
+        </DataSettleGate>
+      </MemoryRouter>,
+    );
+    expect(container.querySelector('.hmi-binding-overlay')).toBeNull();
+    expect(container.textContent).toContain('12.5');
+  });
+
+  it('still marks a binding the metadata proves wrong while the window is open', () => {
+    // An index into a scalar: the metadata describes this key, so the verdict
+    // does not depend on which page's context it came from.
+    const { container } = render(
+      <MemoryRouter>
+        <DataSettleGate settleKey="p1" done={false}>
+          <WidgetRenderer
+            node={{ ...NODE, properties: { variable: { $var: { path: 'PLC:Speed', index: 2 } } } }}
+          />
+        </DataSettleGate>
+      </MemoryRouter>,
+    );
     expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
   });
 
@@ -185,6 +259,7 @@ describe('PageDataSettleGate', () => {
       values: {},
       varMeta: { 'PLC:Speed': { type: { kind: 'scalar', base: 'Float', array: false } } },
       metadataReceived: true,
+      metaCurrent: false,
       snapshotReceived: true,
       wsConnected: true,
       opcuaConnected: {},
@@ -209,5 +284,16 @@ describe('PageDataSettleGate', () => {
   it('does not let an ack for another page settle this one', () => {
     useVariableStore.setState({ contextReadyPageIds: ['x2'] });
     expect(renderFor('x1').container.querySelector('.hmi-binding-overlay')).toBeNull();
+  });
+
+  it('takes the metadata as final once it answers the latest context, ack or no ack', () => {
+    // A context the backend failed to apply never gets its ack; the metadata
+    // frame naming that context still proves the metadata in hand is its own.
+    useVariableStore.setState({ varMeta: {}, contextReadyPageIds: [] });
+    const { container } = renderFor('x1');
+    expect(container.querySelector('.hmi-binding-overlay')).toBeNull();
+
+    act(() => useVariableStore.getState().setMetaCurrent(true));
+    expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
   });
 });

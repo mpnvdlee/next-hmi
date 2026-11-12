@@ -1,10 +1,13 @@
-import { useVariableStore } from './variableStore';
+import { localInputKey, useVariableStore, type VarMeta } from './variableStore';
+
+const INTEGER: VarMeta = { type: { kind: 'scalar', base: 'Integer', array: false } };
 
 describe('variableStore', () => {
   beforeEach(() => {
     useVariableStore.setState({
       values: {},
       varMeta: {},
+      prevVarMeta: {},
       metadataReceived: false,
       snapshotReceived: false,
       contextReadyPageIds: [],
@@ -38,6 +41,7 @@ describe('variableStore', () => {
           type: { kind: 'struct', name: 'HMI', fields: ['bVisible'], array: false },
         },
       },
+      prevVarMeta: { 'MyPLC:Motor/Speed': INTEGER },
     });
 
     useVariableStore.getState().removeVars(['MyPLC:Motor/Speed', 'MyPLC:Motor/HMI']);
@@ -45,6 +49,23 @@ describe('variableStore', () => {
     const state = useVariableStore.getState();
     expect(state.values).toEqual({});
     expect(state.varMeta).toEqual({});
+    expect(state.prevVarMeta).toEqual({});
+  });
+
+  it('notifies no subscriber when none of the variables to remove is there', () => {
+    useVariableStore.setState({
+      values: { 'MyPLC:Motor/Speed': 42 },
+      varMeta: {},
+      prevVarMeta: {},
+    });
+    const listener = vi.fn();
+    const unsubscribe = useVariableStore.subscribe(listener);
+
+    useVariableStore.getState().removeVars(['$input:f1/name', 'MyPLC:Gone']);
+
+    unsubscribe();
+    expect(listener).not.toHaveBeenCalled();
+    expect(useVariableStore.getState().values).toEqual({ 'MyPLC:Motor/Speed': 42 });
   });
 
   it('replaces a snapshot generation instead of retaining old cached values', () => {
@@ -54,21 +75,65 @@ describe('variableStore', () => {
     expect(useVariableStore.getState().values).toEqual({ 'NewPLC:Fresh': 2 });
   });
 
-  it('treats metadata as authoritative and prunes values for removed keys', () => {
+  it('replaces metadata per context but keeps the last values of keys outside it', () => {
     useVariableStore.setState({
-      values: { 'PLC:Keep': 1, 'PLC:Remove': 2 },
+      values: { 'PLC:ThisPage': 1, 'PLC:OtherPage': 2 },
       varMeta: {
-        'PLC:Keep': { type: { kind: 'scalar', base: 'Integer', array: false } },
-        'PLC:Remove': { type: { kind: 'scalar', base: 'Integer', array: false } },
+        'PLC:ThisPage': { type: { kind: 'scalar', base: 'Integer', array: false } },
+        'PLC:OtherPage': { type: { kind: 'scalar', base: 'Integer', array: false } },
       },
     });
 
     useVariableStore.getState().setVarMeta({
-      'PLC:Keep': { type: { kind: 'scalar', base: 'Integer', array: false } },
+      'PLC:ThisPage': { type: { kind: 'scalar', base: 'Integer', array: false } },
     });
 
-    expect(useVariableStore.getState().values).toEqual({ 'PLC:Keep': 1 });
-    expect(Object.keys(useVariableStore.getState().varMeta)).toEqual(['PLC:Keep']);
+    // Navigating back to the other page shows its last value until fresh data lands.
+    expect(useVariableStore.getState().values).toEqual({ 'PLC:ThisPage': 1, 'PLC:OtherPage': 2 });
+    expect(Object.keys(useVariableStore.getState().varMeta)).toEqual(['PLC:ThisPage']);
+  });
+
+  it('keeps the values of the last three metadata frames only', () => {
+    const { applyBatch, setVarMeta } = useVariableStore.getState();
+    for (const page of ['A', 'B', 'C']) {
+      setVarMeta({ [`PLC:${page}`]: INTEGER });
+      applyBatch({ [`PLC:${page}`]: 1 });
+    }
+    expect(Object.keys(useVariableStore.getState().values)).toEqual(['PLC:A', 'PLC:B', 'PLC:C']);
+
+    setVarMeta({ 'PLC:D': INTEGER });
+    expect(Object.keys(useVariableStore.getState().values)).toEqual(['PLC:B', 'PLC:C']);
+  });
+
+  it('keeps the same values map when a metadata frame drops nothing', () => {
+    const { applyBatch, setVarMeta } = useVariableStore.getState();
+    setVarMeta({ 'PLC:A': INTEGER });
+    applyBatch({ 'PLC:A': 1 });
+    const before = useVariableStore.getState().values;
+
+    setVarMeta({ 'PLC:A': INTEGER });
+    expect(useVariableStore.getState().values).toBe(before);
+  });
+
+  it('keeps local inputs however many metadata frames go by', () => {
+    const input = localInputKey('frame', 'slot');
+    useVariableStore.getState().applyBatch({ [input]: 7, 'PLC:A': 1 });
+    for (const page of ['B', 'C', 'D', 'E']) {
+      useVariableStore.getState().setVarMeta({ [`PLC:${page}`]: INTEGER });
+    }
+    expect(useVariableStore.getState().values).toEqual({ [input]: 7 });
+  });
+
+  it('starts the kept frames over on a reconnect', () => {
+    const { applyBatch, setVarMeta, setWsConnected } = useVariableStore.getState();
+    setVarMeta({ 'PLC:A': INTEGER });
+    setVarMeta({ 'PLC:B': INTEGER });
+    setWsConnected(true);
+    applyBatch({ 'PLC:A': 1, 'PLC:B': 2 });
+
+    // The previous connection's frames no longer count towards the three.
+    setVarMeta({ 'PLC:C': INTEGER });
+    expect(useVariableStore.getState().values).toEqual({});
   });
 
   it('resets connection-scoped readiness when a new WebSocket opens', () => {
@@ -89,6 +154,7 @@ describe('variableStore', () => {
       wsConnected: true,
       values: {},
       varMeta: {},
+      prevVarMeta: {},
       metadataReceived: false,
       snapshotReceived: false,
       contextReadyPageIds: [],

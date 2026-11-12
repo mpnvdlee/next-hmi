@@ -52,8 +52,17 @@ interface VariableStore {
   values: Record<string, unknown>;
   /** Variable shape metadata from datasource config — available before live data arrives */
   varMeta: Record<string, VarMeta>;
+  /** The metadata frame `varMeta` replaced: with it, the frames whose keys'
+   *  values `setVarMeta` keeps. */
+  prevVarMeta: Record<string, VarMeta>;
   /** True after the authoritative var_metadata frame (including an empty one). */
   metadataReceived: boolean;
+  /**
+   * Whether `varMeta` answers the latest `set_context` sent — its frame echoed
+   * that context's id. A page in the context can then judge its bindings on it
+   * without waiting for the context's `context_ready`.
+   */
+  metaCurrent: boolean;
   /** True once the first var_snapshot has been received from the server */
   snapshotReceived: boolean;
   /**
@@ -85,13 +94,18 @@ interface VariableStore {
   setWsConnected(v: boolean): void;
   setOpcuaConnected(datasource: string, v: boolean): void;
   clearOpcuaConnected(): void;
-  setVarMeta(meta: Record<string, VarMeta>): void;
+  /** `current`: whether the frame answers the latest context (`metaCurrent`);
+   *  undefined leaves that as it was. */
+  setVarMeta(meta: Record<string, VarMeta>, current?: boolean): void;
+  setMetaCurrent(current: boolean): void;
 }
 
 export const useVariableStore = create<VariableStore>((set) => ({
   values: {},
   varMeta: {},
+  prevVarMeta: {},
   metadataReceived: false,
+  metaCurrent: false,
   snapshotReceived: false,
   contextReadyPageIds: [],
   wsConnected: false,
@@ -113,11 +127,20 @@ export const useVariableStore = create<VariableStore>((set) => ({
 
   removeVars: (ids) =>
     set((state) => {
+      // Nothing to drop keeps the state, so no subscriber runs: an unmounting
+      // Value input often finds its slots already gone.
+      if (!ids.some((id) => id in state.values || id in state.varMeta || id in state.prevVarMeta)) {
+        return state;
+      }
       const values = { ...state.values };
       const varMeta = { ...state.varMeta };
-      for (const id of ids) delete values[id];
-      for (const id of ids) delete varMeta[id];
-      return { values, varMeta };
+      const prevVarMeta = { ...state.prevVarMeta };
+      for (const id of ids) {
+        delete values[id];
+        delete varMeta[id];
+        delete prevVarMeta[id];
+      }
+      return { values, varMeta, prevVarMeta };
     }),
 
   setWsConnected: (v) =>
@@ -126,7 +149,9 @@ export const useVariableStore = create<VariableStore>((set) => ({
         ? {
             values: keepLocalInputs(state.values, {}),
             varMeta: {},
+            prevVarMeta: {},
             metadataReceived: false,
+            metaCurrent: false,
             wsConnected: true,
             snapshotReceived: false,
             contextReadyPageIds: [],
@@ -140,18 +165,36 @@ export const useVariableStore = create<VariableStore>((set) => ({
 
   clearOpcuaConnected: () => set({ opcuaConnected: {} }),
 
-  setVarMeta: (meta) =>
+  setMetaCurrent: (current) => set({ metaCurrent: current }),
+
+  // Metadata is per context, so it replaces wholesale but values are kept: a
+  // key outside the new context is only off screen, and its last value is what
+  // the page shows when navigated back to, until the fresh read lands. A deleted
+  // variable goes by `var_removed`; one that missed it has no metadata, so its
+  // binding is still marked once the page settles.
+  //
+  // Only the keys of the last three metadata frames keep their values, though:
+  // kept for every frame, `values` grows with each page ever opened, and
+  // `applyBatch` copies all of it on every flush. Frames, not pages: a
+  // datasource edit, a page's component definitions loading and a variable-table
+  // scroll each send one on the same page.
+  setVarMeta: (next, current) =>
     set((state) => {
-      // Metadata snapshots are authoritative. Prune values for removed keys so
-      // a missed var_removed frame cannot keep a deleted binding alive.
+      const meta = next;
+      const frames = [meta, state.varMeta, state.prevVarMeta];
       const values: Record<string, unknown> = {};
-      for (const key of Object.keys(meta)) {
-        if (key in state.values) values[key] = state.values[key];
+      let dropped = false;
+      for (const [key, value] of Object.entries(state.values)) {
+        if (isLocalInputKey(key) || frames.some((m) => key in m)) values[key] = value;
+        else dropped = true;
       }
       return {
         varMeta: meta,
-        values: keepLocalInputs(state.values, values),
+        prevVarMeta: state.varMeta,
         metadataReceived: true,
+        metaCurrent: current ?? state.metaCurrent,
+        // Unchanged, the map keeps its identity: no subscriber re-renders for nothing.
+        values: dropped ? values : state.values,
       };
     }),
 }));

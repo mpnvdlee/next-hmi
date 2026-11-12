@@ -81,7 +81,8 @@ On accept, the backend sends, in order:
    `set_context`, for the keys that context resolved to plus their ancestor
    folders (the array an element sits in) and descendants (a struct's members,
    an array's elements). Each frame is an authoritative *replacement*
-   snapshot — the client drops values for keys outside it — and a datasource
+   snapshot — the client keeps the values of the last three frames' keys, so
+   a revisited page shows its last values, and drops the rest — and a datasource
    edit re-sends every client its own. Metadata for 100k variables is 13 MB;
    a page's is kilobytes. The frame's shape:
 
@@ -251,8 +252,11 @@ integer digits keeps them too — and writes it back as a string.
   - Before anything is stored, every key — explicit or resolved from a page —
     that names no enabled variable or folder of a loaded datasource is
     dropped, so a connection holds at most the keys it can be answered for.
-    A page bound to a variable added later gets its fast subscription on its
-    next `set_context`.
+    The kept keys are not re-resolved when a datasource changes: a client
+    sends its context again on each `config_changed` for a `datasource` or
+    its `variables`, so a key naming a variable that edit enabled or added is
+    answered and subscribed from then on — and for a `page`, whose save
+    changes what its page ids resolve to.
   - The fast-subscription set is the union of every connection's keys, kept
     as a count per key. A `set_context` (or a disconnect) that adds no key to
     the union and removes none costs only that connection's own keys and
@@ -273,11 +277,15 @@ integer digits keeps them too — and writes it back as a string.
     `invalidate_runtime_pages_config_cache`); an id that no page or group
     carries costs nothing.
 
-  Current producers: `HmiView` (active page + open overlays), `PreviewView`
-  (preview page/overlay context), `DatasourceVariableTable` (explicit
-  `priorityKeys` for visible rows after scroll settle), `RecipeTable` (explicit
-  `priorityKeys` for a recipe type's bound parameters while its Live column is
-  on).
+  Current producers: `HmiView` (active page + open overlays, `priorityKeys`
+  from the in-memory component tree), `PreviewView` (preview page/overlay
+  context, likewise), `DatasourceVariableTable` (`priorityKeys` for visible
+  rows after scroll settle), `RecipeTable` (`priorityKeys` for a recipe type's
+  bound parameters while its Live column is on), `VariableBindingPicker`
+  (`priorityKeys` for dynamic arrays, whose live length its `[#]` rows
+  follow, while it is open). The client merges them into one `set_context`
+  per socket and does not resend an identical one, except on a reconnect or
+  a datasource or page `config_changed` (above).
 
 - `write_field` — write a value to a variable.
 

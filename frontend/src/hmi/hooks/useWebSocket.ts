@@ -36,8 +36,8 @@ type WsMessage =
   | { type: 'var_snapshot'; values?: Record<string, unknown>; bootId?: string }
   | { type: 'var_update'; values?: Record<string, unknown> }
   | { type: 'var_removed'; ids?: string[] }
-  | { type: 'var_metadata'; meta?: Record<string, VarMeta> }
-  | { type: 'context_ready'; currentPageIds?: string[] }
+  | { type: 'var_metadata'; meta?: Record<string, VarMeta>; contextId?: number }
+  | { type: 'context_ready'; currentPageIds?: string[]; contextId?: number }
   | { type: 'opcua_status'; datasource: string; connected: boolean }
   | {
       type: 'user_identity';
@@ -129,15 +129,12 @@ let _pendingSnapshot = false;
 // through this same buffer guarantees the store's scalars/structs are already
 // updated by the time a consumer sees contextReadyPageIds include a page.
 let _pendingContextReady: { pageIds: string[] } | null = null;
-// Normalized page-set of the most recent set_context we actually sent. Used to
-// drop stale context_ready acks: a superseded navigation's background OPC-UA
-// prefetch can land after we've already moved on, and applying its ack would
-// drop the current surface from contextReadyPageIds and flash it back to its
-// spinner. The backend echoes the id list verbatim, so matching on it
-// identifies the ack's originating set_context without a wire-level token.
-// Opening or closing a page overlay changes that list too, since the overlay's
-// page is sent alongside the routed one.
-let _lastSentContextKey: string | null = null;
+// The number of the last set_context sent; the backend echoes each context's
+// number on its var_metadata and context_ready. A superseded context's prefetch
+// can land after we've moved on, and its ack must not settle the page it names
+// — the page ids alone cannot tell, since a return to a page while its first
+// visit's read still runs sends the very same ids again.
+let _lastSentContextId = 0;
 let _flushRaf: number | null = null;
 let _flushFns: {
   applyBatch: { current: (updates: Record<string, unknown>) => void };
@@ -163,6 +160,13 @@ function flushPendingVarUpdates(): void {
   if (contextReady) _flushFns.setContextReady.current(contextReady.pageIds);
 }
 
+/** Apply what is queued now rather than at the next frame. */
+function flushPendingNow(): void {
+  if (_flushRaf === null) return;
+  cancelAnimationFrame(_flushRaf);
+  flushPendingVarUpdates();
+}
+
 function enqueueVarUpdate(
   type: 'var_snapshot' | 'var_update',
   values: Record<string, unknown> | undefined,
@@ -179,15 +183,6 @@ function enqueueVarUpdate(
   if (_flushRaf === null) {
     _flushRaf = requestAnimationFrame(flushPendingVarUpdates);
   }
-}
-
-/** Order-independent key of one id list. */
-function idListKey(ids: unknown): string {
-  if (!Array.isArray(ids)) return '';
-  return ids
-    .filter((id): id is string => typeof id === 'string' && id.length > 0)
-    .sort()
-    .join('\n');
 }
 
 function enqueueContextReady(currentPageIds: string[]): void {
@@ -241,6 +236,9 @@ interface ContextProducer {
   priorityKeys?: readonly string[];
 }
 const _contextProducers = new Map<string, ContextProducer>();
+// The merged set_context this socket last sent. Each one makes the backend
+// resend every cached value it covers, so an identical one is not sent again.
+let _lastSentContext: string | null = null;
 
 function sendMergedContext(): void {
   const currentPageIds: string[] = [];
@@ -250,8 +248,39 @@ function sendMergedContext(): void {
       if (!currentPageIds.includes(id)) currentPageIds.push(id);
     for (const key of producer.priorityKeys ?? []) priorityKeys.add(key);
   }
+  const msg = { type: 'set_context', currentPageIds, priorityKeys: [...priorityKeys] };
+  const signature = JSON.stringify(msg);
+  if (signature === _lastSentContext) return;
   // Dropped while the socket is down; `onopen` sends the merged context again.
-  sendWsMessage({ type: 'set_context', currentPageIds, priorityKeys: [...priorityKeys] });
+  if (!sendWsMessage({ ...msg, contextId: _lastSentContextId + 1 })) return;
+  _lastSentContextId += 1;
+  _lastSentContext = signature;
+  trimContextReady(currentPageIds);
+}
+
+/** Send the merged context even if it is the one last sent: the backend's
+ *  copy is gone (a new socket) or stale (a datasource edit — it kept only the
+ *  keys naming a variable it knew when the context arrived). */
+function resendMergedContext(): void {
+  _lastSentContext = null;
+  if (_contextProducers.size) sendMergedContext();
+}
+
+/** Forget the acks of pages a new context no longer holds. One left behind
+ *  settled that page at once on a return — while the metadata in hand was
+ *  still the page in between's — so its bindings showed red until its own
+ *  metadata landed. A page the new context keeps (an overlay opening) stays
+ *  settled. */
+function trimContextReady(currentPageIds: readonly string[]): void {
+  const keep = (ids: string[]) => ids.filter((id) => currentPageIds.includes(id));
+  // An ack already received but not yet flushed is just as stale.
+  if (_pendingContextReady) _pendingContextReady = { pageIds: keep(_pendingContextReady.pageIds) };
+  const { contextReadyPageIds, setContextReady, metaCurrent, setMetaCurrent } =
+    useVariableStore.getState();
+  const kept = keep(contextReadyPageIds);
+  if (kept.length !== contextReadyPageIds.length) setContextReady(kept);
+  // The metadata in hand answers the previous context until this one's lands.
+  if (metaCurrent) setMetaCurrent(false);
 }
 
 /** Register (or replace) what `owner` wants in this socket's context, and send
@@ -277,13 +306,6 @@ export function clearContextProducer(owner: string): void {
 export function sendWsMessage(msg: unknown): boolean {
   if (writeLocalInput(msg)) return true;
   if (_ws?.readyState === WebSocket.OPEN) {
-    if (
-      typeof msg === 'object' &&
-      msg !== null &&
-      (msg as { type?: unknown }).type === 'set_context'
-    ) {
-      _lastSentContextKey = idListKey((msg as { currentPageIds?: unknown }).currentPageIds);
-    }
     _ws.send(JSON.stringify(msg));
     return true;
   }
@@ -384,7 +406,7 @@ export function useWebSocket(): void {
       ws.onopen = () => {
         setWsConnectedRef.current(true);
         // A fresh backend client knows no context: send the merged one again.
-        if (_contextProducers.size) sendMergedContext();
+        resendMergedContext();
       };
 
       ws.onmessage = (event: MessageEvent) => {
@@ -407,20 +429,32 @@ export function useWebSocket(): void {
             enqueueVarUpdate(msg.type, msg.values);
             return;
           case 'var_removed':
-            if (Array.isArray(msg.ids)) removeVarsRef.current(msg.ids);
-            return;
-          case 'var_metadata':
-            if (msg.meta && typeof msg.meta === 'object') setVarMetaRef.current(msg.meta);
-            return;
-          case 'context_ready': {
-            const readyPageIds = Array.isArray(msg.currentPageIds) ? msg.currentPageIds : [];
-            // Drop acks from a superseded set_context (see _lastSentContextKey)
-            // so a late prefetch can't flash the current page back to a spinner.
-            if (idListKey(readyPageIds) === _lastSentContextKey) {
-              enqueueContextReady(readyPageIds);
+            if (Array.isArray(msg.ids)) {
+              // Queued values land first: applied at the next frame, they would put it back.
+              flushPendingNow();
+              removeVarsRef.current(msg.ids);
             }
             return;
-          }
+          case 'var_metadata':
+            if (msg.meta && typeof msg.meta === 'object') {
+              // Values that arrived before this frame land before it, so its
+              // prune drops them too instead of the next flush re-adding them.
+              flushPendingNow();
+              // A frame answering a set_context names it; a datasource edit's
+              // snapshot answers none and leaves the verdict as it was.
+              setVarMetaRef.current(
+                msg.meta,
+                msg.contextId === undefined ? undefined : msg.contextId === _lastSentContextId,
+              );
+            }
+            return;
+          case 'context_ready':
+            // Only the latest context's ack (see _lastSentContextId), so a late
+            // prefetch can't settle a page on another context's data.
+            if (msg.contextId === _lastSentContextId) {
+              enqueueContextReady(Array.isArray(msg.currentPageIds) ? msg.currentPageIds : []);
+            }
+            return;
           case 'opcua_status':
             setOpcuaConnectedRef.current(msg.datasource, msg.connected);
             return;
@@ -501,6 +535,12 @@ export function useWebSocket(): void {
             return;
           case 'config_changed':
             ingestConfigChanged(msg);
+            // The backend resolved this context from the config it had: a
+            // datasource edit narrowed the keys it kept, a page save changed
+            // what the page ids resolve to.
+            if (['datasource', 'variables', 'page'].includes(msg.artifact_type)) {
+              resendMergedContext();
+            }
             return;
           case 'widget_updated':
             publishWidgetUpdated({

@@ -81,6 +81,10 @@ heading.
 - **A page with about 1,800 bindings never loaded.** Its request to the
   server was over 64 KB and was dropped whole; the limit is now 1 MiB.
 
+- **The no-connection cross no longer flashes on every navigation.** A
+  revisited page shows its last values until fresh ones arrive, and a binding
+  whose metadata is still on its way is not shown as broken.
+
 - **The runtime no longer stalls on a page switch against a large PLC.**
   Against 72,000 variables it could hang for up to 30 s.
 
@@ -121,6 +125,17 @@ heading.
 - **A sidebar or variable trigger reading a whole array got no value** while
   the open page bound one element of that array at a fixed index.
 
+- **Fewer requests per page switch.** The server's sampling interval is read
+  once per connection, and an unchanged page context is not sent again.
+
+- **Browser memory stays bounded on long sessions.** A browser keeps the
+  values of its most recent pages only, so long sessions no longer slow down.
+
+- **A variable removed from a datasource could reappear on an open screen**
+  when a value for it was still on its way, and stay until the next page
+  switch. Values arriving just before a page switch could likewise outlive
+  the browser's last three pages.
+
 - **A variable no longer goes without values after a busy PLC refused it.** A
   variable the PLC refused or did not answer while moving between the page's
   fast subscription and the background one was retried once and then dropped
@@ -150,6 +165,9 @@ heading.
 - **A static variable write updates the struct around its array.** Writing a
   member of an array element in a static datasource updated the element and
   the array, but a struct holding that array kept showing the old value.
+
+- **No red flash when a page's metadata arrives late.** A binding stays amber
+  until its page's metadata is complete, instead of turning red after 3 s.
 
 - **Saving a datasource no longer stalls live values.**
 
