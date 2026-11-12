@@ -1,5 +1,6 @@
 import {
   bitKeyLabel,
+  elementNameAt,
   flattenForRender,
   resolveElementBinding,
   rowSelectionKey,
@@ -26,14 +27,14 @@ function scalarArrayVar(): PickerVariableEntry {
   };
 }
 
-function arrayOfStructFolder(elementNamer: (i: number) => string): PickerFolderEntry {
+function arrayOfStructFolder(elementNamer: (i: number) => string, length = 2): PickerFolderEntry {
   return {
     kind: 'folder',
     name: 'Motors',
     is_array: true,
     _datasource: 'MyPLC',
     _path: 'Motors',
-    children: [0, 1].map((i): PickerFolderEntry => ({
+    children: Array.from({ length }, (_, i): PickerFolderEntry => ({
       kind: 'folder',
       name: elementNamer(i),
       _datasource: 'MyPLC',
@@ -93,6 +94,37 @@ describe('resolveElementBinding', () => {
     expect(result).toEqual({ path: 'Motors', index: 0 });
   });
 
+  // `index` is a position from 0 whatever the PLC counts from, as the runtime
+  // and the backend's `_element_paths` read it: `[1]` of `ARRAY[1..12]` is 0.
+  it.each([
+    ['0', (i: number) => `[${i}]`],
+    ['1', (i: number) => `[${i + 1}]`],
+    ['1, "Prefix[N]" naming', (i: number) => `Line[${i + 1}]`],
+  ])('binds each element of an array counting from %s by its position', (_from, namer) => {
+    const arrayFolder = arrayOfStructFolder(namer, 12);
+    const tree = dsTreeWith(arrayFolder);
+    arrayFolder.children.forEach((child, position) => {
+      const elem = child as PickerFolderEntry;
+      expect(resolveElementBinding('MyPLC', elem._path!, elem, tree)).toEqual({
+        path: 'Motors',
+        index: position,
+      });
+    });
+  });
+
+  it('ranks elements by the number they end in, not by their order in the tree', () => {
+    const arrayFolder = arrayOfStructFolder((i) => `[${i + 1}]`, 12);
+    arrayFolder.children.reverse();
+    const elem = arrayFolder.children.find((c) => (c as PickerFolderEntry).name === '[2]');
+    const result = resolveElementBinding(
+      'MyPLC',
+      'Motors/[2]',
+      elem as PickerFolderEntry,
+      dsTreeWith(arrayFolder),
+    );
+    expect(result).toEqual({ path: 'Motors', index: 1 });
+  });
+
   it('does not treat a plain struct folder as an array element even if it is bracket-named', () => {
     // A struct folder incidentally named "Line[2]" whose *parent* is not
     // flagged is_array must not be misread as an array element.
@@ -130,6 +162,32 @@ describe('resolveElementBinding', () => {
     const result = resolveElementBinding('MyPLC', 'Settings', folder, dsTreeWith(folder));
     expect(result).toEqual({ path: 'Settings' });
   });
+});
+
+describe('elementNameAt', () => {
+  const from0 = (i: number) => `[${i}]`;
+  const from1 = (i: number) => `[${i + 1}]`;
+  it.each([
+    ['0', 0, '[0]', from0],
+    ['0', 1, '[1]', from0],
+    ['1', 0, '[1]', from1],
+    ['1', 11, '[12]', from1],
+    ['1, "Prefix[N]" naming', 1, 'Line[2]', (i: number) => `Line[${i + 1}]`],
+  ])('on an array counting from %s, names position %i %s', (_from, position, name, namer) => {
+    expect(elementNameAt(arrayOfStructFolder(namer, 12), position)).toBe(name);
+  });
+
+  // Past the end there is no element — not even on `ARRAY[1..10]`, whose
+  // position 10 shares its number with the element `[10]` at position 9.
+  it.each([
+    ['0', 2, 5, from0],
+    ['1', 10, 10, from1],
+  ])(
+    'names nothing past the end of an array counting from %s',
+    (_from, length, position, namer) => {
+      expect(elementNameAt(arrayOfStructFolder(namer, length), position)).toBeUndefined();
+    },
+  );
 });
 
 describe('rowSelectionKey', () => {

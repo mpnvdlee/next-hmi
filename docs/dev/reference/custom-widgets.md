@@ -611,7 +611,7 @@ The binding picker matches the nested shape: it verifies that the selected struc
 
 #### Array-of-struct bindings
 
-When the target OPC-UA variable is an array of structs — represented as a folder containing indexed sub-folders `[0]`, `[1]`, `[2]`, … — use an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`):
+When the target OPC-UA variable is an array of structs — represented as an `is_array` folder of element sub-folders named `[0]`, `[1]`, … or, from TwinCAT, `aMotors[0]`, `aMotors[1]`, … ([data-formats](../architecture/data-formats.md#variable-tree-model)) — use an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`):
 
 ```ts
 motors: {
@@ -621,7 +621,7 @@ motors: {
 }
 ```
 
-The `requiredFields` describe the shape of each array element. The binding picker shows only folders whose children are all `[N]`-indexed sub-folders, and validates that the lowest-index element (`[0]`, or `[1]` for an array counting from 1) satisfies the required fields; the runtime and the editor's warnings judge the bound element, or that same lowest-index one when none is bound.
+The `requiredFields` describe the shape of each array element. The binding picker shows only array-of-struct folders, and validates that the lowest-index element (`[0]`, or `[1]` for an array counting from 1, whatever comes before the brackets) satisfies the required fields; the runtime and the editor's warnings judge the bound element, or that same lowest-index one when none is bound.
 
 At runtime, the backend returns a JSON array:
 
@@ -886,7 +886,7 @@ The value types and the full source model are specified in [../architecture/valu
 
 The picker, the runtime binding check and the editor's warnings all hold a bound struct to every one of these — name, type, access and nesting — against the same element of a struct array, so a struct the picker offers (without **Show all**) is one the page accepts. A disabled member, or one gone from the server, counts as missing.
 
-Set an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`) on the field itself to require an array-of-struct folder (children must be `[0]`, `[1]`, …). The `requiredFields` then describe the shape of each element. At runtime the value is a JSON array (`unknown[]`), accessed via `usePropStruct` or the explicit `useStructVariable(key)` for write-back.
+Set an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`) on the field itself to require an array-of-struct folder (elements `[0]`, `[1]`, … or `Name[0]`, `Name[1]`, …). The `requiredFields` then describe the shape of each element. At runtime the value is a JSON array (`unknown[]`), accessed via `usePropStruct` or the explicit `useStructVariable(key)` for write-back.
 
 ### `option-list` source types
 

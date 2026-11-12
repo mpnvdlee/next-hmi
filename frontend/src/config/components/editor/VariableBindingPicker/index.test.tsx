@@ -1,10 +1,16 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiJson } from '@shared/utils/api';
+import { clearContextProducer, setContextProducer } from '@hmi/hooks/useWebSocket';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import VariableBindingPicker from './index';
 
 vi.mock('@shared/utils/api', () => ({ apiJson: vi.fn() }));
+vi.mock('@hmi/hooks/useWebSocket', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@hmi/hooks/useWebSocket')>()),
+  setContextProducer: vi.fn(),
+  clearContextProducer: vi.fn(),
+}));
 
 const mockedApiJson = vi.mocked(apiJson);
 
@@ -84,6 +90,108 @@ describe('VariableBindingPicker search', () => {
       { path: 'Demo PLC:Top Speed' },
       expect.objectContaining({ dataType: 'Float' }),
     );
+  });
+});
+
+describe('VariableBindingPicker live array lengths', () => {
+  it('asks for its dynamic arrays only while open', async () => {
+    // The picker stays mounted after a close; its keys stayed on the fast
+    // subscription for the rest of the editor session.
+    mockedApiJson
+      .mockResolvedValueOnce([{ name: 'Demo PLC', type: 'static' }] as never)
+      .mockResolvedValueOnce({
+        variables: [
+          { display_name: 'Lengths', data_type: 'Integer', enabled: true, is_array: true },
+        ],
+      } as never);
+    render(<VariableBindingPicker />);
+    expect(setContextProducer).not.toHaveBeenCalled();
+
+    act(() =>
+      useEditorDomainStore.getState().openBindingPicker('', 'value', {
+        onPick: vi.fn(),
+        currentBinding: { path: 'Demo PLC:Lengths' },
+      }),
+    );
+    await waitFor(() =>
+      expect(setContextProducer).toHaveBeenLastCalledWith('binding-picker', {
+        priorityKeys: ['Demo PLC:Lengths'],
+      }),
+    );
+    vi.mocked(clearContextProducer).mockClear();
+    const sent = vi.mocked(setContextProducer).mock.calls.length;
+
+    act(() => useEditorDomainStore.getState().closeBindingPicker());
+
+    expect(clearContextProducer).toHaveBeenCalledWith('binding-picker');
+    expect(setContextProducer).toHaveBeenCalledTimes(sent);
+  });
+});
+
+describe('VariableBindingPicker struct array elements', () => {
+  /** Opens on `{ path: 'PLC:Motors', index }`, an array of `length` elements
+   *  counting from `first`. No page metadata names `Motors`: the tree alone
+   *  says it is a struct array. */
+  function openOnMotors(first: number, length: number, index: number) {
+    const element = (n: number) => ({
+      kind: 'folder',
+      name: `[${n}]`,
+      children: [{ display_name: 'Speed', data_type: 'Float', enabled: true }],
+    });
+    mockedApiJson.mockImplementation(
+      async (url: string) =>
+        (url === '/api/datasources'
+          ? [{ name: 'PLC', type: 'static' }]
+          : {
+              variables: [
+                {
+                  kind: 'folder',
+                  name: 'Motors',
+                  is_array: true,
+                  children: Array.from({ length }, (_, i) => element(first + i)),
+                },
+              ],
+            }) as never,
+    );
+    const onPick = vi.fn();
+    useEditorDomainStore.getState().openBindingPicker('', 'motor', {
+      onPick,
+      currentBinding: { path: 'PLC:Motors', index },
+      filter: { type: 'Motor', requiredFields: [{ name: 'Speed', type: 'Float' }] },
+    });
+    render(<VariableBindingPicker />);
+    return onPick;
+  }
+
+  // A stored index is a position from 0 whatever the PLC counts from, so on
+  // `ARRAY[1..2]` position 1 is the element named `[2]`.
+  it.each([
+    [0, '[1]'],
+    [1, '[2]'],
+  ])('opens position 1 of an array counting from %i on %s, and keeps it', async (first, name) => {
+    const onPick = openOnMotors(first, 2, 1);
+
+    // Only the drawer names it: jsdom renders no rows of the virtual list.
+    await screen.findByText(name);
+    fireEvent.click(screen.getByRole('button', { name: /Confirm/ }));
+
+    expect(onPick).toHaveBeenCalledWith(
+      { path: 'PLC:Motors', index: 1 },
+      expect.objectContaining({ index: 1 }),
+    );
+  });
+
+  // What the old picker wrote for `[10]` of `ARRAY[1..10]`: the runtime finds
+  // nothing there, so the element named `[10]` (position 9) must not stand in.
+  it('opens a position past the end as not found', async () => {
+    openOnMotors(1, 10, 10);
+
+    await screen.findByText('Not found');
+    // Let the preselect settle on the loaded tree: a switch to `[10]` lands after.
+    await act(async () => {});
+    expect(screen.getByText('Not found')).toBeInTheDocument();
+    expect(screen.queryByText('[10]')).toBeNull();
+    expect(screen.getByRole('button', { name: /Confirm/ })).toBeDisabled();
   });
 });
 

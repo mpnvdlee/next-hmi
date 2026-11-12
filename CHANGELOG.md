@@ -104,6 +104,10 @@ heading.
 - **The runtime no longer stalls on a page switch against a large PLC.**
   Against 72,000 variables it could hang for up to 30 s.
 
+- **A struct-array binding at a fixed index could show the wrong element.**
+  On a page binding only some elements, `Motors[1]` read another element as
+  live. The binding picker now also writes and shows an element by position.
+
 - **A page could stop updating when several panels switched pages at once.**
   It received no live values until the next page switch.
 

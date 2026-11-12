@@ -11,7 +11,7 @@ import { buildVarKey, isFolder } from '@shared/types/datasource';
 import { isArrayShape, isFixedArray } from '@shared/types/arrayShape';
 import { useVariableStore } from '@hmi/store/variableStore';
 import type { StructSchemaNode, ComponentPropertySchema } from '@shared/types/componentProperty';
-import { hasRequiredFields, shapeElementFolder } from './helpers';
+import { ELEMENT_NAME, elementFolders, hasRequiredFields, shapeElementFolder } from './helpers';
 import { type RequiredFieldEntry } from '../bindingPickerUtils';
 import { REPEAT_INDEX_SUFFIX } from './repeatItemRows';
 
@@ -325,6 +325,12 @@ export function arrayExpansionKey(v: PickerVariableEntry): string {
   return `${ds}:${path}[]`;
 }
 
+/** The name of a struct array's element at `position` (from 0) — `[1]` for
+ *  position 0 of an array counting from 1; undefined past its end. */
+export function elementNameAt(array: FolderEntry, position: number): string | undefined {
+  return elementFolders(array)[position]?.name;
+}
+
 /**
  * Resolve a selected composite key's raw path into the `{path, index}` shape
  * a `VariableBinding` uses.
@@ -336,10 +342,12 @@ export function arrayExpansionKey(v: PickerVariableEntry): string {
  *   `"MyArray[2]"`.
  * - A **struct[] element** is a real `[N]`-indexed sub-*folder* one level
  *   below an array-of-struct folder, joined by "/": `"Motors/[2]"` or
- *   `"Motors/Line[2]"` (static-server prefix style). The index always comes
- *   from the folder's own `name`, and the array's root path from stripping
- *   just that last path segment — never from a regex over the whole path,
- *   which would mis-parse the "/" as part of the base path.
+ *   `"Motors/Line[2]"` (static-server prefix style). Its index is the folder's
+ *   position among the array's elements, from 0 whatever the PLC counts from
+ *   — the runtime reads it so — not the `N` in its name; the array's root
+ *   path comes from stripping just that last path segment — never from a
+ *   regex over the whole path, which would mis-parse the "/" as part of the
+ *   base path.
  *
  * `rawSelectedFolder` (non-null only when the selection is a folder, from
  * `findRawFolder`) disambiguates which case applies.
@@ -351,12 +359,14 @@ export function resolveElementBinding(
   dsTree: DatasourceNode[],
 ): { path: string; index?: number } {
   if (rawSelectedFolder) {
-    const nameMatch = rawSelectedFolder.name.match(/\[(\d+)\]$/);
-    if (!nameMatch) return { path: rawPath };
+    if (!ELEMENT_NAME.test(rawSelectedFolder.name)) return { path: rawPath };
     const parentPath = rawPath.slice(0, rawPath.length - rawSelectedFolder.name.length - 1);
     const parentFolder = parentPath ? findRawFolder(dsTree, `${datasource}:${parentPath}`) : null;
     if (parentFolder && isArrayShape(parentFolder)) {
-      return { path: parentPath, index: parseInt(nameMatch[1], 10) };
+      const index = elementFolders(parentFolder).findIndex(
+        (f) => f.name === rawSelectedFolder.name,
+      );
+      return { path: parentPath, index };
     }
     return { path: rawPath };
   }
