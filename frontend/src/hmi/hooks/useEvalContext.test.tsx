@@ -6,7 +6,9 @@ import { HostPageContext } from '../context/HostPageContext';
 import { PageGroupStackContext } from '../components/PageGroupStackContext';
 import { useHmiStore } from '../store/hmiStore';
 import { evaluatePropertyValue } from '../utils/propertySourceEval';
-import { useEvalContext } from './useEvalContext';
+import { useEvalContext, WidgetStoresContext } from './useEvalContext';
+import { useReactiveEval } from './useReactiveEval';
+import { useComponentPropStore } from '../store/widgetPropStore';
 
 const PAGES = [
   { id: 'dashboard', type: 'page' as const, title: 'Dashboard', description: 'Line overview' },
@@ -242,5 +244,30 @@ describe('useEvalContext $page groupIndex / groupLastIndex', () => {
     expect(result.current.resolvePage?.('groupIndex', 'info')).toBe(2);
     expect(result.current.resolvePage?.('groupLastIndex', 'info')).toBe(2);
     expect(result.current.resolvePage?.('groupIndex')).toBeNull();
+  });
+});
+
+// A popup a widget opens, the alarm detail dialog of an alarm list, renders
+// inside that widget, whose stores say nothing about the popup's values.
+describe('useReactiveEval inside a widget', () => {
+  const SELECTED = { $widgetProp: { componentId: 'grid', property: 'row' } };
+
+  function Popup() {
+    const value = evaluatePropertyValue(SELECTED, useReactiveEval(SELECTED));
+    return <span data-testid="popup">{String(value)}</span>;
+  }
+
+  it('follows the stores of the values it is given', () => {
+    useComponentPropStore.setState({ props: {} });
+    const Wrapper = wrapper('/pages/dashboard');
+    render(
+      <Wrapper>
+        <WidgetStoresContext.Provider value={0}>
+          <Popup />
+        </WidgetStoresContext.Provider>
+      </Wrapper>,
+    );
+    act(() => useComponentPropStore.getState().setComponentProp('grid', 'row', 4));
+    expect(screen.getByTestId('popup').textContent).toBe('4');
   });
 });

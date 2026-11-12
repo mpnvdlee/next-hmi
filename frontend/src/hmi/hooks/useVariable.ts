@@ -3,8 +3,7 @@ import { useVariableStore, type VarMeta } from '../store/variableStore';
 import { type VariableBinding, bindingIndex, bindingKey } from '@shared/types/config';
 import { readBit } from '@shared/utils/valueTypes';
 import { readArrayElement } from '../utils/repeatItemResolution';
-
-const noSubscribe = (): (() => void) => () => {};
+import { noSubscribe } from './useLiveScalars';
 
 /**
  * Subscribe to a single scalar variable value.
@@ -22,12 +21,13 @@ export function useVariable(id: string): unknown {
  * Components receive a single scalar value regardless of whether the source is an
  * array variable or a plain scalar.
  *
- * For a `struct[]`-typed source, `index` resolves to the element's own
- * composite key (e.g. `ds:Motors/[2]`) rather than slicing the whole-array
- * value client-side — the backend caches/broadcasts each element under its
- * own key, so this only re-renders when that one element changes,
- * not on every element's update. Scalar arrays have no per-element backend
- * key, so `index` still slices the array value directly.
+ * For a `struct[]`-typed source, `index` is a position in the array, counted
+ * from 0: it reads the element folder whose metadata `position` matches,
+ * under that folder's own key — the backend caches/broadcasts each element
+ * there, so this only re-renders when that one element changes — and slices
+ * the whole-array value when that key holds nothing (`readArrayElement`).
+ * Scalar arrays have no per-element backend key, so `index` slices the array
+ * value directly.
  *
  * @example
  *   const value = useBindingValue(binding); // returns binding.index element if array

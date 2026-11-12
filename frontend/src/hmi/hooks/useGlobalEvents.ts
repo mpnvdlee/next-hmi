@@ -6,9 +6,10 @@ import { useVariableStore } from '../store/variableStore';
 import { NO_DATA_GRACE_MS } from '../components/DataSettleGate';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { executeWidgetActions } from '../utils/widgetActions';
+import { STORE_VARIABLE_RESOLVERS } from './useEvalContext';
 import { resolvePageContext } from '@shared/utils/pageTree';
 import { evaluatePropertyValue } from '../utils/propertySourceEval';
-import type { EvaluationContext, ResolvedValue } from '../utils/propertySourceEval';
+import type { EvaluationContext } from '../utils/propertySourceEval';
 import type { GlobalEventsConfig } from '@shared/types/config';
 
 /**
@@ -117,10 +118,7 @@ export function useGlobalEvents(scope: string): void {
   // actions in the live preview does not count as a change of its variable.
   useEffect(() => {
     const last = new Map<string, unknown>();
-    const evalCtx: EvaluationContext = {
-      resolveVariable: (ds, path) =>
-        (useVariableStore.getState().values[`${ds}:${path}`] ?? null) as ResolvedValue,
-    };
+    const evalCtx: EvaluationContext = STORE_VARIABLE_RESOLVERS;
     function check() {
       const changed = new Map<string, boolean>();
       for (const trigger of globalEventsRef.current.onVariableChanged ?? []) {

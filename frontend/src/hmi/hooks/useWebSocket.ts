@@ -24,6 +24,7 @@ import type { AlarmInstance, AlarmSummary } from '@shared/types/alarm';
 import type { RecipeConfig, LoadedDataset, DownloadResult } from '@shared/types/recipe';
 import type { ActionResultReason } from '@shared/types/config';
 import { flushAllAsDisconnected, resolvePending } from '../utils/actionDispatcher';
+import { elementMemberValues } from '../utils/repeatItemResolution';
 import { wsUrl } from '@shared/utils/runtimeBase';
 import { isLiveScope, saveSessionToken } from '../utils/runtimeSession';
 
@@ -171,14 +172,18 @@ function enqueueVarUpdate(
   type: 'var_snapshot' | 'var_update',
   values: Record<string, unknown> | undefined,
 ): void {
+  // A struct-array element fills in its members as it arrives, so whichever of
+  // an element and a member the server ships itself came last wins (within a
+  // frame the member, which is never the older). Metadata lands before its values.
+  const members = values && elementMemberValues(values, useVariableStore.getState().varMeta);
   if (type === 'var_snapshot') {
     // A snapshot starts a new authoritative value generation. Drop any queued
     // updates from the previous socket; later chunks merge into this object.
-    _pendingValues = { ...(values ?? {}) };
+    _pendingValues = { ...members, ...values };
     _pendingSnapshot = true;
   } else if (values) {
     if (!_pendingValues) _pendingValues = {};
-    Object.assign(_pendingValues, values);
+    Object.assign(_pendingValues, members, values);
   }
   if (_flushRaf === null) {
     _flushRaf = requestAnimationFrame(flushPendingVarUpdates);

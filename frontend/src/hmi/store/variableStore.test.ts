@@ -29,6 +29,32 @@ describe('variableStore', () => {
     });
   });
 
+  it('keeps the unchanged elements of a struct array re-sent around one changed leaf', () => {
+    const element = (n: number) => ({ nId: n, stInfo: { nState: n } });
+    const { applyBatch } = useVariableStore.getState();
+    applyBatch({ 'PLC:List': [element(0), element(1)] });
+    const before = useVariableStore.getState().values['PLC:List'] as unknown[];
+
+    applyBatch({ 'PLC:List': [element(0), { ...element(1), nId: 9 }] });
+    const after = useVariableStore.getState().values['PLC:List'] as Record<string, unknown>[];
+    expect(after[0]).toBe(before[0]);
+    expect(after[1]).toEqual({ nId: 9, stInfo: { nState: 1 } });
+    expect(after[1].stInfo).toBe((before[1] as Record<string, unknown>).stInfo);
+  });
+
+  it('keeps the state for a batch that changes nothing, so no subscriber runs', () => {
+    const { applyBatch } = useVariableStore.getState();
+    applyBatch({ 'PLC:List': [{ nId: 1 }], 'PLC:A': 1 });
+    const before = useVariableStore.getState();
+
+    applyBatch({ 'PLC:List': [{ nId: 1 }], 'PLC:A': 1 });
+    expect(useVariableStore.getState()).toBe(before);
+
+    // A key the store lacks is still added, even with no value.
+    applyBatch({ 'PLC:B': undefined });
+    expect('PLC:B' in useVariableStore.getState().values).toBe(true);
+  });
+
   it('removes variables from the value cache', () => {
     useVariableStore.setState({
       values: {
@@ -113,6 +139,22 @@ describe('variableStore', () => {
 
     setVarMeta({ 'PLC:A': INTEGER });
     expect(useVariableStore.getState().values).toBe(before);
+  });
+
+  it('keeps the object of every metadata entry a frame repeats unchanged', () => {
+    const { setVarMeta } = useVariableStore.getState();
+    const frame = { 'PLC:A': { ...INTEGER, min: 0 }, 'PLC:B': INTEGER };
+    setVarMeta(frame);
+    const before = useVariableStore.getState().varMeta;
+
+    // Every frame arrives as fresh JSON.
+    setVarMeta(structuredClone({ ...frame, 'PLC:B': { ...INTEGER, max: 9 } }));
+    const changed = useVariableStore.getState().varMeta;
+    expect(changed['PLC:A']).toBe(before['PLC:A']);
+    expect(changed['PLC:B']).toEqual({ ...INTEGER, max: 9 });
+
+    setVarMeta(structuredClone(changed));
+    expect(useVariableStore.getState().varMeta).toBe(changed);
   });
 
   it('keeps local inputs however many metadata frames go by', () => {

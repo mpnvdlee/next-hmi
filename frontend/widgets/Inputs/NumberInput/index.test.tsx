@@ -36,6 +36,20 @@ function scalarMeta(range: { min?: number; max?: number }, base: 'Float' | 'Inte
   };
 }
 
+/** A member of struct-array element 0, as a Repeater copy or a component's
+ *  `device/…` binds it: the member's own leaf, filled in from the element. */
+function memberOfElement(leaf: Record<string, unknown>) {
+  const S = { kind: 'struct' as const, name: 'Tank', array: true, fields: ['Level'] };
+  return {
+    varMeta: {
+      'PLC:Tanks': { type: S },
+      'PLC:Tanks/Tanks[1]': { type: { ...S, array: false }, position: 0 },
+      'PLC:Tanks/Tanks[1]/Level': leaf,
+    },
+  };
+}
+const MEMBER = { $var: { path: 'PLC:Tanks/Tanks[1]/Level' } };
+
 describe('NumberInput', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -291,6 +305,24 @@ describe('NumberInput', () => {
 
     expect(screen.getByRole('textbox')).toHaveValue('9007199254740992');
     expect(container.querySelector('.hmi-number-input__field--invalid')).not.toBeNull();
+  });
+
+  it("takes the range and type of an element member from the member's leaf", async () => {
+    useVariableStore.setState({
+      values: { 'PLC:Tanks/Tanks[1]/Level': 150 },
+      ...memberOfElement({
+        type: { kind: 'scalar', base: 'Integer', array: false },
+        min: 0,
+        max: 100,
+        writable: true,
+      }),
+    });
+    const user = userEvent.setup();
+    const { container } = renderInput({ variable: MEMBER, decimals: 2 });
+
+    expect(container.querySelector('.hmi-number-input__field--invalid')).not.toBeNull();
+    await user.click(screen.getByRole('textbox'));
+    expect(screen.getByRole('button', { name: ',' })).toBeDisabled();
   });
 
   it('disables the comma for an Integer variable', async () => {

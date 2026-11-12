@@ -2,14 +2,13 @@ import { useMemo } from 'react';
 import type { AlarmLevel } from '@shared/types/alarm';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { useAlarmStore } from '@hmi/store/alarmStore';
-import { useVariableStore } from '@hmi/store/variableStore';
 import { useLiveScalars } from '@hmi/hooks/useLiveScalars';
+import { STORE_VARIABLE_RESOLVERS } from '@hmi/hooks/useEvalContext';
 import { extractVarKeys } from '@hmi/utils/extractVarKeys';
 import {
   evaluatePropertyValue,
   fillPlaceholders,
   type EvaluationContext,
-  type ResolvedValue,
 } from '@hmi/utils/propertySourceEval';
 import { useHmiScope } from '@hmi/context/HmiScopeContext';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -23,10 +22,7 @@ export interface AlarmTextValues {
   values?: unknown[];
 }
 
-const LIVE_CONTEXT: EvaluationContext = {
-  resolveVariable: (datasource, path) =>
-    (useVariableStore.getState().values[`${datasource}:${path}`] ?? null) as ResolvedValue,
-};
+const LIVE_CONTEXT: EvaluationContext = STORE_VARIABLE_RESOLVERS;
 
 /**
  * Fill the `{1}`, `{Round1(2)}` … placeholders of alarm text with entry n of

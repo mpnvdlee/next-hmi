@@ -1,10 +1,11 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { useVariableStore } from '../store/variableStore';
+import { recipeParameterKeys, useRecipeStore } from '../store/recipeStore';
 import { analyzePropertyValue } from '../utils/analyzePropertyValue';
 import { extractLiveKeys } from '../utils/extractVarKeys';
 
 /** No listener registered, so no re-render — the snapshot still reads current. */
-const noSubscribe = (): (() => void) => () => {};
+export const noSubscribe = (): (() => void) => () => {};
 
 /**
  * Granular subscription to a specific set of scalar variable keys.
@@ -45,18 +46,37 @@ const NO_META: Record<string, unknown> = {};
 
 /**
  * The keys `useLiveScalars` should watch for `value`: its `$var` keys, plus
- * the element key of every struct array bound at a literal index. Only a
+ * the element key of every struct array bound at a literal index, plus the
+ * parameter keys of a recipe whose changed fields it reads. Only a
  * value with such an index subscribes to the metadata (the element's name
- * comes from it); every other widget registers no listener for it.
+ * comes from it); every other widget registers no listener for it. The keys
+ * are the snapshot, not the metadata, so a widget whose indexes all fall in
+ * scalar arrays does not re-render on every `var_metadata`.
  */
 export function useLiveKeys(value: unknown): readonly string[] {
-  const indexed = analyzePropertyValue(value).indexedVarRefs.length > 0;
-  const varMeta = useSyncExternalStore(
+  const { indexedVarRefs, recipeChangeTypes } = analyzePropertyValue(value);
+  const indexed = indexedVarRefs.length > 0;
+  const keys = useSyncExternalStore(
     indexed ? useVariableStore.subscribe : noSubscribe,
-    () => (indexed ? useVariableStore.getState().varMeta : NO_META),
-    () => NO_META,
+    () => extractLiveKeys(value, indexed ? useVariableStore.getState().varMeta : NO_META),
+    () => extractLiveKeys(value, NO_META),
   );
-  return extractLiveKeys(value, varMeta);
+  // A recipe's changed fields read its parameters' live values, which the
+  // `$recipe` source does not name: watch the keys the parameters are bound to.
+  const readsRecipe = recipeChangeTypes.length > 0;
+  const getRecipeConfig = () => (readsRecipe ? useRecipeStore.getState().config : null);
+  const recipeConfig = useSyncExternalStore(
+    readsRecipe ? useRecipeStore.subscribe : noSubscribe,
+    getRecipeConfig,
+    getRecipeConfig,
+  );
+  return useMemo(
+    () =>
+      recipeConfig
+        ? [...new Set([...keys, ...recipeParameterKeys(recipeConfig, recipeChangeTypes)])]
+        : keys,
+    [keys, recipeConfig, recipeChangeTypes],
+  );
 }
 
 function sigToken(value: unknown): unknown {

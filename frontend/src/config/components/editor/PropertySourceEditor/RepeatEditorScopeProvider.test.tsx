@@ -53,7 +53,15 @@ describe('RepeatEditorScopeProvider', () => {
       'PLC:Motors': {
         type: { kind: 'struct', name: 'Motors', array: true, fields: ['Speed', 'Io'] },
       },
+      'PLC:Motors/Line[2]': {
+        type: { kind: 'struct', name: 'Motor', array: false, fields: ['Speed'] },
+        position: 1,
+      },
       'PLC:Motors/Line[2]/Speed': { type: float, writable: true },
+      'PLC:Motors/Line[1]': {
+        type: { kind: 'struct', name: 'Motor', array: false, fields: ['Speed'] },
+        position: 0,
+      },
       'PLC:Motors/Line[1]/Speed': { type: float, writable: false },
       'PLC:Motors/Line[1]/Io': {
         type: { kind: 'struct', name: 'Io', array: false, fields: ['On'] },

@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
-import { useVariableStore } from '../store/variableStore';
-import { useLiveScalars } from './useLiveScalars';
+import { useVariableStore, type VarMeta } from '../store/variableStore';
+import { useLiveKeys, useLiveScalars } from './useLiveScalars';
 
 describe('useLiveScalars', () => {
   beforeEach(() => {
@@ -74,6 +74,56 @@ describe('useLiveScalars', () => {
     act(() => {
       useVariableStore.getState().setScalar('PLC:a', 1);
     });
+    expect(renders).toBe(1);
+  });
+});
+
+describe('useLiveKeys', () => {
+  const setMeta = (meta: Record<string, unknown>) =>
+    useVariableStore.setState({ varMeta: meta as Record<string, VarMeta> });
+  const motor = { kind: 'struct', name: 'Motor', array: true, fields: ['Speed'] };
+
+  it('does not re-render on new metadata when every index falls in a scalar array', () => {
+    const zones = { type: { kind: 'scalar', base: 'Integer', array: true } };
+    setMeta({ 'PLC:Zones': zones });
+    const value = { a: { $var: { path: 'PLC:Zones', index: 3 } } };
+    let renders = 0;
+    const { result } = renderHook(() => {
+      renders++;
+      return useLiveKeys(value);
+    });
+    act(() => setMeta({ 'PLC:Zones': zones }));
+    expect(renders).toBe(1);
+    expect(result.current).toEqual(['PLC:Zones']);
+  });
+
+  it('adds a struct element once the metadata naming it arrives', () => {
+    setMeta({});
+    const value = { a: { $var: { path: 'PLC:Motors', index: 1 } } };
+    const { result } = renderHook(() => useLiveKeys(value));
+    expect(result.current).toEqual(['PLC:Motors']);
+    act(() =>
+      setMeta({
+        'PLC:Motors': { type: motor },
+        'PLC:Motors/[2]': { type: { ...motor, array: false }, position: 1 },
+      }),
+    );
+    expect(result.current).toEqual(['PLC:Motors', 'PLC:Motors/[2]']);
+  });
+
+  it('does not re-render on new metadata naming the same struct element', () => {
+    const page = {
+      'PLC:Motors': { type: motor },
+      'PLC:Motors/[2]': { type: { ...motor, array: false }, position: 1 },
+    };
+    setMeta({ ...page });
+    const value = { a: { $var: { path: 'PLC:Motors', index: 1 } } };
+    let renders = 0;
+    renderHook(() => {
+      renders++;
+      return useLiveKeys(value);
+    });
+    act(() => setMeta({ ...page }));
     expect(renders).toBe(1);
   });
 });

@@ -84,7 +84,7 @@ These carry whatever type the field requires, so you can use them almost anywher
 | Source | Shape | What it gives you |
 |---|---|---|
 | `$static` | `{ $static: value }` | A fixed value you type or pick — the literal for **any** type, including a structured `icon` (`{ type, name }`), `image` (`{ path }`) or `video` (`{ path }`). For those, the editor opens a picker rather than a text box |
-| `$var` | `{ $var: { path, index?, repeatIndex?, bit? } }` | A live datasource / OPC-UA variable. `repeatIndex: true` takes `index` from the surrounding Repeater copy — see [Repeater items in depth](#repeater-items-in-depth-repeatitem). `index` may itself be an Integer source (`{ $componentProp: 'device' }`, a `$var`): `useResolvedProperties` resolves it to a number before a widget, its writer or an action target sees the binding (`boundIndexResolution.ts`), events resolve a write target's at write time, and a `$var` inside it is subscribed. No whole number from 0 up resolves to `-1`: the read is *absent*, never the whole array, and a write is refused `array_index_out_of_bounds`. A whole array on a field that takes one value — or as a toggle or Edit Value target — is reported at `<field>/$var/index`, where the editor's index row — under the field's box, untitled, with an *Element of the array* hint — asks for the element. `bit` reads one bit (0 the lowest) of a whole number as a `Boolean` — judged as a `Boolean` against the field, its word's access deciding a write; `readBit` in `valueTypes.ts` on the runtime, `_has_bit` in the validator, which caps it at the real type's width (`BIT_WIDTHS`: 8, 16 or 32 for `Byte`/`SByte`, `UInt16`/`Int16`, `UInt32`/`Int32` and a static `Integer`; none for an array element). A write travels with a `.N` path suffix and lands as a read-modify-write of the whole word — see [websocket.md](websocket.md#client--server-messages) |
+| `$var` | `{ $var: { path, index?, repeatIndex?, bit? } }` | A live datasource / OPC-UA variable. `repeatIndex: true` takes `index` from the surrounding Repeater copy — see [Repeater items in depth](#repeater-items-in-depth-repeatitem). `index` may itself be an Integer source (`{ $componentProp: 'device' }`, a `$var`): `useBoundIndexes` resolves it to a number before a widget, its writer or an action target sees the binding (`boundIndexResolution.ts`), events resolve a write target's at write time, and a `$var` inside it is subscribed. No whole number from 0 up resolves to `-1`: the read is *absent*, never the whole array, and a write is refused `array_index_out_of_bounds`. A whole array on a field that takes one value — or as a toggle or Edit Value target — is reported at `<field>/$var/index`, where the editor's index row — under the field's box, untitled, with an *Element of the array* hint — asks for the element. `bit` reads one bit (0 the lowest) of a whole number as a `Boolean` — judged as a `Boolean` against the field, its word's access deciding a write; `readBit` in `valueTypes.ts` on the runtime, `_has_bit` in the validator, which caps it at the real type's width (`BIT_WIDTHS`: 8, 16 or 32 for `Byte`/`SByte`, `UInt16`/`Int16`, `UInt32`/`Int32` and a static `Integer`; none for an array element). A write travels with a `.N` path suffix and lands as a read-modify-write of the whole word — see [websocket.md](websocket.md#client--server-messages) |
 | `$widgetProp` | `{ $widgetProp: { componentId, property, path? } }` | A property **exported by another component** on the page (sibling → me). `path` is an optional slash-path into a struct/array member of the exported value (e.g. `name` on a selected row) |
 | `$componentProp` | `{ $componentProp: name }` | **Input** (editor label): a value **passed in from outside** — by my parent component, by the Open Dialog that opened the dialog I am in, or by the Navigate To Page that brought the operator to my page (outside → me) |
 | `$overlay` | `{ $overlay: { page, param } }` | An input of the Dialogs-folder page `page` **while it is open** — what the opening action passed, else the declared default — and *absent* once it closes. Reads the topmost open copy, from anywhere on screen: a hotspot's selection ring is `$compare($overlay{device, device} === 3)`. The backend flags a `page` outside the Dialogs folder (`overlay-page`) and a `param` it does not declare (`overlay-param-unknown`) |
@@ -483,12 +483,20 @@ filters and marks the pick by the same types.
 
 - **A variable element stays a variable.** When Items is a `$var` array, a
   `$repeatItem` is rewritten into the `$var` it stands for before the widget sees
-  it — `{ path, index }` for a scalar-array element or a whole struct element, the
-  member's own leaf (`PLC:Motors/[2]/Speed`) for a struct member. The live
-  subscription, the binding overlay and the widget's own writer then treat it as
-  any other binding, so an input inside a Repeater writes back to its element.
-  The leaf path comes from the element folder's real name in the variable
-  metadata, since a static server may call it `Line[2]` rather than `[2]`.
+  it — `{ path, index }` for a scalar-array element, the element folder's own key
+  for a whole struct element, and the member's own leaf (`PLC:Motors/[2]/Speed`)
+  for a struct member. The leaf path comes from the element folder's real name in
+  the variable metadata, since a static server may call it `Line[2]` rather than
+  `[2]`. The server ships a struct array's elements, not the members below them:
+  the client fills in each member the metadata lists from its element as the
+  element arrives (`elementMemberValues` in `repeatItemResolution.ts`, applied by
+  `useWebSocket`). So the live subscription, the binding overlay, the widget's
+  own writer and a project widget's `useVariableMeta(bindingKey(binding))` treat
+  a member as any other binding: an input inside a Repeater writes back to its
+  element, and a whole element passed to a component input reads its members by
+  sub-path (`device/Speed`). A page that also binds a member itself gets it from
+  the server too; whichever of the member and its element arrived last is the
+  value.
 - **Any other source is read-only.** Over `$static`, `$http` (a JSON-array
   pick), `$recipeList`, `$user` users/groups or `$widgetProp`, `$repeatItem`
   resolves to the element's value; `member` is a slash-path into it, and a record
@@ -579,7 +587,7 @@ A name can be declared at several levels at once — on the page and on the grou
 
 ### `$componentProp` substitution
 
-`resolveComponentPropValue` (`frontend/src/hmi/utils/componentPropResolution.ts`) rewrites every `{ "$componentProp": "<key>" }` in a value, at any depth, into what the scope holds for that key, before evaluation. `useResolvedProperties` runs it over a widget's properties and `useResolvedLayout` over its layout, so a forwarded `$var` nested in `$if` / `$compare` / `$not` / `$stringExpr` / `$switch` is an ordinary `$var` by the time `extractVarKeys` collects the live subscription. A `key/member/path` appends the member path to the forwarded `$var`'s `path`. A widget node kept in a property (a slot's content) is skipped — it resolves its own — and a key the scope does not hold stays a reference, which the evaluator reads as no value.
+`resolveComponentPropValue` (`frontend/src/hmi/utils/componentPropResolution.ts`) rewrites every `{ "$componentProp": "<key>" }` in a value, at any depth, into what the scope holds for that key, before evaluation. `useScopedProperties` runs it over a widget's properties and `useResolvedLayout` over its layout, so a forwarded `$var` nested in `$if` / `$compare` / `$not` / `$stringExpr` / `$switch` is an ordinary `$var` by the time `extractVarKeys` collects the live subscription. A `key/member/path` appends the member path to the forwarded `$var`'s `path`, keeping its `index`. When that `$var` names one element of a struct array (`{ "path": "PLC:Motors", "index": 1 }`), the result (`PLC:Motors/sName` at 1) names no variable, so it has no metadata; its nearest ancestor that has some is the array. Once the metadata names the element at that position, the widget rebinds it to the member's own leaf (`PLC:Motors/Motors[2]/sName`, `substituteMemberLeaves` in `boundIndexResolution.ts`): `useBoundIndexes` does so after resolving a bound index, so the leaf follows the element the index selects, `useScopedLayout` does so for the layout, and an action's write target is rebound at write time. From there it is an ordinary `$var` whose value the client fills in from the element (see [Repeater items](#repeater-items-in-depth-repeatitem)): value, metadata, write, range and binding status are the leaf's. A value an event evaluates outside any widget, such as a dialog's `onOpen`, reads such a key off the same leaf (`readStoredElement` in `useEvalContext.ts`, which page and global events share). A key that has metadata of its own, or whose nearest described ancestor is not a struct array, is left as it is. A widget node kept in a property (a slot's content) is skipped — it resolves its own — and a key the scope does not hold stays a reference, which the evaluator reads as no value.
 
 ### Struct inputs
 
@@ -620,6 +628,10 @@ A child can bind the **whole struct**, or drill into **one member** by slash-pat
 // a nested member
 { "$componentProp": "sensor/stFiltered/bValue" }
 ```
+
+The same paths work when the instance passes one element of a struct array (`{ "$var": { "path": "PLC:Motors", "index": 1 } }`): `sensor/fValue` reads that element's member — see [`$componentProp` substitution](#componentprop-substitution).
+
+**Known limitation.** A component that reads a struct array *whole* through a sub-path (`{ "$componentProp": "plant/Motors" }`), on a screen that also binds that array at a literal index, gets only the indexed elements: the server promotes, reads and ships an array bound only at literal indexes as those elements alone (see [websocket.md](websocket.md#client--server-messages)), and the sub-path reaches it only as a priority key the client sends (`collectComponentPriorityKeys`), which does not count as a whole binding of an array the page already binds. Not yet handled.
 
 ### What happens to a missing member
 

@@ -432,7 +432,7 @@ describe('PageGroupPageView / a routed page’s events read its inputs', () => {
     useHmiStore.setState({ pageArrival: null, pendingToasts: [], routedInputScopes: {} });
   });
 
-  it('opens with what Navigate To Page passed and closes with the local value', () => {
+  it('opens with what Navigate To Page passed and closes with the local value', async () => {
     const { rerender } = render(
       <MemoryRouter>
         <View id="other" />
@@ -456,6 +456,8 @@ describe('PageGroupPageView / a routed page’s events read its inputs', () => {
       </MemoryRouter>,
     );
     expect(toasts()).toEqual(['open Espresso', 'close Doos']);
+    // The slot goes a microtask after the page, with every other frame's.
+    await act(async () => {});
     expect(useVariableStore.getState().values[slot]).toBeUndefined();
   });
 

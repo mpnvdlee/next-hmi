@@ -580,6 +580,9 @@ interface VarMeta {
   writable?: boolean;
   /** Configured numeric range per field — structs only. */
   fieldRanges?: Record<string, { min?: number; max?: number }>;
+  /** An element of a struct array only — its index in the array, from 0
+   *  whatever index the PLC starts at. */
+  position?: number;
 }
 declare function useVariableMeta(key: string): VarMeta | undefined;
 

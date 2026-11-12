@@ -232,6 +232,12 @@ integer digits keeps them too — and writes it back as a string.
     latest union instead of replaying every intermediate page. An array
     folder bound only at literal indexes is promoted, read and shipped as
     those element folders; the client reads an element under its own key.
+    No leaf below an element is shipped unless a binding names it, so the
+    client reads a member of an element out of the element: a component's
+    `device/sName` of an input bound to an element, and a Repeater copy's
+    member. The key a component's sub-path makes of one, the array's path
+    plus the member (`PLC:Motors/sName`), reaches the server as a priority
+    key that names no variable, and is dropped (below).
   - A page id resolves to what that page shows: its own widgets, at any depth
     of either root, plus the header and footer band of every page group
     around it. The pages beside it are not resolved; each is when it is

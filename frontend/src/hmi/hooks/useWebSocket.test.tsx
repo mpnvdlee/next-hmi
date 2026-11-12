@@ -416,6 +416,84 @@ describe('useWebSocket', () => {
       await nextFrame();
       expect(values()).not.toHaveProperty('PLC:A');
     });
+
+    describe('a struct-array element', () => {
+      const S = { kind: 'struct', name: 'Motor', array: true, fields: ['fSpeed', 'stState'] };
+      // What the server describes for a page binding `PLC:Motors` whole, or
+      // one of its leaves: the element and the leaves below it.
+      const META = {
+        'PLC:Motors': { type: S },
+        'PLC:Motors/[1]': { type: { ...S, array: false }, position: 0 },
+        'PLC:Motors/[1]/fSpeed': { type: { kind: 'scalar', base: 'Float', array: false } },
+        'PLC:Motors/[1]/stState': { type: { kind: 'struct', name: 'State', array: false } },
+        'PLC:Motors/[1]/stState/bOn': { type: { kind: 'scalar', base: 'Boolean', array: false } },
+      };
+      const ELEMENT = 'PLC:Motors/[1]';
+      const LEAF = 'PLC:Motors/[1]/fSpeed';
+      const element = (fSpeed: number) => ({ fSpeed, stState: { bOn: true } });
+
+      function connect() {
+        render(<Probe />);
+        const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+        act(() => live.open());
+        const update = (values: Record<string, unknown>) =>
+          live.receive({ type: 'var_update', values });
+        const page = () => live.receive({ type: 'var_metadata', meta: META });
+        return { update, page };
+      }
+
+      it('fills in the members below it as it arrives', async () => {
+        const { update, page } = connect();
+        page();
+        update({ [ELEMENT]: element(1) });
+        await nextFrame();
+        expect(values()).toMatchObject({
+          [LEAF]: 1,
+          'PLC:Motors/[1]/stState': { bOn: true },
+          'PLC:Motors/[1]/stState/bOn': true,
+        });
+        // In one frame the member the server ships itself wins: it is never the older.
+        update({ [ELEMENT]: element(2), [LEAF]: 3 });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(3);
+      });
+
+      it('reads the live value through a dialog binding the leaf and back', async () => {
+        const { update, page } = connect();
+        // The overview's Repeater: the server ships the element.
+        page();
+        update({ [ELEMENT]: element(1) });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(1);
+
+        // A dialog binding the leaf opens: both are shipped, the last one wins.
+        update({ [LEAF]: 2 });
+        update({ [ELEMENT]: element(2) });
+        update({ [LEAF]: 3 });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(3);
+
+        // It closes: the leaf is no longer shipped, the element is.
+        update({ [ELEMENT]: element(4) });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(4);
+
+        // A page binding only the leaf: the element it still holds is frozen.
+        page();
+        update({ [LEAF]: 5 });
+        await nextFrame();
+        update({ [LEAF]: 6 });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(6);
+        expect(values()[ELEMENT]).toEqual(element(4));
+
+        // Back to the overview: the element is shipped again, current.
+        page();
+        update({ [ELEMENT]: element(7) });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(7);
+      });
+    });
   });
 
   it('settles an alarm ack on its correlated response or error', async () => {

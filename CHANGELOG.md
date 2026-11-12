@@ -42,6 +42,22 @@ heading.
   connection settings saves them first and browses once the datasource has
   reconnected, instead of walking the server with the old settings.
 
+- **A component input bound to an array element showed red.** An instance
+  passing one element of a struct array to a component input showed a red
+  cross on every widget reading a member of it (`device/sName`), with no
+  value, and writing that member was refused. The member now shows and is
+  written.
+
+- **A Repeater over an array of structs showed its members as no data.** A
+  widget showing one member of its copy's element stayed empty under an amber
+  mark, because the server sends each element whole, not its members one by
+  one. The member is now read from its element, and writes still reach it.
+
+- **Edit Value on a Repeater item showed no range.** On a member of an element
+  of an array of structs, the numpad showed no configured range and took
+  decimals for a whole-number variable. It now uses the member's own range and
+  type.
+
 - **A Repeater over a PLC array that counts from 1.** Over a struct array
   `A[1..500]`, the first two copies both showed `A[1]` and `A[500]` was never
   drawn. A copy now shows the element at its position, counted from 0 as the
@@ -136,6 +152,27 @@ heading.
   switch. Values arriving just before a page switch could likewise outlive
   the browser's last three pages.
 
+- **Large Repeaters stay smooth.** A Repeater redrew every copy whenever one
+  element of its array changed: with 1,000 copies, one change redrew 4,001
+  widgets, now 5. A widget now redraws only for its own values, not because
+  the widget around it did, and opening a dialog no longer redraws every
+  Repeater copy and input on the page beneath it.
+
+- **Recipe change indicators follow the live values.** A widget showing a
+  recipe's *Parameters changed*, *Parameter changed* or *Number of changed
+  parameters* updated only when something else redrew it, so an
+  unsaved-changes indicator could lag behind a parameter edit. A header,
+  sidebar or alarm popup showing one follows them too.
+
+- **A header or sidebar showing one element of a struct array updates live.**
+  Bound at a fixed index, it showed the element's first value and then stopped
+  following it.
+
+- **Alarm text reads one element of a struct array as a page does.** A `{n}`
+  placeholder bound to one element of a struct array looked it up in the whole
+  array instead of reading the element itself, as widgets and page and global
+  events do.
+
 - **A variable no longer goes without values after a busy PLC refused it.** A
   variable the PLC refused or did not answer while moving between the page's
   fast subscription and the background one was retried once and then dropped
@@ -165,6 +202,15 @@ heading.
 - **A static variable write updates the struct around its array.** Writing a
   member of an array element in a static datasource updated the element and
   the array, but a struct holding that array kept showing the old value.
+
+- **Alarms and popups no longer redraw every widget.** An alarm change, a
+  widget publishing a value for others to read, an opened dialog, a recipe
+  change or new device information redrew every widget on the page: on a
+  page of 3,000 widgets an alarm change took about 0.8 s and a dialog about
+  0.9 s. Only the widgets that show such a value redraw now, in a few
+  milliseconds, and live values on a busy page take about half as long to
+  draw. A project's custom widgets still redraw on each of these, since
+  their code may read any of them.
 
 - **No red flash when a page's metadata arrives late.** A binding stays amber
   until its page's metadata is complete, instead of turning red after 3 s.

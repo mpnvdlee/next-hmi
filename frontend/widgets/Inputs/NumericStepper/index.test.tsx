@@ -39,6 +39,20 @@ function scalarMeta(range: { min?: number; max?: number }) {
   };
 }
 
+/** A member of struct-array element 0, as a Repeater copy or a component's
+ *  `device/…` binds it: the member's own leaf, filled in from the element. */
+function memberOfElement(leaf: Record<string, unknown>) {
+  const S = { kind: 'struct' as const, name: 'Motor', array: true, fields: ['Speed'] };
+  return {
+    varMeta: {
+      'PLC:Motors': { type: S },
+      'PLC:Motors/Motors[1]': { type: { ...S, array: false }, position: 0 },
+      'PLC:Motors/Motors[1]/Speed': leaf,
+    },
+  };
+}
+const MEMBER = { $var: { path: 'PLC:Motors/Motors[1]/Speed' } };
+
 describe('NumericStepper', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -223,6 +237,24 @@ describe('NumericStepper', () => {
     await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
     expect(frames()[0].value).toBe(7);
+  });
+
+  it("takes the range of an element member from the member's leaf", () => {
+    useVariableStore.setState({
+      values: { 'PLC:Motors/Motors[1]/Speed': 100 },
+      ...memberOfElement({
+        type: { kind: 'scalar', base: 'Float', array: false },
+        min: 0,
+        max: 100,
+        writable: true,
+      }),
+    });
+    renderStepper({ variable: MEMBER, step: 1 });
+
+    // Only the leaf's max: 100 can stop the increment.
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!,
+    ).toBeDisabled();
   });
 
   it('disables the comma for an Integer variable', async () => {

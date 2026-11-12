@@ -1,4 +1,4 @@
-import { useContext, useMemo, useRef } from 'react';
+import { createContext, useContext, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useVariableStore } from '../store/variableStore';
 import { buildVarKey } from '@shared/types/datasource';
@@ -29,6 +29,7 @@ import {
 import type { PageGroupChild, PagePathSegment } from '@shared/types/config';
 import { PageGroupStackContext, pickPageGroup } from '../components/PageGroupStackContext';
 import type { EvaluationContext, ResolvedValue } from '../utils/propertySourceEval';
+import { analyzePropertyValue } from '../utils/analyzePropertyValue';
 import { useViewport, getViewportSnapshot } from './useViewport';
 
 /** Stable, so an `accounts` list memo holds for a non-admin. */
@@ -36,21 +37,94 @@ const NO_ACCOUNTS: UserAccount[] = [];
 
 const PAGE_ID_PATH_PATTERN = /\/(?:pages|preview)\/([^/]+)/;
 
+// Stores an eval context follows only for a reader whose sources read them:
+// every reader following them made one alarm update, published export or
+// opened dialog re-render every widget on the page.
+const WIDGET_PROPS = 1;
+const ALARMS = 2;
+const RECIPES = 4;
+const OVERLAYS = 8;
+const DEVICE = 16;
+export const ALL_STORES = WIDGET_PROPS | ALARMS | RECIPES | OVERLAYS | DEVICE;
+
+const STORES_OF_SOURCE: Record<string, number> = {
+  $widgetProp: WIDGET_PROPS,
+  $alarmCount: ALARMS,
+  $recipe: RECIPES,
+  $recipeList: RECIPES,
+  $device: DEVICE,
+  // Both evaluate a value kept elsewhere, which may hold any source: a dialog
+  // input as the opener passed it, a value map's cases.
+  $overlay: ALL_STORES,
+  $map: ALL_STORES,
+};
+
+/** The stores the sources anywhere in `values` read, for `useEvalContext`. */
+export function storesReadBy(...values: unknown[]): number {
+  let stores = 0;
+  for (const value of values) {
+    for (const key of analyzePropertyValue(value).sourceKeys) stores |= STORES_OF_SOURCE[key] ?? 0;
+  }
+  return stores;
+}
+
+/** The stores the widget around a reader evaluates (see WidgetRenderer); all of
+ *  them outside any widget, where nothing says what will be evaluated. */
+export const WidgetStoresContext = createContext(ALL_STORES);
+
 /** `$page` groupIndex / groupLastIndex of the child `childId` among a group's children. */
 function tabField(field: 'groupIndex' | 'groupLastIndex', tabs: PageGroupChild[], childId: string) {
   return field === 'groupLastIndex' ? tabs.length - 1 : tabs.findIndex((c) => c.id === childId);
 }
 
+/** A `$var` read fresh from the store; null until it has a value. Read through
+ *  getState() rather than a subscribed snapshot, so an eval context holding it
+ *  stays the same object across variable ticks: widgets get their live updates
+ *  from granular `useLiveScalars` subscriptions instead (see WidgetRenderer),
+ *  so only widgets that read a changed variable re-render. */
+export function readStoredVariable(datasource: string, path: string): ResolvedValue {
+  const value = useVariableStore.getState().values[buildVarKey(datasource, path)];
+  return (value !== undefined ? value : null) as ResolvedValue;
+}
+
+/** A `$var` read at `index`, fresh from the store: the element (a member of
+ *  one included, `readArrayElement`), else a non-array value as itself. */
+export function readStoredElement(datasource: string, path: string, index: number): ResolvedValue {
+  const key = buildVarKey(datasource, path);
+  const { values, varMeta } = useVariableStore.getState();
+  const element = readArrayElement(values, varMeta, key, index);
+  if (element !== undefined) return element as ResolvedValue;
+  // A non-array value with an index reads as itself, as it always did.
+  const whole = values[key];
+  return (whole === undefined || Array.isArray(whole) ? null : whole) as ResolvedValue;
+}
+
+/** The `$var` readers of every eval context that reads the live store. */
+export const STORE_VARIABLE_RESOLVERS: Pick<
+  EvaluationContext,
+  'resolveVariable' | 'resolveElement'
+> = {
+  resolveVariable: readStoredVariable,
+  resolveElement: readStoredElement,
+};
+
 /**
  * Returns a fully wired EvaluationContext for use with evaluatePropertyValue /
  * getPropString / getPropNumber / getPropBoolean.
+ *
+ * Every resolver reads its store fresh. The context changes, and so re-renders
+ * its reader, on a change to a store in `stores` (`storesReadBy` of what the
+ * reader evaluates), by default the ones the surrounding widget's properties
+ * read.
  *
  * @example
  *   const evalCtx = useEvalContext();
  *   const label = getPropString(properties, 'label', 'Default', evalCtx);
  *   const value = getPropNumber(properties, 'value', 0, evalCtx);
  */
-export function useEvalContext(): EvaluationContext {
+export function useEvalContext(stores?: number): EvaluationContext {
+  const widgetStores = useContext(WidgetStoresContext);
+  const follows = stores ?? widgetStores;
   const activeLanguage = useTranslationStore((s) => s.activeLanguage);
   const translations = useTranslationStore((s) => s.translations);
   const location = useLocation();
@@ -61,15 +135,15 @@ export function useEvalContext(): EvaluationContext {
   const repeatScope = useRepeatScope();
   const currentUsersByScope = useHmiStore((s) => s.currentUsersByScope);
   // Subscribed so a `$overlay` re-reads when a dialog opens, swaps or closes.
-  const openPageOverlays = useHmiStore((s) => s.openPageOverlays);
+  const openPageOverlays = useHmiStore((s) => (follows & OVERLAYS ? s.openPageOverlays : null));
   // The project's account list, for `$user` with `field: 'userList'` — distinct
   // from `currentUsersByScope`, which is only who is signed in per scope.
   const allUsers = useUsersData();
-  const widgetProps = useComponentPropStore((s) => s.props);
-  const alarmSummary = useAlarmStore((s) => s.summary);
-  const recipeConfig = useRecipeStore((s) => s.config);
-  const recipeLoaded = useRecipeStore((s) => s.loaded);
-  const deviceInfo = useDeviceInfoStore((s) => s.info);
+  const widgetProps = useComponentPropStore((s) => (follows & WIDGET_PROPS ? s.props : null));
+  const alarmSummary = useAlarmStore((s) => (follows & ALARMS ? s.summary : null));
+  const recipeConfig = useRecipeStore((s) => (follows & RECIPES ? s.config : null));
+  const recipeLoaded = useRecipeStore((s) => (follows & RECIPES ? s.loaded : null));
+  const deviceInfo = useDeviceInfoStore((s) => (follows & DEVICE ? s.info : null));
   // Subscribe so consumers re-render when these change, but read them fresh
   // via getState()/getViewportSnapshot() inside resolvers — keeps the evalCtx
   // reference stable so downstream useMemos don't invalidate on every tick.
@@ -102,26 +176,7 @@ export function useEvalContext(): EvaluationContext {
   return useMemo(
     () => {
       return {
-        resolveVariable: (datasource, path): ResolvedValue => {
-          const key = `${datasource}:${path}`;
-          // Read fresh via getState() rather than closing over a subscribed
-          // snapshot: this keeps the returned evalCtx reference stable across
-          // variable ticks. Widgets get their live updates from granular
-          // `useLiveScalars` subscriptions instead (see WidgetRenderer), so only
-          // widgets that read a changed variable re-render — not every bound one.
-          const v = useVariableStore.getState().values[key];
-          return (v !== undefined ? v : null) as ResolvedValue;
-        },
-
-        resolveElement: (datasource, path, index): ResolvedValue => {
-          const key = buildVarKey(datasource, path);
-          const { values, varMeta } = useVariableStore.getState();
-          const element = readArrayElement(values, varMeta, key, index);
-          if (element !== undefined) return element as ResolvedValue;
-          // A non-array value with an index reads as itself, as it always did.
-          const whole = values[key];
-          return (whole === undefined || Array.isArray(whole) ? null : whole) as ResolvedValue;
-        },
+        ...STORE_VARIABLE_RESOLVERS,
 
         resolveTranslation: (key) => useTranslationStore.getState().resolve(key),
 
@@ -144,10 +199,7 @@ export function useEvalContext(): EvaluationContext {
 
         resolveUserAccounts: () => currentUsersByScope[scope]?.accounts ?? NO_ACCOUNTS,
 
-        resolveDevice: (field) => {
-          if (!deviceInfo) return null;
-          return deviceInfo[field] ?? null;
-        },
+        resolveDevice: (field) => useDeviceInfoStore.getState().info?.[field] ?? null,
 
         resolveComponentProp: (componentId, property): ResolvedValue => {
           // Fresh, like resolveVariable: an action run in the handler that just
@@ -256,7 +308,9 @@ export function useEvalContext(): EvaluationContext {
         resolveHttpRequest: (spec) => readHttpSource(spec),
 
         resolveOverlayParam: (page, param) => {
-          const entry = [...openPageOverlays].reverse().find((e) => e.pageId === page);
+          const entry = [...useHmiStore.getState().openPageOverlays]
+            .reverse()
+            .find((e) => e.pageId === page);
           if (!entry) return null;
           const declared = findPageNodeById(
             pageRootsRef.current.dialogs,
@@ -274,9 +328,10 @@ export function useEvalContext(): EvaluationContext {
         }),
       };
     },
-    // activeLanguage/translations/alarmSummary/recipe* force memo invalidation
-    // even though their resolvers call getState() — without them, consumers
-    // would not re-evaluate on language/alarm/recipe changes. The store's
+    // activeLanguage/translations/alarmSummary/recipe*/widgetProps/deviceInfo/
+    // openPageOverlays force memo invalidation even though their resolvers call
+    // getState() — without them, consumers would not re-evaluate on a change to
+    // a store they follow. The store's
     // `values` map is deliberately absent: variable ticks must NOT churn this
     // context (that was the per-tick re-render storm); reactivity to `$var`
     // comes from granular `useLiveScalars` subscriptions at the widget boundary.

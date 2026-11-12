@@ -239,4 +239,113 @@ describe('a $componentProp write target', () => {
     });
     expect(sendWsMessage).not.toHaveBeenCalled();
   });
+
+  it('writes and edits a member of an indexed struct element at its own leaf', async () => {
+    // `device/fSpeed` of an instance passing `PLC:Motors` at 0, which counts from 1.
+    const { useHmiStore } = await import('@hmi/store/hmiStore');
+    const { useVariableStore } = await import('@hmi/store/variableStore');
+    const S = { kind: 'struct' as const, name: 'Motor', array: true, fields: ['fSpeed'] };
+    useVariableStore.setState({
+      values: { 'PLC:Motors/Motors[1]': { fSpeed: 3 } },
+      varMeta: {
+        'PLC:Motors': { type: S },
+        'PLC:Motors/Motors[1]': { type: { ...S, array: false }, position: 0 },
+        'PLC:Motors/Motors[1]/fSpeed': {
+          type: { kind: 'scalar', base: 'Float', array: false },
+          writable: true,
+        },
+      },
+    });
+    const member = {
+      scope: 'runtime',
+      evalCtx: { inputScopeProps: { device: { $var: { path: 'PLC:Motors', index: 0 } } } },
+    };
+    const leaf = { datasource: 'PLC', path: 'Motors/Motors[1]/fSpeed' };
+    try {
+      const fSpeed = { $componentProp: 'device/fSpeed' };
+      executeWidgetActions([{ type: 'writeDataVariable', target: fSpeed, value: 5 }], member);
+      expect(sendWsMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ type: 'write_field', ...leaf, value: 5 }),
+      );
+
+      executeWidgetActions([{ type: 'editValue', target: fSpeed }], member);
+      const numpad = useHmiStore.getState().numpadRequest;
+      expect(numpad?.currentValue).toBe('3');
+      numpad!.apply(7);
+      expect(sendWsMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ type: 'write_field', ...leaf, value: 7 }),
+      );
+    } finally {
+      useVariableStore.setState({ values: {}, varMeta: {} });
+    }
+  });
+
+  it("writes a member of an indexed struct element read in a dialog's onOpen", async () => {
+    // A page event passes only the dialog's inputs: `device` is `PLC:Motors` at 0.
+    const { useVariableStore } = await import('@hmi/store/variableStore');
+    const S = { kind: 'struct' as const, name: 'Motor', array: true, fields: ['sName'] };
+    const STRING = { type: { kind: 'scalar' as const, base: 'String' as const, array: false } };
+    useVariableStore.setState({
+      values: { 'PLC:Motors/Motors[1]': { sName: 'Pump' }, 'PLC:Motors/Motors[1]/sName': 'Pump' },
+      varMeta: {
+        'PLC:Motors': { type: S },
+        'PLC:Motors/Motors[1]': { type: { ...S, array: false }, position: 0 },
+        'PLC:Motors/Motors[1]/sName': STRING,
+        'PLC:Selected': { ...STRING, writable: true },
+      },
+    });
+    try {
+      executeWidgetActions(
+        [
+          {
+            type: 'writeDataVariable',
+            target: { $var: { path: 'PLC:Selected' } },
+            value: { $componentProp: 'device/sName' },
+          },
+        ],
+        {
+          scope: 'runtime',
+          evalCtx: { inputScopeProps: { device: { $var: { path: 'PLC:Motors', index: 0 } } } },
+        },
+      );
+      expect(sendWsMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ type: 'write_field', path: 'Selected', value: 'Pump' }),
+      );
+    } finally {
+      useVariableStore.setState({ values: {}, varMeta: {} });
+    }
+  });
+
+  it("opens Edit Value with the range and type of an element member's leaf", async () => {
+    // The element folder's own `[1]` is part of the leaf's address, not a slot.
+    const { useHmiStore } = await import('@hmi/store/hmiStore');
+    const { useVariableStore } = await import('@hmi/store/variableStore');
+    const S = { kind: 'struct' as const, name: 'Motor', array: true, fields: ['nSpeed'] };
+    useVariableStore.setState({
+      values: { 'PLC:Motors/Motors[1]': { nSpeed: 3 } },
+      varMeta: {
+        'PLC:Motors': { type: S },
+        'PLC:Motors/Motors[1]': { type: { ...S, array: false }, position: 0 },
+        'PLC:Motors/Motors[1]/nSpeed': {
+          type: { kind: 'scalar', base: 'Integer', array: false },
+          min: 0,
+          max: 1500,
+          writable: true,
+        },
+      },
+    });
+    try {
+      executeWidgetActions([{ type: 'editValue', target: { $componentProp: 'device/nSpeed' } }], {
+        scope: 'runtime',
+        evalCtx: { inputScopeProps: { device: { $var: { path: 'PLC:Motors', index: 0 } } } },
+      });
+      expect(useHmiStore.getState().numpadRequest).toMatchObject({
+        min: 0,
+        max: 1500,
+        decimals: 0,
+      });
+    } finally {
+      useVariableStore.setState({ values: {}, varMeta: {} });
+    }
+  });
 });

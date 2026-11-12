@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { VarType } from '@shared/types/varType';
+import { isRecord } from '@shared/types/propertyValueGuards';
 
 /** Variable shape metadata sent by the backend at connection time. */
 export interface VarMeta {
@@ -12,6 +13,9 @@ export interface VarMeta {
   writable?: boolean;
   /** Configured numeric range per field — structs only. */
   fieldRanges?: Record<string, { min?: number; max?: number }>;
+  /** An element of a struct array only — its index in the array, from 0
+   *  whatever index the PLC starts at. */
+  position?: number;
 }
 
 /**
@@ -40,6 +44,38 @@ function keepLocalInputs(
   const out = { ...next };
   for (const key of Object.keys(prev)) if (isLocalInputKey(key)) out[key] = prev[key];
   return out;
+}
+
+/**
+ * `next`, with every part that deep-equals the same part of `prev` swapped for
+ * `prev`'s own object — `prev` itself when the two are equal throughout. A
+ * frame arrives as fresh JSON, so without this every object in it is new and
+ * every selector holding one sees a change.
+ */
+function shareEqual<T>(prev: unknown, next: T): T {
+  if (Object.is(prev, next)) return prev as T;
+  if (Array.isArray(prev) && Array.isArray(next)) {
+    let equal = prev.length === next.length;
+    let out: unknown[] | undefined;
+    for (let i = 0; i < next.length; i++) {
+      const part = shareEqual(prev[i], next[i]);
+      if (part !== prev[i]) equal = false;
+      if (part !== next[i]) (out ??= next.slice())[i] = part;
+    }
+    return (equal ? prev : (out ?? next)) as T;
+  }
+  if (isRecord(prev) && isRecord(next)) {
+    const keys = Object.keys(next);
+    let equal = keys.length === Object.keys(prev).length;
+    let out: Record<string, unknown> | undefined;
+    for (const key of keys) {
+      const part = shareEqual(prev[key], next[key]);
+      if (part !== prev[key] || !(key in prev)) equal = false;
+      if (part !== next[key]) (out ??= { ...next })[key] = part;
+    }
+    return (equal ? prev : (out ?? next)) as T;
+  }
+  return next;
 }
 
 interface VariableStore {
@@ -113,10 +149,22 @@ export const useVariableStore = create<VariableStore>((set) => ({
 
   setScalar: (id, value) => set((state) => ({ values: { ...state.values, [id]: value } })),
 
+  // A composite comes whole around each changed leaf — a struct array re-sent
+  // for one element's field. Its unchanged parts keep their objects, so the
+  // Repeater copy of an unchanged element, or any other reader of one, sees
+  // no change.
+  // A batch that changes nothing — identical frames resent — keeps the state,
+  // so no subscriber runs.
   applyBatch: (updates) =>
     set((state) => {
-      if (Object.keys(updates).length === 0) return state;
-      return { values: { ...state.values, ...updates } };
+      let values: Record<string, unknown> | undefined;
+      for (const [key, value] of Object.entries(updates)) {
+        const previous = state.values[key];
+        const next = shareEqual(previous, value);
+        if (next === previous && key in state.values) continue;
+        (values ??= { ...state.values })[key] = next;
+      }
+      return values ? { values } : state;
     }),
 
   replaceValues: (values) => set((state) => ({ values: keepLocalInputs(state.values, values) })),
@@ -178,9 +226,13 @@ export const useVariableStore = create<VariableStore>((set) => ({
   // `applyBatch` copies all of it on every flush. Frames, not pages: a
   // datasource edit, a page's component definitions loading and a variable-table
   // scroll each send one on the same page.
+  //
+  // An entry the frame repeats unchanged keeps its object, and a frame that
+  // repeats them all keeps the map: a widget reading one variable's metadata
+  // must not re-render because an overlay or a table scroll sent a frame.
   setVarMeta: (next, current) =>
     set((state) => {
-      const meta = next;
+      const meta = shareEqual(state.varMeta, next);
       const frames = [meta, state.varMeta, state.prevVarMeta];
       const values: Record<string, unknown> = {};
       let dropped = false;
