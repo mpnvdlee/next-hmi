@@ -152,6 +152,9 @@ class FakeDatasourceManager:
     def delete(self, name: str) -> None:
         self.deleted_name = name
 
+    async def delete_async(self, name: str) -> None:
+        self.delete(name)
+
     def snapshot(self) -> dict[str, Any]:
         return dict(self.snapshot_values)
 

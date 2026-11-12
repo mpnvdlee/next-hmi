@@ -381,6 +381,7 @@ Important behaviors:
 - `_wire_ancestor_map()` rewrites `_var_to_folder` so every leaf variable — including those inside nested sub-folders — maps to the topmost ancestor struct; this ensures a single datachange triggers a full re-snapshot of the entire aggregate
 - snapshot recursion follows the configured structure without a fixed depth limit
 - `snapshot()` returns enabled scalar values plus folder structs; `get_cached_values(keys)` filters the same way, since `set_context` passes it keys straight from the client
+- `DatasourceEntry.metadata_index` — every variable's metadata and its sorted keys, which `variable_metadata()` bisects for a context — is built off the event loop as soon as the entry exists: `save_async` builds it in the worker thread that builds the entry, and `load_all` and an `apply_config` handed no entry start a daemon thread for it. An entry is replaced on edit, never mutated, so nothing invalidates it. A `set_context` that reaches an entry first builds it there, or waits for the build already running rather than starting a second one beside it; on the loop, the first one after a start or a save stalled 180-530 ms on a large PLC
 - `get_priority_keys()` returns the union of all client priority sets
 
 ## WebSocket Flow

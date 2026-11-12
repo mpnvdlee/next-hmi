@@ -409,24 +409,38 @@ async def put_datasource(name: str, body: DatasourceUpsertBody) -> dict[str, Any
     properties panel) preserves the existing tree — see
     ``DatasourceUpsertBody.to_storage_dict``.
     """
+    payload: dict[str, Any]  # what the last build() made, the save's own once it ran
+
+    def build() -> dict[str, Any]:
+        nonlocal payload
+        current = datasource_manager.get(name)
+        existing_variables = current.config.get("variables") if current is not None else None
+        payload = body.to_storage_dict(name, existing_variables=existing_variables)
+        if payload.get("type") == "static":
+            validate_static_data_types(payload.get("variables") or [])
+        return payload
+
     old_entry = datasource_manager.get(name)
-    existing_variables = old_entry.config.get("variables") if old_entry is not None else None
-    payload = body.to_storage_dict(name, existing_variables=existing_variables)
-    if payload.get("type") == "static":
-        validate_static_data_types(payload.get("variables") or [])
+    build()  # refused here, before the runtime stops
 
     # A full datasource PUT starts a new runtime generation. Clear every old
     # runtime before replacing its manager entry so an in-flight callback from
-    # the old endpoint cannot seed the new cache. Then clear every old browser
-    # key so same-path values cannot survive until a future datachange.
+    # the old endpoint cannot seed the new cache. Once it is replaced, clear
+    # every old browser key so same-path values cannot survive until a future
+    # datachange: cleared before, a page switch during the save would fetch
+    # them back from the old entry, and nothing would clear them again.
     if old_entry is not None:
         await _stop_datasource_runtime(name, old_entry.ds_type)
-    await _broadcast_removed_keys(sorted(metadata_keys(old_entry)))
-    datasource_manager.save(name, payload)
+    # Built again once the save lock is held: a settings-only save keeps the
+    # variable tree, and the one read above would write back the tree a
+    # variables save committed meanwhile. Likewise the keys to clear are those
+    # of the entry the save replaced, a variable that save added included.
+    replaced = await datasource_manager.save_async(name, build)
+    await _broadcast_removed_keys(sorted(metadata_keys(replaced)))
     await _sync_datasource_runtime(
         name,
         payload,
-        old_entry,
+        replaced,
         runtime_stopped=old_entry is not None,
     )
     new_entry = datasource_manager.get(name)
@@ -440,7 +454,7 @@ async def delete_datasource(name: str) -> dict[str, str]:
     """Delete a datasource and stop its connections."""
     entry = _require_datasource(name)
     await _stop_datasource_runtime(name, entry.ds_type)
-    datasource_manager.delete(name)
+    await datasource_manager.delete_async(name)
     await _broadcast_removed_keys(sorted(metadata_keys(entry, name)))
     await _broadcast_var_metadata()
     return {"status": "deleted"}
@@ -449,20 +463,23 @@ async def delete_datasource(name: str) -> dict[str, str]:
 @router.put("/{name}/variables", dependencies=[broadcasts("variables")])
 async def put_variables(name: str, body: list[Any]) -> list[Any]:
     """Update only the variable tree for a datasource."""
-    entry = _require_datasource(name)
-    old_enabled = enabled_paths(entry)
-    if entry.ds_type == "static":
-        validate_static_data_types(body)
 
-    config = {**entry.config, "variables": body}
-    datasource_manager.save(name, config)
+    # Built once the save lock is held: from an entry read before waiting for
+    # it, a settings save committing meanwhile would be written back old.
+    def with_variables() -> dict[str, Any]:
+        current = _require_datasource(name)
+        if current.ds_type == "static":
+            validate_static_data_types(body)
+        return {**current.config, "variables": body}
+
+    entry = await datasource_manager.save_async(name, with_variables)
 
     new_entry = datasource_manager.get(name)
     if new_entry is None:
         return body
 
     removed_keys = await apply_subscription_delta(
-        name, old_enabled, new_entry, _opcua_pool, _test_server_pool, entry,
+        name, enabled_paths(entry), new_entry, _opcua_pool, _test_server_pool, entry,
     )
     await _broadcast_removed_keys(removed_keys)
     await _broadcast_var_metadata()
@@ -600,12 +617,17 @@ async def trust_server_certificate(name: str, body: TrustCertificateBody) -> Tru
     filename = f"{_sanitize_cert_filename(name)}-server.der"
     write_bytes_atomic(active_certs_dir() / filename, certificate.der)
     path = f"certs/{filename}"
-    settings = {**entry.config.get("settings", {}), "server_certificate": path}
+
+    # Built once the save lock is held, on whatever the last save committed.
+    def with_pin() -> dict[str, Any]:
+        config = _require_datasource(name).config
+        return {**config, "settings": {**config.get("settings", {}), "server_certificate": path}}
+
     # Stopped before the entry is replaced, as a PUT does, so no callback from
     # the old engine lands in the new entry's cache.
     await _stop_datasource_runtime(name, entry.ds_type)
-    datasource_manager.save(name, {**entry.config, "settings": settings})
-    await _require_opcua_pool().start(name, settings)
+    await datasource_manager.save_async(name, with_pin)
+    await _require_opcua_pool().start(name, _require_datasource(name).config["settings"])
     return TrustCertificateResult(server_certificate=path)
 
 

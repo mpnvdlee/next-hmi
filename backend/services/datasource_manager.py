@@ -7,6 +7,7 @@ where each datasource has its own JSON file under the active project's
 ``datasources/`` directory.
 """
 
+import asyncio
 import contextlib
 import hashlib
 import logging
@@ -14,7 +15,6 @@ import re
 import threading
 from bisect import bisect_left
 from collections.abc import Callable, Iterable
-from functools import cached_property
 from typing import Any, ClassVar
 
 from core.exceptions import DatasourceValidationError
@@ -67,14 +67,32 @@ class DatasourceEntry:
         # Composite keys valid for snapshot, each mapped to itself so a caller
         # holding many of them can share these strings instead of its own copies.
         self._enabled_cache_keys: dict[str, str] = {}
+        self._metadata_index: tuple[dict[str, dict[str, Any]], list[str]] | None = None
+        self._metadata_lock = threading.Lock()
         self._build_registry()
 
-    @cached_property
+    @property
     def metadata_index(self) -> tuple[dict[str, dict[str, Any]], list[str]]:
         """This datasource's full variable metadata and its sorted keys, built
         once per entry — an edit replaces the entry, so nothing invalidates it.
         100k variables take ~80 ms to describe; a page context then costs a
-        few bisects into the sorted keys (``DatasourceManager.variable_metadata``)."""
+        few bisects into the sorted keys (``DatasourceManager.variable_metadata``).
+
+        Built in a worker thread when the entry is loaded or saved
+        (``_with_metadata``, ``_build_metadata_soon``): on the loop, the first
+        ``set_context`` after a start or a save stalled 180-530 ms on a large
+        PLC. One that comes before the thread is done waits for it rather than
+        building a second copy beside it, which contending for the GIL took
+        up to twice as long."""
+        index = self._metadata_index
+        if index is None:
+            with self._metadata_lock:
+                index = self._metadata_index
+                if index is None:
+                    index = self._metadata_index = self._build_metadata_index()
+        return index
+
+    def _build_metadata_index(self) -> tuple[dict[str, dict[str, Any]], list[str]]:
         result: dict[str, dict[str, Any]] = {}
         # Scalar / plain-array variables
         for path, var_entry in self.registry.items():
@@ -507,6 +525,7 @@ class DatasourceManager:
         # repeated saves overwrite the same file even when a sanitized-name
         # collision forced a different datasource onto a disambiguated one.
         self._name_to_filename: dict[str, str] = {}
+        self.save_lock = asyncio.Lock()  # see save_async
 
     def set_enqueue_callback(self, fn: Callable[..., None]) -> None:
         self._enqueue_callback = fn
@@ -748,6 +767,9 @@ class DatasourceManager:
                     self._load_static_values(entry)
             except Exception:
                 logger.exception("Failed to load datasource config %s", path)
+        with self._lock:
+            entries = list(self.datasources.values())
+        _build_metadata_soon(entries)
 
     # Map from lower-cased data_type to a zero-value for that type, in the
     # cache form a write leaves behind. Parity: opcuaBuiltinTypes.json
@@ -934,19 +956,68 @@ class DatasourceManager:
 
     def save(self, name: str, config: dict[str, Any]) -> None:
         """Save a datasource config to disk and update in-memory state."""
+        self._write(name, config)
+        self.apply_config(name, config)
+
+    async def save_async(
+        self, name: str, config: dict[str, Any] | Callable[[], dict[str, Any]],
+    ) -> DatasourceEntry | None:
+        """``save`` for a coroutine on the event loop. Returns the entry it replaced.
+
+        The write and the registry and metadata build run in worker threads;
+        the swap and a static datasource's cache stay on the loop. That takes
+        the file I/O, the replace retries while a virus scanner holds the file,
+        and the build (150 ms for a large PLC, leaving a 17 ms loop gap) off
+        the loop — not the JSON encoding, whose C encoder holds the GIL: ~100 ms
+        for 30 MB.
+
+        Saves wait for each other, and for ``delete_async``: two overlapping
+        saves could otherwise apply the older config over the newer file, and a
+        delete landing while the threads run would be undone by the swap. A
+        read-modify-write passes *config* as a function, called once the lock
+        is held, so it builds on whatever the previous save committed. The
+        sync ``save()`` (test server) and ``apply_config`` callers
+        (``datasource_sync.apply_datasource_change``) do not take this lock.
+        """
+        # Shielded, lock inside: a request cancelled mid-write would otherwise
+        # leave the new file on disk and the old entry in memory, and let the
+        # next save start while this write is still running.
+        return await asyncio.shield(self._save_locked(name, config))
+
+    async def _save_locked(
+        self, name: str, config: dict[str, Any] | Callable[[], dict[str, Any]],
+    ) -> DatasourceEntry | None:
+        async with self.save_lock:
+            if callable(config):
+                config = config()
+            # Side by side: the build only reads *config*, and is applied
+            # only once the write committed.
+            _, entry = await asyncio.gather(
+                asyncio.to_thread(self._write, name, config),
+                asyncio.to_thread(_with_metadata, config),
+            )
+            old_entry = self.get(name)
+            self.apply_config(name, config, entry)
+            return old_entry
+
+    def _write(self, name: str, config: dict[str, Any]) -> None:
         active_datasources_dir().mkdir(parents=True, exist_ok=True)
         filename = self._assign_filename(name)
         write_json(active_datasources_dir() / f"{filename}.json", config)
-        self.apply_config(name, config)
 
-    def apply_config(self, name: str, config: dict[str, Any]) -> DatasourceEntry:
+    def apply_config(
+        self, name: str, config: dict[str, Any], entry: DatasourceEntry | None = None,
+    ) -> DatasourceEntry:
         """Refresh the in-memory entry for *name* from *config* without writing to disk.
 
         For external writers (e.g. MCP tools) that have already persisted the
         config and just need the runtime registry / cache rebuilt so OPC-UA
-        subscription deltas and snapshot keys are consistent.
+        subscription deltas and snapshot keys are consistent. *entry* is
+        ``DatasourceEntry(config)`` when the caller has built it already.
         """
-        entry = DatasourceEntry(config)
+        if entry is None:
+            entry = DatasourceEntry(config)
+            _build_metadata_soon([entry])
         with self._lock:
             old_entry = self.datasources.get(name)
             self.datasources[name] = entry
@@ -959,6 +1030,11 @@ class DatasourceManager:
 
             alarm_manager.evaluate_cached()
         return entry
+
+    async def delete_async(self, name: str) -> None:
+        """``delete`` for a coroutine, after any save in flight (see ``save_async``)."""
+        async with self.save_lock:
+            self.delete(name)
 
     def delete(self, name: str) -> None:
         """Remove a datasource from disk and memory."""
@@ -1447,6 +1523,31 @@ class DatasourceManager:
         """Return union of composite keys across all clients' active pages."""
         with self._lock:
             return set(self._page_key_counts)
+
+
+def _with_metadata(config: dict[str, Any]) -> DatasourceEntry:
+    """``DatasourceEntry(config)`` with its ``metadata_index`` built: what
+    ``save_async`` runs in a worker thread."""
+    entry = DatasourceEntry(config)
+    _ = entry.metadata_index
+    return entry
+
+
+def _build_metadata_soon(entries: list[DatasourceEntry]) -> None:
+    """Build each entry's ``metadata_index`` in a daemon thread, for a caller
+    on the loop that built the entries itself. Their registries are never
+    mutated (the loop fills only ``derived``, which the thread never reads),
+    so the thread only reads; a ``set_context`` that reaches an entry first
+    builds it there, or waits for the build already running."""
+
+    def build() -> None:
+        for entry in entries:
+            try:
+                _ = entry.metadata_index
+            except Exception:
+                logger.exception("Building the variable metadata of %s failed", entry.name)
+
+    threading.Thread(target=build, name="datasource-metadata", daemon=True).start()
 
 
 def _safe_filename(name: str) -> str:

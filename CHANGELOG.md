@@ -74,6 +74,16 @@ heading.
   Connected Runtimes table shows per browser how many keys its context holds
   and how much it has been sent.
 
+- **Saving a datasource's settings no longer undoes variable edits.** Saving
+  settings and variables together could write the variable tree back as it was
+  before the edits, when the variables save finished first.
+
+- **Saving a datasource no longer stalls live values.**
+
+- **The first page after a start or a datasource save no longer pauses.**
+  Describing a large PLC's variables held the server up for up to half a
+  second; that now happens in the background.
+
 - **On Windows, a save or widget build could fail while a virus scanner held
   the file.** The write now retries briefly.
 
