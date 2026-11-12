@@ -78,6 +78,13 @@ heading.
   settings and variables together could write the variable tree back as it was
   before the edits, when the variables save finished first.
 
+- **An agent's variable edit and an editor save no longer undo each other.** On
+  a running project, saving a datasource in the editor while an agent added,
+  removed or changed one of its variables over MCP could write the tree back
+  without the agent's change, or the agent's write could undo the save. The
+  running project now applies the agent's edit itself, one save after the
+  other.
+
 - **Saving a datasource no longer stalls live values.**
 
 - **The first page after a start or a datasource save no longer pauses.**

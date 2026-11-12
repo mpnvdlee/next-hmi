@@ -116,6 +116,30 @@ async def _reload_datasources(artifact_ids: list[str]) -> None:
         await apply_datasource_change(name, after, old_enabled)
 
 
+class VariableToolBody(BaseModel):
+    args: dict[str, Any]
+    agent_label: str | None = None
+
+
+@router.post("/variables/{tool}")
+async def run_variable_tool(tool: str, body: VariableToolBody) -> dict[str, Any]:
+    """Run a workspace MCP variable tool here, under the save lock: this child
+    saves the same file from the editor, building on the tree it holds in
+    memory, so a write from the manager's process could be written back over
+    (see ``mcp_server.tools.variables._in_running_child``)."""
+    from mcp_server import agent_label
+    from mcp_server.tools import variables as variable_tools
+
+    if tool not in variable_tools.FORWARDED_TOOLS:
+        raise NotFoundError(f"No variable tool named '{tool}'")
+    token = agent_label._header_label.set(body.agent_label)
+    try:
+        async with datasource_manager.save_lock:
+            return await getattr(variable_tools, tool)(**body.args)
+    finally:
+        agent_label._header_label.reset(token)
+
+
 class PanelBody(BaseModel):
     panel: str
 

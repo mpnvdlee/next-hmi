@@ -299,3 +299,61 @@ def test_panel_login_passes_the_caller_s_address_to_the_throttle(
 
     assert resp.status_code == 401
     assert addresses == ["testclient"]
+
+
+@pytest.mark.asyncio
+async def test_a_variable_tool_waits_for_a_save_in_flight(
+    monkeypatch, live_project_root: Path
+) -> None:
+    """A workspace MCP variable edit runs in the child under the save lock: an
+    editor save holding it writes back the tree it built from memory, so an
+    edit landing meanwhile would be lost. The agent's label rides along."""
+    import asyncio
+    import json
+
+    import core.storage as storage
+    import httpx
+    from services.datasource_manager import datasource_manager
+
+    storage.ensure_active_project_dirs()
+    path = storage.active_datasources_dir() / "Static.json"
+    path.write_text(json.dumps({"name": "Static", "type": "static", "variables": []}), encoding="utf-8")
+    events: list[ConfigChangedEvent] = []
+
+    async def capture(event: ConfigChangedEvent) -> None:
+        events.append(event)
+
+    monkeypatch.setattr(websocket_manager, "broadcast_config_changed", capture)
+    # Made on this loop: the singleton's lock would bind to it.
+    lock = asyncio.Lock()
+    monkeypatch.setattr(datasource_manager, "save_lock", lock)
+    transport = httpx.ASGITransport(app=_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://child") as ac:
+        async with lock:
+            request = asyncio.create_task(ac.post(
+                "/api/internal/variables/variables_add",
+                json={
+                    "args": {"datasource": "Static", "name": "myFlag", "data_type": "boolean"},
+                    "agent_label": "claude",
+                },
+            ))
+            for _ in range(5):
+                await asyncio.sleep(0)
+            assert json.loads(path.read_text())["variables"] == []
+        resp = await request
+    await asyncio.sleep(0)
+
+    assert resp.status_code == 200 and resp.json()["path"] == "myFlag"
+    assert [v["display_name"] for v in json.loads(path.read_text())["variables"]] == ["myFlag"]
+    assert [event.agent_label for event in events] == ["claude"]
+
+
+def test_an_unknown_variable_tool_is_not_found() -> None:
+    from core.exceptions import register_exception_handlers
+
+    app = _app()
+    register_exception_handlers(app)
+
+    resp = TestClient(app).post("/api/internal/variables/variables_list", json={"args": {}})
+
+    assert resp.status_code == 404

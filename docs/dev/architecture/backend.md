@@ -241,7 +241,7 @@ current value and before its Boolean check, with the same folder exception. Ever
 - `backend/api/change_broadcast.py`
   - the `broadcasts(artifact_type)` route dependency every content-changing REST write carries: `config_changed` after a successful write, echoing the `X-NextHMI-Tab` header as `tab_id` ([websocket.md](websocket.md#config_changed))
 - `backend/api/internal_api.py`
-  - the loopback-only `POST /api/internal/reload` hook the manager calls after a workspace MCP write
+  - the loopback-only `POST /api/internal/reload` hook the manager calls after a workspace MCP write, and `POST /api/internal/variables/{tool}`, where a running project's child runs a workspace MCP variable write under its datasource save lock
 - `backend/api/projects_api.py` (not on a managed instance)
   - list / create / locate / delete / validate-path; export zip; import zip. `delete` refuses a project that is in the manifest `running` set. No push/pull here — that's `manager_peers_api.py`, manager-only. Mounted on the manager and on a standalone `uvicorn main:app`; a manager-spawned instance skips it, so the projects API is simply absent from the process that serves a live project.
 - `backend/api/supervisor_api.py` (manager only)

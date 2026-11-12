@@ -975,8 +975,10 @@ class DatasourceManager:
         saves could otherwise apply the older config over the newer file, and a
         delete landing while the threads run would be undone by the swap. A
         read-modify-write passes *config* as a function, called once the lock
-        is held, so it builds on whatever the previous save committed. The
-        sync ``save()`` (test server) and ``apply_config`` callers
+        is held, so it builds on whatever the previous save committed. A
+        workspace MCP variable edit runs under ``save_lock`` too (see
+        ``api.internal_api.run_variable_tool``). The sync ``save()`` (test
+        server) and ``apply_config`` callers
         (``datasource_sync.apply_datasource_change``) do not take this lock.
         """
         # Shielded, lock inside: a request cancelled mid-write would otherwise
