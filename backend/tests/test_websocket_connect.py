@@ -17,7 +17,12 @@ import pytest
 import services.websocket_manager as websocket_manager_module
 from conftest import FakeDatasourceManager, FakeEngine, FakePool, FakeWebSocket
 from fastapi import WebSocketDisconnect
-from services.websocket_manager import _BOOT_ID, WebSocketManager
+from services.websocket_manager import (
+    _BOOT_ID,
+    _MAX_PRIORITY_KEYS,
+    _MAX_WS_MESSAGE_BYTES,
+    WebSocketManager,
+)
 
 
 def _json(msg: dict) -> str:
@@ -139,11 +144,107 @@ def test_delivery_keys_add_recipe_parameters_and_whole_array_elements() -> None:
     manager.set_datasource_manager(dm)
     manager.set_recipe_manager(_Recipes())
 
-    assert manager._delivery_keys({"DS:Motors", "DS:Plain"}) == {
+    shared = manager._shared_value_keys()
+    assert manager._delivery_keys({"DS:Motors", "DS:Plain"}, shared) == {
         "DS:Motors", "DS:Motors/[0]", "DS:Motors/[1]", "DS:Plain", "DS:Setpoint",
     }
     # An element promoted on its own brings no siblings.
-    assert manager._delivery_keys({"DS:Motors/[1]"}) == {"DS:Motors/[1]", "DS:Setpoint"}
+    assert manager._delivery_keys({"DS:Motors/[1]"}, shared) == {"DS:Motors/[1]", "DS:Setpoint"}
+
+
+class _ParkedWebSocket(FakeWebSocket):
+    """Every send parks until ``release`` is set."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.release = asyncio.Event()
+
+    async def send_text(self, message: str) -> None:
+        await self.release.wait()
+        await super().send_text(message)
+
+
+def test_a_recompute_during_set_context_keeps_the_new_page() -> None:
+    """A recompute rebuilds every client's keys from its stored page. One run
+    while a set_context was still sending put the old page back; with another
+    client already on the new page no later recompute came, and that client
+    got no value for the page it was on."""
+    from services.datasource_manager import DatasourceManager
+
+    dm = DatasourceManager()
+    dm.apply_config("PLC", {"name": "PLC", "type": "opcua-client", "variables": [
+        {"kind": "variable", "display_name": "Speed", "data_type": "Float",
+         "node_id": "ns=2;s=Speed", "enabled": True},
+    ]})
+    manager = WebSocketManager()
+    manager.set_datasource_manager(dm)
+    manager.set_opcua_pool(FakePool(FakeEngine()))
+    context = {"type": "set_context", "currentPageIds": [], "priorityKeys": ["PLC:Speed"]}
+
+    async def _run() -> _ParkedWebSocket:
+        a, b = _ParkedWebSocket(), FakeWebSocket()
+        manager._connections = {"a": a, "b": b}  # type: ignore[assignment]
+        await manager._handle_set_context("b", context)
+        await manager._priority_recompute_task  # b moved the union
+        applying = asyncio.create_task(manager._handle_set_context("a", context))
+        await asyncio.sleep(0)  # parked in its metadata send
+        await manager.recompute_priority_subscriptions()
+        a.release.set()
+        await applying
+        assert manager._client_keys["a"] == manager._delivery_keys({"PLC:Speed"}, set())
+        await manager._broadcast_values({"PLC:Speed": 3.0})
+        return a
+
+    a = asyncio.run(_run())
+
+    assert {"type": "var_update", "values": {"PLC:Speed": 3.0}} in a.messages
+
+
+def test_broadcast_var_metadata_does_not_wait_on_a_stalled_socket() -> None:
+    manager = WebSocketManager()
+    manager.set_datasource_manager(FakeDatasourceManager(metadata={"DS:A": {"type": "a"}}))
+    stalled, healthy = _ParkedWebSocket(), FakeWebSocket()
+    manager._connections = {"stalled": stalled, "healthy": healthy}  # type: ignore[assignment]
+    manager._client_keys = {"stalled": {"DS:A"}, "healthy": {"DS:A"}}
+
+    async def _run() -> None:
+        broadcast = asyncio.create_task(manager.broadcast_var_metadata())
+        for _ in range(10):
+            if healthy.messages:
+                break
+            await asyncio.sleep(0)
+        assert healthy.messages == [{"type": "var_metadata", "meta": {"DS:A": {"type": "a"}}}]
+        stalled.release.set()
+        await broadcast
+
+    asyncio.run(_run())
+
+
+def test_broadcast_var_metadata_never_lands_an_older_context_after_a_newer_one() -> None:
+    """The broadcast's sends start a loop turn after it does. A set_context
+    applied in between sends the new page's metadata; a frame built from the
+    keys the broadcast started with then landed last and replaced it."""
+    manager = WebSocketManager()
+    manager.set_datasource_manager(
+        FakeDatasourceManager(metadata={"DS:Old": {"type": "a"}, "DS:New": {"type": "b"}})
+    )
+    manager.set_opcua_pool(FakePool(FakeEngine()))
+    ws = FakeWebSocket()
+    manager._connections = {"c1": ws}  # type: ignore[assignment]
+    manager._client_keys = {"c1": {"DS:Old"}}
+
+    async def _run() -> None:
+        broadcast = asyncio.create_task(manager.broadcast_var_metadata())
+        await asyncio.sleep(0)  # the broadcast has begun, its sends not yet
+        await manager._handle_set_context(
+            "c1", {"type": "set_context", "currentPageIds": [], "priorityKeys": ["DS:New"]}
+        )
+        await broadcast
+
+    asyncio.run(_run())
+
+    metadata = [m["meta"] for m in ws.messages if m["type"] == "var_metadata"]
+    assert metadata[-1] == {"DS:New": {"type": "b"}}
 
 
 def test_broadcast_values_shares_one_frame_between_clients_on_the_same_page() -> None:
@@ -295,6 +396,19 @@ def test_handle_message_ignores_invalid_json_without_error() -> None:
 def test_handle_message_rejects_oversized_message_without_dispatch() -> None:
     manager = WebSocketManager()
     calls = _spy(manager, "_handle_write_field")
-    oversized = _json({"type": "write_field", "padding": "x" * (64 * 1024 + 1)})
+    oversized = _json({"type": "write_field", "padding": "x" * (_MAX_WS_MESSAGE_BYTES + 1)})
     asyncio.run(manager.handle_message("c1", oversized))
     assert calls == []
+
+
+def test_a_set_context_at_the_key_cap_is_not_dropped_as_oversized() -> None:
+    """A large PLC page sends ~1,800 keys of ~120 bytes; dropping its
+    set_context left the page without metadata, values or context_ready."""
+    manager = WebSocketManager()
+    calls = _spy(manager, "_handle_set_context")
+    key = "PLC1:PLC1/gPlc/emMachineFunctions/scmPackPattern/sstMod/Ppar/aLayers/aLayers[10]/aRows/aRows[3]/nPlace{:05d}"
+    keys = [key.format(i) for i in range(_MAX_PRIORITY_KEYS)]
+    asyncio.run(
+        manager.handle_message("c1", _json({"type": "set_context", "currentPageIds": ["p"], "priorityKeys": keys}))
+    )
+    assert len(calls) == 1

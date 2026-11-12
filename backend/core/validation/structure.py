@@ -16,6 +16,7 @@ from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalo
 from core.http_origins import is_dynamic_template, listed_origins
 from core.page_index import (
     INDEX_ROOTS,
+    SHELL_REGIONS,
     collect_group_ancestors,
     collect_page_group_properties,
     collect_page_group_property_keys,
@@ -487,7 +488,7 @@ def _config_widgets(config: Any) -> dict[str, _WidgetIndex]:
     """The shell's widgets, and each page group's header/footer chrome, per
     artifact (see ``ValidationContext.project_widgets``)."""
     shell: _WidgetIndex = {}
-    for area in _SHELL_REGIONS:
+    for area in SHELL_REGIONS:
         index_widgets(config.get(area) if isinstance(config, dict) else None, shell)
     out = {"shell": shell}
     for root in INDEX_ROOTS:
@@ -3610,7 +3611,6 @@ _SHELL_BINDABLE_FIELDS: dict[str, dict[str, str]] = {
 # Design-time initial state — deliberately NOT bindable (it is the fallback the
 # runtime uses until `expanded` resolves), so only its literal is checked.
 _SHELL_DEFAULT_STATES = ("expanded", "collapsed", "hidden")
-_SHELL_REGIONS = ("header", "footer", "leftSidebar", "rightSidebar")
 
 
 def _walk_widget_array(
@@ -3635,7 +3635,7 @@ def validate_shell_regions(
     """Validate the bindable fields on a ShellConfig."""
     if not isinstance(shell_like, dict):
         return
-    for region in _SHELL_REGIONS:
+    for region in SHELL_REGIONS:
         region_cfg = shell_like.get(region)
         if not isinstance(region_cfg, dict):
             continue
@@ -3740,10 +3740,10 @@ def validate_shell_areas(config: Any, ctx: ValidationContext) -> ValidationRepor
     # A shell region renders around every page, so nothing supplies it input
     # parameters — same as a page outside the Dialogs folder.
     shell_widgets: _WidgetIndex = {}
-    for area in _SHELL_REGIONS:
+    for area in SHELL_REGIONS:
         index_widgets(config.get(area), shell_widgets)
     ctx = replace(ctx, input_scope=False, widget_index=shell_widgets, artifact_key="shell")
-    for area in _SHELL_REGIONS:
+    for area in SHELL_REGIONS:
         _walk_widget_array(config.get(area), ctx, f"/{area}", report)
     validate_shell_regions(config.get("shell"), ctx, "/shell", report)
     return report

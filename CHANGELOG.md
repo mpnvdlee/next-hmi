@@ -78,8 +78,14 @@ heading.
   timestamp, which they reject (`BadWriteNotSupported`); it now sends the
   value alone.
 
+- **A page with about 1,800 bindings never loaded.** Its request to the
+  server was over 64 KB and was dropped whole; the limit is now 1 MiB.
+
 - **The runtime no longer stalls on a page switch against a large PLC.**
   Against 72,000 variables it could hang for up to 30 s.
+
+- **A page could stop updating when several panels switched pages at once.**
+  It received no live values until the next page switch.
 
 - **Large pages no longer drop the TwinCAT connection.** Reads and
   subscriptions are split to fit the server's 4 MiB request limit.
@@ -103,6 +109,17 @@ heading.
   reconnect starts new subscriptions, and the ones the dropped connection
   left behind kept their variables on the PLC for 8 minutes to several
   hours. They now expire after about two minutes.
+
+- **A page subscribes only what it shows.** Opening a page in a page group
+  subscribed every page of the group around it: on one project a page
+  binding a few dozen variables put over 8,000 on the fast subscription. A
+  page now subscribes its own widgets, the header and footer of the groups it
+  sits in, and the header, footer, sidebars and global events every page
+  shares; the other pages of a group subscribe when they are shown. A page
+  group's own header and footer now show live values, which they never did.
+
+- **A sidebar or variable trigger reading a whole array got no value** while
+  the open page bound one element of that array at a fixed index.
 
 - **A variable no longer goes without values after a busy PLC refused it.** A
   variable the PLC refused or did not answer while moving between the page's

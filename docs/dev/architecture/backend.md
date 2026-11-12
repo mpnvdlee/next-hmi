@@ -386,7 +386,7 @@ Important behaviors:
 
 ## WebSocket Flow
 
-`backend/services/websocket_manager.py` batches pending variable updates into 50 ms windows. On connect it accepts the socket, sends an empty `var_snapshot`, then streams cached values in `var_update` chunks. On disconnect the client is removed from the connection map, its waiting `set_context` and prefetch are cancelled, its priority keys are cleared, and a priority recompute is scheduled. `set_context` pacing, the shared recompute interval and the 500-socket runtime cap are in [websocket.md](websocket.md).
+`backend/services/websocket_manager.py` batches pending variable updates into 50 ms windows. On connect it accepts the socket, sends an empty `var_snapshot`, then streams cached values in `var_update` chunks. The keys a `set_context` names that nothing has cached are read one datasource after another, each result seeded into the cache as soon as its read returns, and the client's frame is then taken from the cache: a change that arrives during a later datasource's read is in it, instead of being overwritten by the earlier result. On disconnect the client is removed from the connection map, its waiting `set_context` and prefetch are cancelled, its priority keys are cleared, and a priority recompute is scheduled. `set_context` pacing, the shared recompute interval and the 500-socket runtime cap are in [websocket.md](websocket.md).
 
 The full handshake order, every message shape, and the async-action result correlation (`requestId` → `write_response` / `write_error`, reason-code vocabulary, client-synthesised `timeout` / `disconnected`) are specified in [websocket.md](websocket.md).
 
@@ -395,19 +395,16 @@ The full handshake order, every message shape, and the async-action result corre
 Priority keys are grouped by datasource and forwarded to the matching OPC-UA engine.
 The engine promotes only enabled variables still present on the server
 (`is_subscribable`), a struct folder's key expanding to its enabled leaves: any
-client may name any key, and a promoted value reaches every client.
+client may name any key, and a promoted value reaches every client. A struct's
+leaves include those of every array nested in it, at any depth
+(`_composite_leaf_steps`), since its value holds those arrays: on one TwinCAT
+project binding a device struct promotes 577 leaves where it promoted 145, and
+all pages together 46,784 where they promoted 37,004.
 
-Current frontend producers:
-
-- `HmiView` sends `set_context` with active runtime page + open-overlay page context
-- `PreviewView` sends `set_context` with preview page/overlay context
-- `DatasourceVariableTable` sends `set_context` with explicit `priorityKeys`
-- `RecipeTable` sends `set_context` with explicit `priorityKeys` for a recipe type's parameters while its Live column is on
-
-`set_context` payload currently supports:
-
-- `currentPageIds` (overlay pages included — there is no separate key)
-- `priorityKeys`
+The `set_context` payload, the keys a page id resolves to, its producers and
+its pacing are specified in [websocket.md](websocket.md#client--server-messages).
+How the engine creates, routes and re-creates the monitored items is under
+`engine.py` in [Main Modules](#main-modules).
 
 ## REST Surface
 

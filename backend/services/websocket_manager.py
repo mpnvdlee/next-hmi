@@ -27,6 +27,7 @@ import secrets
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -34,7 +35,14 @@ from typing import Any, cast
 from core import audit
 from core.exceptions import RateLimitError, UserConflictError, UserValidationError
 from core.number_utils import get_config_float
-from core.page_index import INDEX_ROOTS, page_document_dir, root_nodes
+from core.page_index import (
+    INDEX_ROOTS,
+    SHELL_REGIONS,
+    collect_page_ids,
+    is_page_group,
+    page_document_dir,
+    root_nodes,
+)
 from core.storage import (
     active_config_dir,
     read_json,
@@ -67,7 +75,10 @@ def _config_path():
 # --- OPC-UA write coercion constants (built once at import time) --------------
 _MAX_PAGE_IDS = 2000
 _MAX_PRIORITY_KEYS = 5000
-_MAX_WS_MESSAGE_BYTES = 64 * 1024
+# Must hold a set_context at _MAX_PRIORITY_KEYS: a PLC path runs to ~150 bytes,
+# and at 64 KB a 1,787-key page (210 KB) was dropped whole — the page never
+# received its metadata, values or context_ready.
+_MAX_WS_MESSAGE_BYTES = 1024 * 1024
 # Identity scopes are a view's own name ("runtime:" plus 12 hex digits,
 # "runtime:preview"). Each stored one costs memory for the connection's life,
 # so both its length and how many one socket keeps are capped.
@@ -124,8 +135,8 @@ class _SocketContext:
     waiting: SetContextMessage | None = None  # the latest, held for its turn
     apply_task: asyncio.Task | None = None
     prefetch_task: asyncio.Task | None = None
-    # The latest (keys, page ids) that arrived while a prefetch ran.
-    prefetch_waiting: tuple[set[str], list[str]] | None = None
+    # The latest (keys, page ids, context id) that arrived while a prefetch ran.
+    prefetch_waiting: tuple[set[str], list[str], int | None] | None = None
 
 
 class WebSocketManager:
@@ -313,15 +324,20 @@ class WebSocketManager:
         message = json.dumps(payload)
         await self._send_all([(client_id, message) for client_id in self._connections])
 
-    async def _send_all(self, frames: list[tuple[str, str]]) -> None:
+    async def _send_all(self, frames: list[tuple[str, str | Callable[[], str]]]) -> None:
         """Send each (client_id, frame) concurrently; a client whose send
-        fails or stalls past 5 s is dropped."""
+        fails or stalls past 5 s is dropped. A frame given as a function is
+        built as its send starts."""
         live = [(client_id, self._connections.get(client_id), frame) for client_id, frame in frames]
         live = [(client_id, ws, frame) for client_id, ws, frame in live if ws is not None]
         if not live:
             return
+
+        async def send(ws: WebSocket, frame: str | Callable[[], str]) -> None:
+            await ws.send_text(frame() if callable(frame) else frame)
+
         results = await asyncio.gather(
-            *[asyncio.wait_for(ws.send_text(frame), timeout=5.0) for _, ws, frame in live],
+            *[asyncio.wait_for(send(ws, frame), timeout=5.0) for _, ws, frame in live],
             return_exceptions=True,
         )
         for (client_id, _, _), result in zip(live, results, strict=True):
@@ -345,13 +361,14 @@ class WebSocketManager:
             for path in paths
         }
 
-    def _delivery_keys(self, promoted: set[str]) -> set[str]:
+    def _delivery_keys(self, promoted: set[str], shared: set[str]) -> set[str]:
         """Every key a client holding *promoted* receives: those keys, the
-        shared recipe parameters, and the elements of each struct array it
-        binds whole (the client reads an element under its own key). Decided
-        once per set_context, so every delivery path — metadata, cached
-        values, the prefetch, the live broadcast — is one set lookup."""
-        keys = set(promoted) | self._shared_value_keys()
+        *shared* keys (``_shared_value_keys``), and the elements of each
+        struct array it binds whole (the client reads an element under its
+        own key). Decided once per set_context, so every delivery path —
+        metadata, cached values, the prefetch, the live broadcast — is one
+        set lookup."""
+        keys = promoted | shared
         if self._datasource_manager is not None:
             for key in promoted:
                 keys |= self._datasource_manager.element_keys(key)
@@ -396,22 +413,33 @@ class WebSocketManager:
         """Send every client a fresh metadata snapshot for its own context.
 
         Datasource edits can add, remove, or reshape bindings while clients stay
-        connected. The snapshot is authoritative: the client drops values for
-        keys no longer in it, so one that lost all its keys gets an empty map.
+        connected. The snapshot is authoritative: the client validates its
+        bindings against it and keeps values only for the keys of its last
+        three metadata frames, so one that lost all its keys gets an empty map.
         """
         if self._datasource_manager is None or not self._connections:
             return
-        for client_id in list(self._connections):
-            await self._send_context_metadata(client_id, self._client_keys.get(client_id, set()))
+        # Keys read as the send starts, not when the broadcast did: the sends
+        # start a loop turn later, and a set_context applied in between sends
+        # its own metadata, which an older frame landing after it would
+        # wholesale replace.
+        await self._send_all([
+            (client_id, lambda client_id=client_id: self._metadata_frame(self._client_keys.get(client_id, set())))
+            for client_id in self._connections
+        ])
 
-    async def _send_context_metadata(self, client_id: str, keys: set[str]) -> None:
-        """The metadata a client holding *keys* reads (see ``variable_metadata``)."""
+    def _metadata_frame(self, keys: set[str], context_id: int | None = None) -> str:
+        """The metadata a client holding *keys* reads (see ``variable_metadata``),
+        stamped with the set_context it answers, if any."""
+        meta = self._datasource_manager.variable_metadata(keys)
+        return json.dumps(_with_context_id({"type": "var_metadata", "meta": meta}, context_id))
+
+    async def _send_context_metadata(self, client_id: str, keys: set[str], context_id: int | None) -> None:
         ws = self._connections.get(client_id)
         if ws is None or self._datasource_manager is None:
             return
-        meta = self._datasource_manager.variable_metadata(keys)
         try:
-            await ws.send_text(json.dumps({"type": "var_metadata", "meta": meta}))
+            await ws.send_text(self._metadata_frame(keys, context_id))
         except Exception:
             self._connections.pop(client_id, None)
 
@@ -684,9 +712,10 @@ class WebSocketManager:
         if self._datasource_manager is None or self._opcua_pool is None:
             return
         # A recipe edit changes what every client receives; cheap per client.
+        shared = self._shared_value_keys()
         for client_id in list(self._client_keys):
             self._client_keys[client_id] = self._delivery_keys(
-                self._datasource_manager.client_page_keys(client_id)
+                self._datasource_manager.client_page_keys(client_id), shared
             )
         priority_keys = self._datasource_manager.get_priority_keys()
         ds_keys = _group_priority_paths_by_datasource(priority_keys)
@@ -733,6 +762,7 @@ class WebSocketManager:
         if self._datasource_manager is None or self._opcua_pool is None:
             return
         current_page_ids = _resolve_current_page_ids(msg)
+        context_id = _resolve_context_id(msg)
         explicit_priority_keys = _extract_explicit_priority_keys(msg)
         composite_keys = _resolve_context_composite_keys(
             current_page_ids=current_page_ids,
@@ -745,32 +775,42 @@ class WebSocketManager:
         promoted = self._datasource_manager.known_keys(
             _promotion_keys(composite_keys, self._datasource_manager)
         )
-        delivered = self._delivery_keys(promoted)
+        shared = self._shared_value_keys()
+        delivered = self._delivery_keys(promoted, shared)
         previous = self._client_keys.get(client_id)
         self._client_keys[client_id] = delivered
-        # Metadata first: the client validates a binding against it and drops
-        # values for keys outside it, so it has to precede the values. An
-        # unchanged context (a scroll in the variable table) resends nothing.
-        if delivered != previous:
-            await self._send_context_metadata(client_id, delivered)
-        sent_keys = await self._send_cached_values(client_id, delivered)
+        # Before any await: a recompute rebuilds _client_keys from the stored
+        # page, and one running during the sends below would put the old page
+        # back for good when this one moves no subscription.
         self._apply_priority_keys(client_id, promoted)
+        # Metadata first: the client validates a binding against it and keeps
+        # values only for the keys of its last three frames, so it has to
+        # precede the values. An unchanged context (a scroll in the variable
+        # table) resends nothing.
+        if delivered != previous:
+            await self._send_context_metadata(client_id, delivered, context_id)
+        sent_keys = await self._send_cached_values(client_id, delivered)
         # Elements of a whole-bound array arrive with the array itself.
-        missing_keys = (promoted | self._shared_value_keys()) - sent_keys
+        missing_keys = (promoted | shared) - sent_keys
         context = self._contexts.setdefault(client_id, _SocketContext())
         if not missing_keys:
             context.prefetch_waiting = None  # superseded: this context needs no read
-            await self._send_context_ready(client_id, current_page_ids)
+            await self._send_context_ready(client_id, current_page_ids, context_id)
         elif context.prefetch_task is not None:
             # One read in flight per socket; the latest context waits for it.
-            context.prefetch_waiting = (missing_keys, current_page_ids)
+            context.prefetch_waiting = (missing_keys, current_page_ids, context_id)
         else:
             context.prefetch_task = asyncio.create_task(
-                self._prefetch(client_id, context, missing_keys, current_page_ids)
+                self._prefetch(client_id, context, missing_keys, current_page_ids, context_id)
             )
 
     async def _prefetch(
-        self, client_id: str, context: _SocketContext, keys: set[str], page_ids: list[str]
+        self,
+        client_id: str,
+        context: _SocketContext,
+        keys: set[str],
+        page_ids: list[str],
+        context_id: int | None,
     ) -> None:
         """Background continuation of `_handle_set_context`: read the uncached
         keys, then tell the client this context is ready regardless, so it
@@ -779,10 +819,10 @@ class WebSocketManager:
         try:
             while True:
                 await self._send_uncached_values(client_id, keys)
-                await self._send_context_ready(client_id, page_ids)
+                await self._send_context_ready(client_id, page_ids, context_id)
                 if context.prefetch_waiting is None:
                     return
-                (keys, page_ids), context.prefetch_waiting = context.prefetch_waiting, None
+                (keys, page_ids, context_id), context.prefetch_waiting = context.prefetch_waiting, None
         finally:
             context.prefetch_task = None
 
@@ -1486,24 +1526,28 @@ class WebSocketManager:
         if not composite_keys or self._datasource_manager is None or self._opcua_pool is None:
             return
 
-        fresh_values: dict[str, Any] = {}
+        read: set[str] = set()
         async with self._prefetch_slots:
             # A read that finished since (this socket's last, or another's)
             # may have cached some of them: those are not read again.
-            values = self._datasource_manager.get_cached_values(composite_keys)
-            for ds_name, paths in _group_priority_paths_by_datasource(composite_keys - values.keys()).items():
+            cached = self._datasource_manager.cached_keys(composite_keys)
+            for ds_name, paths in _group_priority_paths_by_datasource(composite_keys - cached).items():
                 engine = self._opcua_pool.get(ds_name)
                 if engine is None:
                     continue
                 try:
-                    fresh_values.update(await engine.read_current_values(paths))
+                    fresh = await engine.read_current_values(paths)
                 except Exception as exc:
                     logger.warning("Failed to prefetch values for %s: %s", ds_name, exc)
-            self._datasource_manager.seed_cached_values(fresh_values)
-        values.update(fresh_values)
+                    continue
+                # Seeded before the next datasource's read is awaited: from
+                # then on a change patches the cache, which the frame is taken
+                # from, instead of passing this result by.
+                self._datasource_manager.seed_cached_values(fresh)
+                read.update(fresh)
         ws = self._connections.get(client_id)
         wanted = self._client_keys.get(client_id, set())
-        values = {k: v for k, v in values.items() if k in wanted}
+        values = self._datasource_manager.get_cached_values((composite_keys | read) & wanted)
         if ws is None or not values:
             return
         try:
@@ -1512,7 +1556,9 @@ class WebSocketManager:
             self._connections.pop(client_id, None)
             return
 
-    async def _send_context_ready(self, client_id: str, current_page_ids: list[str]) -> None:
+    async def _send_context_ready(
+        self, client_id: str, current_page_ids: list[str], context_id: int | None,
+    ) -> None:
         """Tell the client every variable requested by this set_context has
         been sent (from cache and/or freshly read). The client uses this to
         reveal a newly navigated page once its own data has actually arrived,
@@ -1520,17 +1566,15 @@ class WebSocketManager:
 
         The page ids are echoed so each surface — the routed page and every
         open page overlay — can recognise the ack for its own id and settle on
-        it rather than on a timer."""
+        it rather than on a timer. The context id is echoed too: two contexts
+        can name the same pages, and only the latest one's ack is current."""
         ws = self._connections.get(client_id)
         if ws is None:
             return
         try:
-            await ws.send_text(
-                json.dumps({
-                    "type": "context_ready",
-                    "currentPageIds": current_page_ids,
-                })
-            )
+            await ws.send_text(json.dumps(_with_context_id(
+                {"type": "context_ready", "currentPageIds": current_page_ids}, context_id,
+            )))
         except Exception:
             self._connections.pop(client_id, None)
 
@@ -1611,6 +1655,15 @@ def _resolve_current_page_ids(msg: dict) -> list[str]:
     return _coerce_non_empty_str_list(msg.get("currentPageIds"), _MAX_PAGE_IDS)
 
 
+def _resolve_context_id(msg: dict) -> int | None:
+    context_id = msg.get("contextId")
+    return context_id if type(context_id) is int else None
+
+
+def _with_context_id(frame: dict[str, Any], context_id: int | None) -> dict[str, Any]:
+    return frame if context_id is None else {**frame, "contextId": context_id}
+
+
 @dataclass
 class _RuntimePages:
     """The runtime pages config, with what set_context has resolved from it.
@@ -1622,7 +1675,7 @@ class _RuntimePages:
 
     config: dict
     # Kept sets are never handed out: ``resolve`` copies them into a fresh one.
-    shared_keys: ContextKeys  # header and footer, in every context
+    shared_keys: ContextKeys  # shell regions and global events, in every context
     # Every id a page or group node carries: no other id can match a page,
     # so one is answered without a walk and is never kept.
     page_ids: frozenset[str]
@@ -1633,12 +1686,12 @@ class _RuntimePages:
         if keys is None:
             keys = self.scopes[page_id] = ContextKeys()
             for root in INDEX_ROOTS:
-                if _collect_active_scope_composite_keys(self.config.get(root, []), page_id, keys):
+                if _collect_page_composite_keys(self.config.get(root, []), page_id, keys):
                     break
         return keys
 
     def resolve(self, current_page_ids: list[str]) -> ContextKeys:
-        """Header, footer and every current page's keys, with their index refs."""
+        """The shared keys and every current page's, with their index refs."""
         keys = ContextKeys()
         for part in (self.shared_keys, *map(self.keys_for, self.page_ids.intersection(current_page_ids))):
             keys |= part
@@ -1649,13 +1702,15 @@ class _RuntimePages:
 
 def _build_runtime_pages(config: dict) -> _RuntimePages:
     """*config* in runtime shape, with its shared keys and page ids collected."""
+    # Counted here, not only taken from the client's priorityKeys: a key the
+    # server resolved counts as bound the way the server saw it, so a sidebar
+    # reading an array whole that a page binds at an index would otherwise
+    # leave the array unpromoted.
     shared_keys = ContextKeys()
-    _walk_components(config["header"], shared_keys)
-    _walk_components(config["footer"], shared_keys)
-    page_ids: set[str] = set()
-    for root in INDEX_ROOTS:
-        _collect_page_ids(config.get(root, []), page_ids)
-    return _RuntimePages(config, shared_keys, frozenset(page_ids))
+    _walk_components([node for region in SHELL_REGIONS for node in config[region]], shared_keys)
+    _extract_variable_keys_from_value(config["globalEvents"], shared_keys)
+    page_ids = frozenset().union(*(collect_page_ids(config.get(root, [])) for root in INDEX_ROOTS))
+    return _RuntimePages(config, shared_keys, page_ids)
 
 
 _runtime_pages_config_cache: _RuntimePages | None = None
@@ -1685,38 +1740,15 @@ def _get_runtime_pages() -> _RuntimePages | None:
     return runtime
 
 
-def _collect_page_ids(nodes: list, ids: set[str]) -> None:
-    """Every string id below *nodes* that the page/group walk can reach."""
-    for node in nodes:
-        if not isinstance(node, dict):
-            continue
-        if isinstance(node.get("id"), str):
-            ids.add(node["id"])
-        _collect_page_ids(
-            [
-                child
-                for child in _iter_dict_children(node.get("children", []))
-                if _is_page_group_node(node) or _is_page_group_node(child)
-            ],
-            ids,
-        )
-
-
 def _resolve_context_composite_keys(
     *,
     current_page_ids: list[str],
     explicit_priority_keys: set[str],
-) -> set[str]:
+) -> ContextKeys:
     # Datasource live-values can drive fast-subscriptions using explicit
     # priority keys without any page context.
-    if not current_page_ids:
-        return set(explicit_priority_keys)
-
-    pages = _get_runtime_pages()
-    if pages is None:
-        return set(explicit_priority_keys)
-
-    composite_keys = pages.resolve(current_page_ids)
+    pages = _get_runtime_pages() if current_page_ids else None
+    composite_keys = pages.resolve(current_page_ids) if pages is not None else ContextKeys()
     # An explicit key the saved config does not bind (an unsaved edit, a
     # variable table row) carries no index: it is wanted whole.
     for key in explicit_priority_keys:
@@ -1726,7 +1758,7 @@ def _resolve_context_composite_keys(
     return composite_keys
 
 
-def _promotion_keys(composite_keys: set[str], dm: Any) -> set[str]:
+def _promotion_keys(composite_keys: ContextKeys, dm: Any) -> set[str]:
     """What to put on the fast subscription for *composite_keys*.
 
     An array-of-struct folder bound only at literal indexes (``Motors[3]``,
@@ -1737,7 +1769,7 @@ def _promotion_keys(composite_keys: set[str], dm: Any) -> set[str]:
     when a context named the array whole.
     """
     keys = set(composite_keys)
-    for key, indexes in getattr(composite_keys, "index_refs", {}).items():
+    for key, indexes in composite_keys.index_refs.items():
         if None in indexes:
             continue
         elements = dm.element_keys(key, indexes)
@@ -1757,7 +1789,7 @@ def _collect_context_composite_keys(
     raw_pages_config: dict,
     *,
     current_page_ids: list[str],
-) -> set[str]:
+) -> ContextKeys:
     """Collect all variable keys for the current runtime context (raw input).
 
     A current page id may name a page in either index root: the routed page
@@ -1767,85 +1799,30 @@ def _collect_context_composite_keys(
     )
 
 
-def _collect_active_scope_composite_keys(nodes: list[dict], page_id: str, keys: set[str]) -> bool:
-    """
-    Collect page keys for the active root scope.
+def _collect_page_composite_keys(nodes: list[dict], page_id: str, keys: ContextKeys) -> bool:
+    """Collect what page *page_id*, at any depth below *nodes*, shows: its own
+    widgets and the header and footer band of every group around it.
 
-    If the requested page is inside a top-level page-group, collect all pages in
-    that group so tab/nested-page switches are already warm.
+    The pages beside it are not collected: each is resolved when it is shown.
+    Taking a page's whole group put a page with no bindings of its own on
+    thousands of monitored items.
     """
     for node in nodes:
-        if not isinstance(node, dict):
-            continue
-
-        if _is_page_group_node(node):
-            if _group_contains_page_id(node, page_id, set()):
-                _collect_group_subtree_composite_keys(node, keys, set())
+        if not is_page_group(node):
+            if node.get("id") == page_id:
+                _walk_components(_iter_dict_children(node.get("children")), keys)
                 return True
-            continue
-
-        if _page_contains_page_id(node, page_id, set()):
-            _collect_page_subtree_composite_keys(node, keys, set())
-            return True
-
-    return False
-
-
-def _collect_group_subtree_composite_keys(group: dict, keys: set[str], visited: set[int]) -> None:
-    if not _is_page_group_node(group) or id(group) in visited:
-        return
-    visited.add(id(group))
-    for child in _iter_dict_children(group.get("children", [])):
-        _collect_page_subtree_composite_keys(child, keys, visited)
-
-
-def _collect_page_subtree_composite_keys(page: dict, keys: set[str], visited: set[int]) -> None:
-    if not isinstance(page, dict) or id(page) in visited:
-        return
-    visited.add(id(page))
-    for child in _iter_dict_children(page.get("children", [])):
-        if _is_page_group_node(child):
-            _collect_group_subtree_composite_keys(child, keys, visited)
-        else:
-            _walk_components([child], keys)
-
-
-def _group_contains_page_id(group: dict, page_id: str, visited: set[int]) -> bool:
-    if not _is_page_group_node(group) or id(group) in visited:
-        return False
-    visited.add(id(group))
-    for child in _iter_dict_children(group.get("children", [])):
-        if _page_contains_page_id(child, page_id, visited):
+        elif _collect_page_composite_keys(_iter_dict_children(node.get("children")), page_id, keys):
+            bands = _iter_dict_children(node.get("header")) + _iter_dict_children(node.get("footer"))
+            _walk_components(bands, keys)
             return True
     return False
-
-
-def _page_contains_page_id(page: Any, page_id: str, visited: set[int]) -> bool:
-    if not isinstance(page, dict) or id(page) in visited:
-        return False
-    visited.add(id(page))
-    if page.get("id") == page_id:
-        return True
-    for child in _iter_dict_children(page.get("children", [])):
-        if not _is_page_group_node(child):
-            continue
-        if _group_contains_page_id(child, page_id, visited):
-            return True
-    return False
-
-
-def _is_page_group_node(node: Any) -> bool:
-    if not isinstance(node, dict):
-        return False
-    return node.get("type") == "page-group"
 
 
 def _to_runtime_pages_config(raw: dict) -> dict:
     if not isinstance(raw, dict):
-        return {"pages": [], "header": [], "footer": [], "dialogs": []}
-    header  = v if isinstance(v := raw.get("header"),  list) else []
-    footer  = v if isinstance(v := raw.get("footer"),  list) else []
-
+        raw = {}
+    events = raw.get("globalEvents")
     return {
         **{
             root: [
@@ -1855,8 +1832,11 @@ def _to_runtime_pages_config(raw: dict) -> dict:
             ]
             for root in INDEX_ROOTS
         },
-        "header": [node for node in header if isinstance(node, dict)],
-        "footer": [node for node in footer if isinstance(node, dict)],
+        **{region: _iter_dict_children(raw.get(region)) for region in SHELL_REGIONS},
+        # The global events the client watches on every page (HmiView).
+        "globalEvents": [events.get("onHmiLoaded"), events.get("onVariableChanged")]
+        if isinstance(events, dict)
+        else [],
     }
 
 
@@ -1888,7 +1868,7 @@ def _load_page_file_children(page_id: str, root: str) -> list[dict]:
 
 
 def _to_runtime_page_node(node: dict, root: str) -> dict:
-    if _is_page_group_node(node):
+    if is_page_group(node):
         return {
             **{k: v for k, v in node.items() if k != "children"},
             "type": "page-group",
@@ -1905,14 +1885,8 @@ def _to_runtime_page_node(node: dict, root: str) -> dict:
     if not raw_children:
         page_id = node.get("id", "")
         raw_children = _load_page_file_children(page_id, root) if page_id else []
-    children: list[dict] = []
-    for child in raw_children:
-        if _is_page_group_node(child):
-            children.append(_to_runtime_page_node(child, root))
-        else:
-            children.append(child)
-
-    runtime["children"] = children
+    # A page is a leaf of the index (core.page_index): its children are widgets.
+    runtime["children"] = raw_children
     runtime["type"] = runtime.get("type") or "page"
     return runtime
 
@@ -1947,7 +1921,7 @@ def _extract_binding_from_value(value: Any) -> tuple[str, str] | None:
 
 MAX_EXTRACT_BINDING_DEPTH = 64
 
-def _extract_variable_keys_from_value(value: Any, keys: set[str], depth: int = MAX_EXTRACT_BINDING_DEPTH) -> None:
+def _extract_variable_keys_from_value(value: Any, keys: ContextKeys, depth: int = MAX_EXTRACT_BINDING_DEPTH) -> None:
     """Recursively collect every canonical ``$var`` below *value*.
 
     This intentionally follows the frontend's generic property-value walker
@@ -1970,10 +1944,8 @@ def _extract_variable_keys_from_value(value: Any, keys: set[str], depth: int = M
         key = build_var_key(ds, path)
         keys.add(key)
         index = value["$var"].get("index")
-        refs = getattr(keys, "index_refs", None)
-        if refs is not None:
-            literal = isinstance(index, int) and not isinstance(index, bool) and index >= 0
-            refs.setdefault(key, set()).add(index if literal else None)
+        literal = isinstance(index, int) and not isinstance(index, bool) and index >= 0
+        keys.index_refs.setdefault(key, set()).add(index if literal else None)
         # A bound index is a source of its own, which may read another variable.
         _extract_variable_keys_from_value(index, keys, depth - 1)
         return
@@ -1982,7 +1954,7 @@ def _extract_variable_keys_from_value(value: Any, keys: set[str], depth: int = M
         _extract_variable_keys_from_value(nested, keys, depth - 1)
 
 
-def _walk_components(components: list, keys: set[str], visited: set[int] | None = None) -> None:
+def _walk_components(components: list, keys: ContextKeys, visited: set[int] | None = None) -> None:
     if visited is None:
         visited = set()
     for comp in components:

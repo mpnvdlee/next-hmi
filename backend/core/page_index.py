@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 INDEX_ROOTS: tuple[str, ...] = ("pages", "dialogs")
+SHELL_REGIONS: tuple[str, ...] = ("header", "footer", "leftSidebar", "rightSidebar")
 
 
 def page_document_dir(root: str) -> Path:

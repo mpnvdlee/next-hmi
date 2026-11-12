@@ -1518,6 +1518,16 @@ class DatasourceManager:
                 self._append_requested_cached_values(entry, keys, result)
         return result
 
+    def cached_keys(self, keys: set[str]) -> set[str]:
+        """The *keys* ``get_cached_values`` would answer, without copying a value."""
+        with self._lock:
+            return {
+                key
+                for entry in self.datasources.values()
+                for key in keys
+                if key in entry.cache and key in entry._enabled_cache_keys
+            }
+
     def get_entry(self, datasource: str, path: str) -> dict[str, Any] | None:
         """Look up a variable entry by datasource name and path."""
         entry = self._get_datasource_entry(datasource)

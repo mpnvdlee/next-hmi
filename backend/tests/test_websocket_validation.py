@@ -18,6 +18,7 @@ from conftest import (
 from services.datasource_manager import DatasourceManager
 from services.websocket_manager import (
     MAX_EXTRACT_BINDING_DEPTH,
+    ContextKeys,
     WebSocketManager,
     _collect_context_composite_keys,
     _extract_variable_keys_from_value,
@@ -77,7 +78,7 @@ def test_handle_set_context_prefetches_uncached_values(monkeypatch) -> None:
     monkeypatch.setattr(
         websocket_manager_module,
         "_resolve_context_composite_keys",
-        lambda **_kwargs: {"DS:Cached", "DS:Fresh"},
+        lambda **_kwargs: ContextKeys({"DS:Cached", "DS:Fresh"}),
     )
 
     async def _run() -> None:
@@ -112,7 +113,7 @@ def test_handle_set_context_sends_ready_immediately_when_fully_cached(monkeypatc
     monkeypatch.setattr(
         websocket_manager_module,
         "_resolve_context_composite_keys",
-        lambda **_kwargs: {"DS:Cached"},
+        lambda **_kwargs: ContextKeys({"DS:Cached"}),
     )
 
     async def _run() -> None:
@@ -125,6 +126,39 @@ def test_handle_set_context_sends_ready_immediately_when_fully_cached(monkeypatc
         {"type": "var_metadata", "meta": {}},
         {"type": "var_update", "values": {"DS:Cached": 1}},
         {"type": "context_ready", "currentPageIds": ["main"]},
+    ]
+
+
+def test_each_context_ready_echoes_the_context_it_answers(monkeypatch) -> None:
+    """Two contexts can name the same page — a return to it while the first
+    visit's read still runs — so only the context id tells the client which
+    ack, and which metadata, answers the context it sent last."""
+    manager = WebSocketManager()
+    manager.set_datasource_manager(FakeDatasourceManager())
+    manager.set_opcua_pool(FakePool(FakeEngine()))
+    ws = FakeWebSocket()
+    manager._connections["client-1"] = ws  # type: ignore[attr-defined]
+    monkeypatch.setattr(
+        websocket_manager_module,
+        "_resolve_context_composite_keys",
+        lambda **_kwargs: ContextKeys({"DS:Fresh"}),
+    )
+
+    async def _run() -> None:
+        await manager._handle_set_context("client-1", {"currentPageIds": ["main"], "contextId": 7})
+        await manager._handle_set_context("client-1", {"currentPageIds": ["main"], "contextId": 8})
+        await manager._priority_recompute_task
+        for _ in range(20):
+            if [m["type"] for m in ws.messages].count("context_ready") == 2:
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(_run())
+
+    assert [(m["type"], m.get("contextId")) for m in ws.messages if m["type"] != "var_update"] == [
+        ("var_metadata", 7),
+        ("context_ready", 7),
+        ("context_ready", 8),
     ]
 
 
@@ -384,6 +418,50 @@ def test_sockets_opening_one_page_together_share_its_reads() -> None:
         assert manager._connections[f"c{s}"].messages[-1]["type"] == "context_ready"
 
 
+def test_a_page_reading_two_datasources_gets_the_first_as_it_is_by_the_end() -> None:
+    """The datasources are read one after another. A change to the first one's
+    value while the second's read is awaited must reach the frame and the
+    cache: seeded only after the last read, the first result put the older
+    value back over it and sent it."""
+    datasource_manager = DatasourceManager()
+    for name in ("A", "B"):
+        datasource_manager.apply_config(name, {"name": name, "type": "opcua-client", "variables": [
+            {"kind": "variable", "display_name": "V", "data_type": "Float", "node_id": f"ns=2;s={name}",
+             "enabled": True},
+        ]})
+    order: list[str] = []
+
+    class _Engine(FakeEngine):
+        def __init__(self, name: str) -> None:
+            super().__init__()
+            self.name = name
+
+        async def read_current_values(self, paths: set[str]) -> dict[str, object]:
+            order.append(self.name)
+            if len(order) == 2:
+                datasource_manager.update(order[0], "V", 9.0)
+            await asyncio.sleep(0)
+            return {f"{self.name}:V": 1.0}
+
+    class _Pool(FakePool):
+        def get(self, name: str) -> FakeEngine | None:
+            return engines.get(name)
+
+    engines = {name: _Engine(name) for name in ("A", "B")}
+    manager = WebSocketManager()
+    manager.set_datasource_manager(datasource_manager)
+    manager.set_opcua_pool(_Pool(None))
+    ws = FakeWebSocket()
+    manager._connections["c1"] = ws  # type: ignore[attr-defined]
+    manager._client_keys["c1"] = {"A:V", "B:V"}
+
+    asyncio.run(manager._send_uncached_values("c1", {"A:V", "B:V"}))
+
+    first, second = (f"{name}:V" for name in order)
+    assert ws.messages[-1]["values"] == {first: 9.0, second: 1.0}
+    assert datasource_manager.get_cached_values({first}) == {first: 9.0}
+
+
 def test_a_disconnect_drops_the_context_still_waiting_for_its_turn() -> None:
     datasource_manager = _plc(10)
     manager = WebSocketManager()
@@ -424,7 +502,7 @@ def test_priority_batch_delay_follows_an_edited_datasource() -> None:
 
 
 def test_extract_variable_keys_handles_nested_if() -> None:
-    keys: set[str] = set()
+    keys = ContextKeys()
     payload = {
         "$if": {
             "condition": {"$var": {"path": "DS:Cond"}},
@@ -439,7 +517,7 @@ def test_extract_variable_keys_handles_nested_if() -> None:
 
 
 def test_extract_variable_keys_handles_string_wildcards_switch_when_and_plain_records() -> None:
-    keys: set[str] = set()
+    keys = ContextKeys()
     payload = {
         "$stringExpr": {
             "template": "{1}",
@@ -463,7 +541,7 @@ def test_extract_variable_keys_handles_string_wildcards_switch_when_and_plain_re
 
 
 def test_extract_variable_keys_walks_and_or_items() -> None:
-    keys: set[str] = set()
+    keys = ContextKeys()
     payload = {"$and": [
         {"$var": {"path": "DS:Ready"}},
         {"$or": [{"$not": {"value": {"$var": {"path": "DS:Fault"}}}}, True]},
@@ -475,7 +553,7 @@ def test_extract_variable_keys_walks_and_or_items() -> None:
 
 
 def test_extract_variable_keys_follows_a_bound_index() -> None:
-    keys: set[str] = set()
+    keys = ContextKeys()
     payload = {"$var": {"path": "DS:Open", "index": {"$var": {"path": "DS:Selected"}}}}
 
     _extract_variable_keys_from_value(payload, keys)
@@ -484,7 +562,7 @@ def test_extract_variable_keys_follows_a_bound_index() -> None:
 
 
 def test_context_keys_record_how_an_array_is_addressed() -> None:
-    keys = websocket_manager_module.ContextKeys()
+    keys = ContextKeys()
     _extract_variable_keys_from_value({"$var": {"path": "DS:Motors", "index": 3}}, keys)
     _extract_variable_keys_from_value({"$var": {"path": "DS:Motors", "index": 7}}, keys)
     _extract_variable_keys_from_value({"$var": {"path": "DS:Pumps", "repeatIndex": True}}, keys)
@@ -507,7 +585,7 @@ def test_promotion_keys_promote_only_the_literally_indexed_elements() -> None:
         {"kind": "folder", "name": "Motors", "is_array": True, "children": [element(i) for i in range(5)]},
         {"kind": "folder", "name": "Pumps", "is_array": True, "children": [element(i) for i in range(2)]},
     ]})
-    keys = websocket_manager_module.ContextKeys({"DS:Motors", "DS:Pumps", "DS:Plain"})
+    keys = ContextKeys({"DS:Motors", "DS:Pumps", "DS:Plain"})
     keys.index_refs = {"DS:Motors": {1, 3, 99}, "DS:Pumps": {0, None}}
 
     promoted = websocket_manager_module._promotion_keys(keys, dm)
@@ -515,12 +593,12 @@ def test_promotion_keys_promote_only_the_literally_indexed_elements() -> None:
     # Motors: two bound elements instead of the whole array (99 is out of range);
     # Pumps: also bound whole somewhere, so it stays whole; Plain is untouched.
     assert promoted == {"DS:Motors/Motors[1]", "DS:Motors/Motors[3]", "DS:Pumps", "DS:Plain"}
-    # A plain set (an explicit priorityKeys context) is promoted as is.
-    assert websocket_manager_module._promotion_keys({"DS:Motors"}, dm) == {"DS:Motors"}
+    # A key with no index refs (an explicit priorityKeys context) is promoted as is.
+    assert websocket_manager_module._promotion_keys(ContextKeys({"DS:Motors"}), dm) == {"DS:Motors"}
 
 
 def test_extract_variable_keys_stops_at_depth_limit() -> None:
-    keys: set[str] = set()
+    keys = ContextKeys()
     nested: dict[str, object] = {"$var": {"path": "DS:Deep"}}
 
     for _ in range(MAX_EXTRACT_BINDING_DEPTH + 10):
@@ -684,41 +762,80 @@ def test_collect_context_keys_resolves_a_page_in_the_dialogs_folder(monkeypatch,
     assert keys == {"DS:Motor/Temp"}
 
 
-def test_collect_context_keys_v2_group_warms_all_sibling_pages(monkeypatch, tmp_path) -> None:
-    """Visiting a page inside a group should warm all sibling pages in that group."""
-    pages_dir = tmp_path / "pages"
-    pages_dir.mkdir()
+def _bound(widget_id: str, path: str) -> dict:
+    return {"id": widget_id, "type": "Label", "properties": {"value": {"$var": {"path": path}}}}
 
-    (pages_dir / "page-1.json").write_text(json.dumps({
-        "id": "page-1",
-        "sections": {"content": [{"id": "c1", "type": "Label", "properties": {
-            "value": {"$var": {"path": "DS:Tag/A"}},
-        }}]},
-    }))
-    (pages_dir / "page-2.json").write_text(json.dumps({
-        "id": "page-2",
-        "sections": {"content": [{"id": "c2", "type": "Label", "properties": {
-            "value": {"$var": {"path": "DS:Tag/B"}},
-        }}]},
-    }))
 
-    monkeypatch.setattr(storage_module, "active_pages_dir", lambda: pages_dir)
-
-    config = {
+def _grouped_project(monkeypatch, tmp_path) -> dict:
+    """A settings group holding two pages and a nested diagnostics group of
+    two more — group → group → page, as a real project nests its modules.
+    Each page binds its own tag; each group's header band binds one too."""
+    pages_dir, _dialogs_dir = _runtime_dirs(monkeypatch, tmp_path)
+    for page_id in ("control-units", "machine-parameters", "diag-master", "diag-slave"):
+        (pages_dir / f"{page_id}.json").write_text(json.dumps(
+            {"sections": {"content": [_bound(f"w-{page_id}", f"DS:Page/{page_id}")]}}
+        ))
+    return {
         "version": 2,
         "pages": [{
-            "id": "grp-1", "title": "Group", "type": "page-group",
+            "id": "settings", "type": "page-group",
+            "header": [_bound("settings-title", "DS:Group/settings")],
             "children": [
-                {"id": "page-1", "title": "Tab 1", "type": "page"},
-                {"id": "page-2", "title": "Tab 2", "type": "page"},
+                {"id": "control-units", "type": "page"},
+                {"id": "machine-parameters", "type": "page"},
+                {
+                    "id": "diagnostics", "type": "page-group",
+                    "footer": [_bound("diag-status", "DS:Group/diagnostics")],
+                    "children": [
+                        {"id": "diag-master", "type": "page"},
+                        {"id": "diag-slave", "type": "page"},
+                    ],
+                },
             ],
         }],
-        "header": [], "footer": [], "dialogs": [],
+        "header": [_bound("clock", "DS:Clock")], "footer": [], "dialogs": [],
     }
 
-    keys = _collect_context_composite_keys(config, current_page_ids=["page-1"])
-    assert "DS:Tag/A" in keys
-    assert "DS:Tag/B" in keys  # sibling page is also warmed
+
+def test_a_page_in_a_group_resolves_to_itself_not_its_whole_group(monkeypatch, tmp_path) -> None:
+    """A page directly under a top-level group gets its own bindings and the
+    bands that frame it (the shell's, its group's) — none of the pages beside
+    it, nor the groups nested next to it. Collecting the whole group put a
+    page with no bindings of its own on thousands of monitored items."""
+    config = _grouped_project(monkeypatch, tmp_path)
+
+    keys = _collect_context_composite_keys(config, current_page_ids=["control-units"])
+
+    assert keys == {"DS:Clock", "DS:Group/settings", "DS:Page/control-units"}
+
+
+def test_a_page_in_a_nested_group_is_found(monkeypatch, tmp_path) -> None:
+    """group → group → page: the walk reaches the page, and it carries the
+    band of every group around it."""
+    config = _grouped_project(monkeypatch, tmp_path)
+
+    keys = _collect_context_composite_keys(config, current_page_ids=["diag-master"])
+
+    assert keys == {"DS:Clock", "DS:Group/settings", "DS:Group/diagnostics", "DS:Page/diag-master"}
+
+
+@pytest.mark.parametrize("whole", [
+    {"leftSidebar": [_bound("alarms", "DS:Motors")]},
+    {"globalEvents": {"onVariableChanged": [{"variable": {"$var": {"path": "DS:Motors"}}, "actions": []}]}},
+])
+def test_an_array_the_shell_binds_whole_stays_wanted_whole(monkeypatch, tmp_path, whole) -> None:
+    """A page binding an array at a literal index alone promotes that element.
+    A sidebar or a global variable trigger reading the whole array is in every
+    context the client sends; unless the server counts it too, the client's
+    key for it is taken as the page's indexed one and the array never arrives."""
+    config = {**_grouped_project(monkeypatch, tmp_path), **whole}
+    (tmp_path / "pages" / "diag-master.json").write_text(json.dumps({"sections": {"content": [
+        {"id": "w", "type": "Label", "properties": {"value": {"$var": {"path": "DS:Motors", "index": 3}}}},
+    ]}}))
+
+    keys = _collect_context_composite_keys(config, current_page_ids=["diag-master"])
+
+    assert keys.index_refs["DS:Motors"] == {3, None}
 
 
 def test_set_context_walks_each_page_once_per_config(monkeypatch, tmp_path) -> None:
@@ -748,26 +865,29 @@ def test_set_context_walks_each_page_once_per_config(monkeypatch, tmp_path) -> N
     page_ids = ["page-1", "page-3", "nope"] * 500
     expected = _collect_context_composite_keys(config, current_page_ids=page_ids)
     walks: list[str] = []
-    walk = websocket_manager_module._collect_active_scope_composite_keys
+    walk = websocket_manager_module._collect_page_composite_keys
 
     def counting(nodes, page_id, keys):
         walks.append(page_id)
         return walk(nodes, page_id, keys)
 
-    monkeypatch.setattr(websocket_manager_module, "_collect_active_scope_composite_keys", counting)
+    monkeypatch.setattr(websocket_manager_module, "_collect_page_composite_keys", counting)
 
     def resolve() -> set[str]:
         return websocket_manager_module._resolve_context_composite_keys(
             current_page_ids=page_ids, explicit_priority_keys={"DS:Extra"}
         )
 
-    assert resolve() == expected | {"DS:Extra"} == {"DS:Clock", "DS:Tag/A", "DS:Tag/B", "DS:Tag/C", "DS:Extra"}
-    assert sorted(walks) == ["page-1", "page-3"]
+    assert resolve() == expected | {"DS:Extra"} == {"DS:Clock", "DS:Tag/A", "DS:Tag/C", "DS:Extra"}
+    # The walk recurses into groups through the same function, so a count
+    # per resolve, not per page.
+    assert sorted(set(walks)) == ["page-1", "page-3"]
+    walked = len(walks)
     resolve()
-    assert len(walks) == 2
+    assert len(walks) == walked
     websocket_manager_module.invalidate_runtime_pages_config_cache()
     resolve()
-    assert len(walks) == 4
+    assert len(walks) == 2 * walked
 
 
 def test_collect_context_keys_v1_inline_children_still_work(monkeypatch, tmp_path) -> None:

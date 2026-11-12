@@ -130,6 +130,9 @@ class FakeDatasourceManager:
     def get_cached_values(self, keys: set[str]) -> dict[str, Any]:
         return {key: self.cached[key] for key in keys if key in self.cached}
 
+    def cached_keys(self, keys: set[str]) -> set[str]:
+        return keys & self.cached.keys()
+
     def seed_cached_values(self, updates: dict[str, Any]) -> None:
         self.seeded.update(updates)
         self.cached.update(updates)
