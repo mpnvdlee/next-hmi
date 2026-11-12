@@ -91,6 +91,7 @@ class FakeDatasourceEntry:
     registry: dict[str, dict[str, Any]] = field(default_factory=dict)
     folder_registry: dict[str, dict[str, Any]] = field(default_factory=dict)
     cache: dict[str, Any] = field(default_factory=dict)
+    derived: dict[str, Any] = field(default_factory=dict)
 
 
 class FakeDatasourceManager:
@@ -131,6 +132,7 @@ class FakeDatasourceManager:
 
     def seed_cached_values(self, updates: dict[str, Any]) -> None:
         self.seeded.update(updates)
+        self.cached.update(updates)
 
     def known_keys(self, keys: set[str]) -> set[str]:
         return {key for key in keys if key.partition(":")[0] in self.datasources}

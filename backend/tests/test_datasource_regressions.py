@@ -286,6 +286,25 @@ def test_snapshot_and_get_cached_values_return_defensive_copies() -> None:
     assert entry.cache[key] == {"nested": [1, 2]}
 
 
+def test_a_seed_reaches_each_key_s_own_datasource() -> None:
+    """The entry is looked up once per run of one datasource's keys, and
+    again whenever the datasource changes, ``A`` to ``AB`` included."""
+    manager = DatasourceManager()
+    a = DatasourceEntry({"name": "A", "type": "opcua-client", "variables": []})
+    ab = DatasourceEntry({"name": "AB", "type": "opcua-client", "variables": []})
+    manager.datasources.update(A=a, AB=ab)
+    a.cache["A:kept"] = 1
+    nested = {"nested": [1]}
+
+    manager.seed_cached_values(
+        {"A:x": nested, "AB:x": 2, "Gone:x": 3, "A:kept": 4, "A:y": 5}, overwrite=False,
+    )
+
+    assert a.cache == {"A:kept": 1, "A:x": {"nested": [1]}, "A:y": 5}
+    assert ab.cache == {"AB:x": 2}
+    assert a.cache["A:x"]["nested"] is not nested["nested"]
+
+
 def test_delete_datasource_broadcasts_removed_keys(monkeypatch) -> None:
     entry = FakeDatasourceEntry(
         config={},
@@ -358,8 +377,29 @@ def test_subscription_status_reports_fast_sub_tuning() -> None:
             "priority_sampling_interval_revised_min_ms": 15.0,
             "priority_sampling_interval_revised_max_ms": 20.0,
             "priority_ws_batch_ms": 10.0,
+            "bg_queue_depth": None,
+            "priority_queue_depth": None,
         }
     }
+
+
+def test_subscription_status_reports_each_subscriptions_event_queue_depth() -> None:
+    """Notifications received but not yet handled: a growing number means the
+    consumer is falling behind an unbounded queue."""
+
+    class _Sub:
+        def __init__(self, queued: int) -> None:
+            self._event_queue: asyncio.Queue = asyncio.Queue()
+            for i in range(queued):
+                self._event_queue.put_nowait(i)
+
+    engine = DatasourceOpcuaEngine("DS")
+    engine._background_sub = _Sub(3)
+    engine._priority_sub = _Sub(0)
+
+    status = engine.subscription_status()
+
+    assert (status["bg_queue_depth"], status["priority_queue_depth"]) == (3, 0)
 
 
 def test_connection_status_empty_pool_returns_empty_mapping() -> None:
@@ -409,10 +449,16 @@ def test_connection_status_is_a_point_in_time_snapshot() -> None:
     assert pool.connection_status() == {"New": False}
 
 
+class _Node:
+    def __init__(self, node_id: str) -> None:
+        self.nodeid = node_id
+
+
 class _FakePrioritySubscription:
     def __init__(self, handles: list[object], raise_on_modify: bool = False) -> None:
         self._handles = handles
         self.raise_on_modify = raise_on_modify
+        self.modify_calls = 0
 
     async def subscribe_data_change(self, nodes: list[object], sampling_interval: float):
         return self._handles
@@ -424,6 +470,7 @@ class _FakePrioritySubscription:
         new_queuesize: int = 0,
         mod_filter_val: int = -1,
     ):
+        self.modify_calls += 1
         if self.raise_on_modify:
             raise RuntimeError("modify failed")
         item = ua.MonitoredItemModifyResult()
@@ -438,12 +485,28 @@ def test_priority_subscribe_helper_uses_public_api_and_collects_revised_sampling
     engine._priority_sub = _FakePrioritySubscription([101, ua.StatusCode(ua.StatusCodes.Bad)])
 
     handles, revised = asyncio.run(
-        engine._subscribe_priority_nodes_with_revised_sampling([("A", object())], None),
+        engine._subscribe_priority_nodes_with_revised_sampling([("A", _Node("A"))], None),
     )
 
     assert handles[0] == 101
     assert isinstance(handles[1], ua.StatusCode)
     assert revised == [12.5]
+
+
+def test_priority_subscribe_helper_reads_revised_sampling_once_per_connection() -> None:
+    """Diagnostics only: a ModifyMonitoredItems round trip on every page
+    switch, under the transition lock, bought nothing after the first."""
+    engine = DatasourceOpcuaEngine("DS")
+    engine._priority_sub = sub = _FakePrioritySubscription([101])
+
+    for _ in range(3):
+        _, revised = asyncio.run(
+            engine._subscribe_priority_nodes_with_revised_sampling([("A", _Node("A"))], None),
+        )
+        engine._record_priority_revised_sampling(revised)
+
+    assert sub.modify_calls == 1
+    assert engine._priority_revised_sampling_count == 1
 
 
 def test_priority_subscribe_helper_ignores_modify_failures() -> None:
@@ -452,7 +515,7 @@ def test_priority_subscribe_helper_ignores_modify_failures() -> None:
     engine._priority_sub = _FakePrioritySubscription([202], raise_on_modify=True)
 
     handles, revised = asyncio.run(
-        engine._subscribe_priority_nodes_with_revised_sampling([("A", object())], None),
+        engine._subscribe_priority_nodes_with_revised_sampling([("A", _Node("A"))], None),
     )
 
     assert handles == [202]
@@ -462,12 +525,17 @@ def test_priority_subscribe_helper_ignores_modify_failures() -> None:
 class _FakeFilterSubscription:
     """Records one CreateMonitoredItems request as (node, filtered?) pairs and
     the plain subscribe_data_change calls; nodes named in `refuse_filter` get
-    a Bad status when asked for with a filter."""
+    `refuse_code` when asked for with a filter."""
 
-    def __init__(self, refuse_filter: set[str] = frozenset()) -> None:
+    def __init__(
+        self,
+        refuse_filter: set[str] = frozenset(),
+        refuse_code: int = ua.StatusCodes.BadFilterNotAllowed,
+    ) -> None:
         self.requests: list[list[tuple[str, bool]]] = []
         self.plain: list[list[str]] = []
         self.refuse_filter = refuse_filter
+        self.refuse_code = refuse_code
         self._next = 1
 
     def _handle(self) -> int:
@@ -477,17 +545,17 @@ class _FakeFilterSubscription:
     def _make_monitored_item_request(self, node, attr, mfilter, queuesize, monitoring, sampling_interval):
         if mfilter is not None:
             assert mfilter.DeadbandType == ua.DeadbandType.Absolute and mfilter.DeadbandValue == 0.5
-        return (node, mfilter is not None)
+        return (node.nodeid, mfilter is not None)
 
     async def create_monitored_items(self, requests):
         self.requests.append(list(requests))
         return [
-            ua.StatusCode(ua.StatusCodes.BadFilterNotAllowed) if filtered and node in self.refuse_filter else self._handle()
+            ua.StatusCode(self.refuse_code) if filtered and node in self.refuse_filter else self._handle()
             for node, filtered in requests
         ]
 
     async def subscribe_data_change(self, nodes, sampling_interval):
-        self.plain.append(list(nodes))
+        self.plain.append([node.nodeid for node in nodes])
         return [self._handle() for _ in nodes]
 
 
@@ -497,6 +565,8 @@ def _deadband_engine(registry: dict) -> DatasourceOpcuaEngine:
 
     entry = _Entry()
     entry.registry = registry
+    entry.folder_registry = {}
+    entry.derived = {}
     engine = DatasourceOpcuaEngine("DS")
     engine._config = {"deadband_abs": 0.5}
     engine._ds_entry_for_test = entry
@@ -513,7 +583,7 @@ def test_create_items_puts_a_deadband_on_numeric_scalars_only_in_one_request() -
     }
     engine = _deadband_engine(registry)
     sub = _FakeFilterSubscription()
-    items = [(path, path) for path in registry]  # node stands in by its path
+    items = [(path, _Node(path)) for path in registry]
 
     handles = asyncio.run(engine._create_items(sub, items, engine._ds_entry_for_test, 50.0))
 
@@ -522,11 +592,20 @@ def test_create_items_puts_a_deadband_on_numeric_scalars_only_in_one_request() -
     assert all(isinstance(h, int) for h in handles) and len(handles) == 5
 
 
-def test_create_items_retries_a_refused_filter_without_it_and_remembers() -> None:
+@pytest.mark.parametrize(
+    "refuse_code",
+    [
+        ua.StatusCodes.BadFilterNotAllowed,
+        ua.StatusCodes.BadMonitoredItemFilterUnsupported,
+        ua.StatusCodes.BadMonitoredItemFilterInvalid,
+        ua.StatusCodes.BadDeadbandFilterInvalid,
+    ],
+)
+def test_create_items_retries_a_refused_filter_without_it_and_remembers(refuse_code) -> None:
     registry = {"Temp": {"data_type": "Float"}, "Pressure": {"data_type": "Double"}}
     engine = _deadband_engine(registry)
-    sub = _FakeFilterSubscription(refuse_filter={"Pressure"})
-    items = [("Temp", "Temp"), ("Pressure", "Pressure")]
+    sub = _FakeFilterSubscription(refuse_filter={"Pressure"}, refuse_code=refuse_code)
+    items = [("Temp", _Node("Temp")), ("Pressure", _Node("Pressure"))]
 
     handles = asyncio.run(engine._create_items(sub, items, engine._ds_entry_for_test, -1))
     assert sub.requests == [[("Temp", True), ("Pressure", True)]]
@@ -538,11 +617,28 @@ def test_create_items_retries_a_refused_filter_without_it_and_remembers() -> Non
     assert sub.plain == [["Pressure"], ["Temp", "Pressure"]] and len(sub.requests) == 1
 
 
+def test_create_items_keeps_the_deadband_when_an_item_is_refused_for_itself() -> None:
+    """An unknown node is no verdict on the filter: it is not created again
+    without one, and the next request still asks for the deadband."""
+    registry = {"Temp": {"data_type": "Float"}, "Gone": {"data_type": "Float"}}
+    engine = _deadband_engine(registry)
+    sub = _FakeFilterSubscription(refuse_filter={"Gone"}, refuse_code=ua.StatusCodes.BadNodeIdUnknown)
+    items = [("Temp", _Node("Temp")), ("Gone", _Node("Gone"))]
+
+    handles = asyncio.run(engine._create_items(sub, items, engine._ds_entry_for_test, -1))
+    assert isinstance(handles[0], int)
+    assert handles[1] == ua.StatusCode(ua.StatusCodes.BadNodeIdUnknown)
+    assert sub.plain == [] and engine._deadband_refused is False
+
+    asyncio.run(engine._create_items(sub, items[:1], engine._ds_entry_for_test, -1))
+    assert sub.requests[-1] == [("Temp", True)]
+
+
 def test_create_items_without_numeric_or_deadband_uses_one_plain_request() -> None:
     engine = _deadband_engine({"Run": {"data_type": "Boolean"}})
     sub = _FakeFilterSubscription()
-    asyncio.run(engine._create_items(sub, [("Run", "Run")], engine._ds_entry_for_test, -1))
+    asyncio.run(engine._create_items(sub, [("Run", _Node("Run"))], engine._ds_entry_for_test, -1))
     engine._config = {"deadband_abs": 0}
-    asyncio.run(engine._create_items(sub, [("Run", "Run")], engine._ds_entry_for_test, -1))
+    asyncio.run(engine._create_items(sub, [("Run", _Node("Run"))], engine._ds_entry_for_test, -1))
 
     assert sub.requests == [] and sub.plain == [["Run"], ["Run"]]

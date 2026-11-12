@@ -74,6 +74,51 @@ heading.
   Connected Runtimes table shows per browser how many keys its context holds
   and how much it has been sent.
 
+- **Writes to TwinCAT and S7 PLCs were refused.** A write carried a source
+  timestamp, which they reject (`BadWriteNotSupported`); it now sends the
+  value alone.
+
+- **The runtime no longer stalls on a page switch against a large PLC.**
+  Against 72,000 variables it could hang for up to 30 s.
+
+- **Large pages no longer drop the TwinCAT connection.** Reads and
+  subscriptions are split to fit the server's 4 MiB request limit.
+
+- **Values arrive sooner after a PLC reconnects.** After a dropped
+  connection the HMI tries again within half a second instead of waiting out
+  **Reconnect (s)** (5 s by default) first, and waits longer, up to that
+  setting, while the PLC stays away: in a test the data was back within a
+  second of the PLC instead of up to 4.4 s. The open page is subscribed
+  first, before the background subscription is rebuilt.
+
+- **Values were missing after the HMI connected to a PLC.** A value the PLC
+  sent the moment it was subscribed could be dropped, and stayed missing
+  until it next changed: the first page after a start showed 1 of its 160
+  values in a test, values that changed during a short outage stayed stale
+  after the reconnect, and on a PLC that limits how many variables one
+  request may subscribe most of a large page stayed blank. The HMI is now
+  ready for each value before it asks the PLC to send it.
+
+- **An outage no longer leaves load behind on the PLC for hours.** Each
+  reconnect starts new subscriptions, and the ones the dropped connection
+  left behind kept their variables on the PLC for 8 minutes to several
+  hours. They now expire after about two minutes.
+
+- **A variable no longer goes without values after a busy PLC refused it.** A
+  variable the PLC refused or did not answer while moving between the page's
+  fast subscription and the background one was retried once and then dropped
+  until the next reconnect, and a page switch that timed out could leave it
+  with no subscription at all. It now goes back to the background and is
+  retried at the health checks until the PLC takes it, waiting twice as many
+  checks after each refusal, up to 16, so a PLC at its monitored-item limit is
+  not asked again every few seconds. A node the PLC does not know is not
+  retried.
+
+- **A PLC that stops publishing a subscription is reconnected cleanly.** The
+  OPC-UA library re-created such a subscription under new handles the HMI
+  never learned, so a later page switch left variables subscribed twice on the
+  PLC. The HMI now reconnects instead.
+
 - **Saving a datasource's settings no longer undoes variable edits.** Saving
   settings and variables together could write the variable tree back as it was
   before the edits, when the variables save finished first.
@@ -85,11 +130,39 @@ heading.
   running project now applies the agent's edit itself, one save after the
   other.
 
+- **A static variable write updates the struct around its array.** Writing a
+  member of an array element in a static datasource updated the element and
+  the array, but a struct holding that array kept showing the old value.
+
 - **Saving a datasource no longer stalls live values.**
+
+- **Bursts of struct-array changes cost less.** Each touched element is
+  copied once per event-loop turn, not once per member: about 6× less backend
+  time for 8,000 members changing at once.
+
+- **Fast-changing struct arrays cost less server CPU.** On a page with a
+  250-slave EtherCAT diagnostics array taking 10,000 changes a second, the
+  server's CPU went from about 55% to about 32%.
 
 - **The first page after a start or a datasource save no longer pauses.**
   Describing a large PLC's variables held the server up for up to half a
   second; that now happens in the background.
+
+- **Nested arrays of structs keep their shape.** After one member of an
+  element changed, a struct bound whole that holds an array of structs from
+  a TwinCAT PLC, whose elements are named `stSetupPosition[1]` rather than
+  `[1]`, received that array as named entries instead of a list, and an
+  array of structs inside another array of structs lost all but the changed
+  element. Both stay lists now.
+
+- **Struct bindings deliver their nested arrays.** A struct bound whole
+  subscribed and read only the members outside the arrays it holds, so an
+  array inside it could stay missing: one TwinCAT device struct got 145 of
+  its 577 members. It now arrives whole, each array inside it a list in
+  element order, an array of arrays a list of lists. This raises the PLC
+  subscriptions on pages that bind such structs: on one project 9 of 113
+  pages subscribe more, all pages together 26% more variables (46,784
+  instead of 37,004).
 
 - **On Windows, a save or widget build could fail while a virus scanner held
   the file.** The write now retries briefly.

@@ -1,6 +1,7 @@
 """Tests for DatasourceOpcuaEngine connect/reconnect state handling."""
 
 import asyncio
+import contextlib
 
 import opcua.engine as engine_module
 import pytest
@@ -139,3 +140,84 @@ async def test_reconnect_loop_survives_zero_interval():
     engine._shutdown = True
 
     await engine._reconnect_loop()  # must not raise / spin
+
+
+# ── Reconnect timing and abandoned subscriptions ──────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_a_failed_connect_is_retried_soon_then_less_often(monkeypatch):
+    """Most outages are a PLC restart, over in a second or two: the first
+    retry comes after half a second, later ones back off to the interval."""
+    engine = DatasourceOpcuaEngine("DS")
+    engine._config = {"reconnect_interval_s": 3}
+    attempts = 0
+
+    async def refused() -> None:
+        nonlocal attempts
+        attempts += 1
+        engine._shutdown = attempts == 6
+        raise ConnectionRefusedError
+
+    monkeypatch.setattr(engine, "_do_connect", refused)
+    delays: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def recording_sleep(delay: float, *args, **kwargs) -> None:
+        delays.append(delay)
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", recording_sleep)
+
+    await engine._reconnect_loop()
+
+    assert delays == [0.5, 1.0, 2.0, 3.0, 3.0, 3.0]
+
+
+@pytest.mark.asyncio
+async def test_a_dropped_connection_is_retried_soon_not_after_the_interval(monkeypatch):
+    """A drop wakes the loop out of its health-check wait; a server that
+    keeps dropping the connection is retried less and less often."""
+    engine = DatasourceOpcuaEngine("DS")
+    engine._config = {"reconnect_interval_s": 300}
+    connects: asyncio.Queue[None] = asyncio.Queue()
+
+    async def connect() -> None:
+        engine._connected = True
+        connects.put_nowait(None)
+
+    monkeypatch.setattr(engine, "_do_connect", connect)
+    delays: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def recording_sleep(delay: float, *args, **kwargs) -> None:
+        delays.append(delay)
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", recording_sleep)
+    loop_task = asyncio.create_task(engine._reconnect_loop())
+    try:
+        for _ in range(3):
+            await asyncio.wait_for(connects.get(), 1)
+            await engine._close_client()  # what a lost connection's status change does
+        await asyncio.wait_for(connects.get(), 1)
+    finally:
+        engine._shutdown = True
+        loop_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await loop_task
+
+    assert delays == [0.5, 1.0, 2.0]
+
+
+@pytest.mark.parametrize(
+    ("interval_ms", "lifetime_s"), [(10.0, 120), (50.0, 120), (1000.0, 120), (60_000.0, 720)],
+)
+def test_a_subscription_left_behind_expires_in_minutes(interval_ms, lifetime_s):
+    """A reconnect never resumes a subscription; the dropped connection's
+    held its items on the PLC for 500 s at 50 ms, and they piled up."""
+    params = DatasourceOpcuaEngine("DS")._make_sub_params(interval_ms, priority=0)
+
+    # OPC UA Part 4 § 5.13.2: at least three keep-alive intervals.
+    assert params.RequestedLifetimeCount >= 3 * params.RequestedMaxKeepAliveCount
+    assert params.RequestedLifetimeCount * interval_ms / 1000 == lifetime_s

@@ -114,6 +114,10 @@ On accept, the backend sends, in order:
    array's are those of its lowest-index element. `type` is the
    canonical `VarType` (`frontend/src/shared/types/varType.ts`). `min`/`max`
    appear on a scalar with a configured range, `fieldRanges` on a struct.
+   `position` is on every element folder of a struct array: its 0-based index
+   in that array whatever the PLC's lower bound (`[1]` of an `ARRAY[1..10]` is
+   position 0); a frame may hold only the elements a page binds, so the client
+   finds a bound index's element by its `position`.
    `writable` is on every scalar: the variable's own `writable` flag (an
    OPC-UA node's access level as browsed, the authored flag on a static or
    test-server variable), `false` when unset. The runtime binding check reads

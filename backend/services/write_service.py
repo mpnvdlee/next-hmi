@@ -833,7 +833,12 @@ async def write_value(
             return WriteOutcome(False, REASON_ARRAY_STATE_UNAVAILABLE)
         try:
             await engine.write_node(node_id, write_val, variant_type_for_data_type(data_type))
-        except Exception:
+        except Exception as exc:
+            # The reason code is all the client gets; the server's StatusCode
+            # (access denied, type mismatch, …) is only here.
+            logger.warning(
+                "Write to %s:%s (%s, %s) failed: %s", ds_name, path, node_id, data_type, exc,
+            )
             return WriteOutcome(False, REASON_WRITE_FAILED)
         if ds_entry is not None and _ARRAY_INDEX_RE.search(path):
             # Reflect the patched array in the cache so a later element write to

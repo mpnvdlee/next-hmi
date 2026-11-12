@@ -45,7 +45,6 @@ from .limits import (
 )
 from .pool import OpcuaPool, opcua_pool
 from .routing import (
-    _collect_struct_leaf_paths,
     _root_folder_paths,
     _struct_field_routes,
 )
@@ -80,7 +79,6 @@ __all__ = [
     "_BrowseProgress",
     "_DsSubHandler",
     "_builtin_data_type_name",
-    "_collect_struct_leaf_paths",
     "_decode_var_attrs",
     "_endpoint_supported",
     "_normalize_discovery_url",
