@@ -383,7 +383,7 @@ function OpcuaClientFields({
       </PropRow>
       <PropRow
         label="Deadband"
-        description="Absolute change a numeric value must make before the server publishes it. 0 turns it off."
+        description="Numbers that change by less than this are not sent. Set 0 when a value's useful changes are this small."
       >
         <input
           className="cfg-prop-input"

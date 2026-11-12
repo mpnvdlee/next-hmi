@@ -249,6 +249,9 @@ heading.
   pages subscribe more, all pages together 26% more variables (46,784
   instead of 37,004).
 
+- **Re-browsing a large server is faster.** The changes list stays responsive
+  with tens of thousands of rows, and applying it no longer walks the tree.
+
 - **On Windows, a save or widget build could fail while a virus scanner held
   the file.** The write now retries briefly.
 

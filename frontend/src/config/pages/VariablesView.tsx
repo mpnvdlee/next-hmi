@@ -25,7 +25,7 @@ export default function VariablesView() {
   const requestBrowse = useVariablesDomainStore((s) => s.requestBrowse);
   const deleteDatasource = useVariablesDomainStore((s) => s.deleteDatasource);
   const saveSettings = useVariablesDomainStore((s) => s.saveSettings);
-  const refreshSelected = useVariablesDomainStore((s) => s.refreshSelected);
+  const applySavedVariables = useVariablesDomainStore((s) => s.applySavedVariables);
   const listError = useVariablesDomainStore((s) => s.listError);
   const configError = useVariablesDomainStore((s) => s.configError);
   const actionError = useVariablesDomainStore((s) => s.actionError);
@@ -90,7 +90,7 @@ export default function VariablesView() {
       center={
         <DatasourceVariableTable
           datasource={selectedConfig}
-          onVariablesChange={refreshSelected}
+          onVariablesChange={applySavedVariables}
           error={actionError ?? configError ?? listError}
         />
       }
