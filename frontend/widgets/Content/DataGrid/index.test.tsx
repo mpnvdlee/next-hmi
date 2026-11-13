@@ -70,6 +70,8 @@ describe('DataGrid', () => {
     __resetForTests();
     useVariableStore.setState({ values: {}, varMeta: {} });
     useComponentPropStore.setState({ props: {} });
+    useConfigStore.setState({ valueMaps: [], dialogs: [] });
+    useHmiStore.setState({ openPageOverlays: [] });
   });
 
   it('keeps only the rows in view in the DOM', () => {
@@ -250,6 +252,39 @@ describe('DataGrid', () => {
 
     expect(useHmiStore.getState().openPageOverlays.at(-1)?.componentProperties).toEqual({
       slave: { $var: { path: 'PLC:Slaves/Slaves[2]' } },
+    });
+  });
+
+  it("hands a dialog the array at the chosen row's position for `[#]`", async () => {
+    const user = userEvent.setup();
+    useVariableStore.setState({ values: { 'PLC:Names': ['Krat', 'Doos'] } });
+    useConfigStore.setState({
+      dialogs: [
+        {
+          id: 'name',
+          type: 'page',
+          title: 'Name',
+          componentProperties: { name: { type: 'string', label: 'Name', mode: 'binding' } },
+        },
+      ],
+    } as never);
+    renderGrid({
+      items: { $var: { path: 'PLC:Names' } },
+      onSelect: {
+        onSelect: [
+          {
+            type: 'openDialog',
+            pageId: 'name',
+            componentProperties: { name: { $var: { path: 'PLC:Names', repeatIndex: true } } },
+          },
+        ],
+      },
+    });
+
+    await user.click(screen.getByText('Doos'));
+
+    expect(useHmiStore.getState().openPageOverlays.at(-1)?.componentProperties).toEqual({
+      name: { $var: { path: 'PLC:Names', index: 1 } },
     });
   });
 
