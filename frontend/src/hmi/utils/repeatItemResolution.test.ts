@@ -90,6 +90,21 @@ describe('elements of a page that binds only some of them', () => {
     expect(readArrayElement(whole, stale, 'PLC:Motors', 1)).toEqual({ Speed: 'b' });
   });
 
+  // A page opened again renders before its own metadata lands: a hidden row's
+  // Visible, bound to a member at its index, read unset and flashed the row up.
+  it("reads a member out of the whole array while the metadata is another page's", () => {
+    const values = {
+      'PLC:Slaves': [
+        { bShow: true, Diag: { nCrc: 1 } },
+        { bShow: false, Diag: { nCrc: 4 } },
+      ],
+    };
+    expect(readArrayElement(values, {}, 'PLC:Slaves/bShow', 1)).toBe(false);
+    expect(readArrayElement(values, {}, 'PLC:Slaves/Diag/nCrc', 0)).toBe(1);
+    expect(readArrayElement(values, {}, 'PLC:Slaves/bShow', 2)).toBeUndefined();
+    expect(readArrayElement({}, {}, 'PLC:Slaves/bShow', 1)).toBeUndefined();
+  });
+
   it('holds no element past the end of a PLC array counting from 1', () => {
     // ARRAY[1..10] bound at 9 and 10: only position 9, element [10], exists.
     const meta = partial({ '[10]': 9 });

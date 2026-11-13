@@ -27,9 +27,12 @@ heading.
   nothing at all. When Items is a tag, Repeat item and `[#]` now name the row's
   own element, as in a Repeater copy, so the dialog stays live.
 
-- **Hidden rows no longer flash up as a page opens.** A widget whose Visible
-  reads a tag that has not arrived yet showed until the value came in. It now
-  stays hidden until then, or until the page's data has settled.
+- **A page opened again starts from its last values.** A Repeater row whose
+  Visible reads a member of the array at the copy's position (`[#]`) flashed up
+  on every return to its page, for as long as the page's own metadata took to
+  arrive, though its last value was in hand. It now reads that member from the
+  array it already holds, so a hidden row stays hidden. A first visit still
+  shows a widget until its Visible has a value.
 
 - **Open and close folders while searching the binding picker.** During a
   search every folder was forced open and a click on its arrow did nothing.

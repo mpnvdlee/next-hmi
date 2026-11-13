@@ -207,7 +207,25 @@ export function readArrayElement(
   const element = key === undefined ? undefined : values[key];
   if (element !== undefined) return element;
   const whole = values[arrayKey];
-  return Array.isArray(whole) ? whole[index] : undefined;
+  return Array.isArray(whole) ? whole[index] : memberOfStoredArray(values, arrayKey, index);
+}
+
+/**
+ * A member of one element read out of the whole array the store holds, for a
+ * key no metadata resolves yet: a page opened again shows its last values at
+ * once, but the metadata naming its elements is still the previous page's
+ * until its own frame lands. Without this, a Visible bound to such a member
+ * read as unset, so a hidden row flashed up on every return to its page.
+ */
+function memberOfStoredArray(values: Record<string, unknown>, key: string, index: number): unknown {
+  for (let slash = key.lastIndexOf('/'); slash > 0; slash = key.lastIndexOf('/', slash - 1)) {
+    const whole = values[key.slice(0, slash)];
+    if (whole === undefined) continue;
+    return Array.isArray(whole)
+      ? pickPath(whole[index], key.slice(slash + 1).split('/'))
+      : undefined;
+  }
+  return undefined;
 }
 
 /** The element a struct array's shape is read off: the one at position `index`
