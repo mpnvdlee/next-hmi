@@ -32,6 +32,10 @@ heading.
   String Input's value and the list narrows with every keystroke, without a
   custom widget.
 
+- **Which release opens which project.** The guide's Projects page lists each
+  release's project file format and the oldest release that opens a project it
+  saved.
+
 ### Fixed
 
 - **The page tree opens fully collapsed.** A page's Header, Content and

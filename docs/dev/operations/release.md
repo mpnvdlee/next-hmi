@@ -157,6 +157,11 @@ If it did, two things follow — both before tagging:
 This is the one release step that cannot be inferred from the code: at merge
 time the release number does not exist yet.
 
+Moved or not, add the release's row to the format table in
+[projects.md](../../user/projects.md#the-manager-dashboard): its version, its
+`PROJECT_FORMAT_VERSION`, and its `PROJECT_FORMAT_MIN_APP` as the oldest release
+that opens what it saves.
+
 ## Pre-flight
 
 From a clean checkout on the release branch:
