@@ -9,6 +9,8 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
+## [Unreleased]
+
 ## [1.3.0] - 2026-11-13
 
 Keeps pace with large OPC-UA servers and shuts out what should not reach the
