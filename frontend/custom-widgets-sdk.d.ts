@@ -517,7 +517,7 @@ interface SchemaField {
   event?: string;
   /** For an `actions` field: the `item-list` property whose chosen element the
    *  actions run with — `$repeatItem` inside them reads it (pass it as
-   *  `resolveRepeatItem` on the `evalCtx` you hand `executeWidgetActions`). */
+   *  `repeatItem` to `executeWidgetActions`). */
   repeatsOver?: string;
 }
 
@@ -640,7 +640,16 @@ declare function useWriteVariable(
 declare function useHmiScope(): string;
 declare function executeWidgetActions(
   actions: ComponentAction[] | undefined,
-  context?: { scope?: string; evalCtx?: EvaluationContext; anchorEl?: HTMLElement | null },
+  context?: {
+    scope?: string;
+    evalCtx?: EvaluationContext;
+    anchorEl?: HTMLElement | null;
+    /** The element of the widget's own items the actions run for, with what
+     *  `useItemListProp` returned: `$repeatItem` and `[#]` inside them resolve
+     *  as in a Repeater copy — to the element's own variable, live and
+     *  writable, when `arrayKey` names one. */
+    repeatItem?: { index: number; item: unknown; arrayKey?: string; structArray?: boolean };
+  },
 ): void;
 /** Returns a function that publishes a value at once — call it before running
  *  actions in the handler that changed the value, so they read the new one. */

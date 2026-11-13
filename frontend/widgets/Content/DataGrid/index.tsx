@@ -12,7 +12,7 @@ export const schema = {
     label: 'Columns',
     group: 'Data',
     description:
-      'One entry per column: the member it shows, its title from any source, a width — Fill shares the free space, Fixed is a length such as 60px — and its alignment. Empty shows a column per member of the first row.',
+      'One entry per column: the member it shows, its title from any source, a width — Fill shares the free space, Fixed is a length such as 60px — its alignment, and a value map that shows each value as its text, such as a state number as its name. Empty shows a column per member of the first row.',
   },
   sortMember: {
     type: 'string' as const,
@@ -103,6 +103,8 @@ interface Column {
   align: string;
   /** A listed column with no member yet: its cells stay empty, not the whole row. */
   blank: boolean;
+  /** The project value map each cell is shown through, by id; empty for none. */
+  map: string;
 }
 
 const ALIGN = /^(left|center|right)$/;
@@ -136,6 +138,13 @@ function shown(v: unknown): string {
   return typeof v === 'number' ? formatNumber(v) : text(v);
 }
 
+/** A cell shown through a project value map; a value no case matches, and no
+ *  default, shows as itself. Sorting and filtering still read the value. */
+function mapped(v: unknown, map: string, evalCtx: EvaluationContext): string {
+  if (v === undefined || v === null || typeof v === 'object') return shown(v);
+  return getPropString({ cell: { $map: { id: map, value: v } } }, 'cell', shown(v), evalCtx);
+}
+
 /** Ordinal, like Optix OrderBy: numbers by value, everything else by code unit. */
 function compare(a: unknown, b: unknown): number {
   if (typeof a === 'number' && typeof b === 'number') return a - b;
@@ -160,7 +169,7 @@ function ColumnTitle({ column, member }: { column: Record<string, unknown>; memb
 export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
-  const { items } = useItemListProp(properties, 'items');
+  const { items, arrayKey, structArray } = useItemListProp(properties, 'items');
   const { items: columnList } = useItemListProp(properties, 'columns');
   const valueMember = usePropString(properties, 'valueMember', '');
   const filterMember = usePropString(properties, 'filterMember', '');
@@ -201,6 +210,7 @@ export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
         track: track(c.width),
         blank: listed.length > 0 && !member,
         align: typeof c.align === 'string' && ALIGN.test(c.align) ? c.align : 'left',
+        map: typeof c.map === 'string' ? c.map : '',
       };
     });
   }, [columnList, items]);
@@ -271,20 +281,8 @@ export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
     const actions = (properties?.onSelect as ActionsConfig | undefined)?.onSelect;
     executeWidgetActions(actions, {
       scope,
-      evalCtx: {
-        ...evalCtx,
-        repeatIndex: row.index,
-        resolveRepeatItem: (payload: unknown) => {
-          const p = isRecord(payload) ? payload : {};
-          if (p.field === 'index') return row.index;
-          const v = cell(row.item, typeof p.member === 'string' ? p.member.trim() : '');
-          return v === undefined || v === null
-            ? null
-            : typeof v === 'object'
-              ? JSON.stringify(v)
-              : v;
-        },
-      },
+      evalCtx,
+      repeatItem: { index: row.index, item: row.item, arrayKey, structArray },
     });
   }
 
@@ -376,7 +374,11 @@ export default function DataGrid({ id, properties, layout }: HmiWidgetProps) {
                     className="hmi-datagrid__cell"
                     data-align={c.align}
                   >
-                    {c.blank ? '' : shown(cell(row.item, c.member))}
+                    {c.blank
+                      ? ''
+                      : c.map
+                        ? mapped(cell(row.item, c.member), c.map, evalCtx)
+                        : shown(cell(row.item, c.member))}
                   </div>
                 ))}
               </div>

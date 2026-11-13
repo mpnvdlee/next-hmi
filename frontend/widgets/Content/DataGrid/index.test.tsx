@@ -5,6 +5,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { useComponentPropStore } from '@hmi/store/widgetPropStore';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { useTranslationStore } from '@shared/store/translationStore';
+import { useConfigStore } from '@shared/store/configStore';
+import { useHmiStore } from '@hmi/store/hmiStore';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { __resetForTests } from '@hmi/utils/actionDispatcher';
 import DataGrid from './index';
@@ -114,6 +116,31 @@ describe('DataGrid', () => {
     expect(screen.getByRole('columnheader')).toHaveTextContent('Lot');
   });
 
+  it('shows a column through a value map, its text translated, and an unmapped value as is', () => {
+    useConfigStore.setState({
+      valueMaps: [
+        {
+          id: 'ecState',
+          type: 'String',
+          cases: [
+            { when: 8, then: { $loc: 'ec.op' } },
+            { when: 4, then: 'SAFEOP' },
+          ],
+        },
+      ],
+    });
+    useTranslationStore.setState({
+      translations: { 'ec.op': { nl: 'OP' } },
+      activeLanguage: 'nl',
+    } as never);
+    renderGrid({
+      items: [{ nState: 8 }, { nState: 4 }, { nState: 2 }],
+      columns: [{ member: 'nState', map: 'ecState' }, { member: 'nState' }],
+    });
+    expect(cellTexts(0)).toEqual(['OP', 'SAFEOP', '2']);
+    expect(cellTexts(1)).toEqual(['8', '4', '2']);
+  });
+
   it('filters on contains, ignoring case, and hides the rows with an empty member', () => {
     renderGrid({
       items: RECIPES.slice(0, 40),
@@ -181,6 +208,49 @@ describe('DataGrid', () => {
         value: 'Doos',
       }),
     );
+  });
+
+  // A dialog handed the chosen row read it once: the row went in as its value.
+  it("hands a dialog the chosen row's own variable, so it follows the row live", async () => {
+    const user = userEvent.setup();
+    const struct = { kind: 'struct' as const, name: 'ST_Slave', array: false, fields: ['sName'] };
+    useVariableStore.setState({
+      varMeta: {
+        'PLC:Slaves': { type: { ...struct, array: true } },
+        'PLC:Slaves/Slaves[1]': { type: struct, position: 0 },
+        'PLC:Slaves/Slaves[2]': { type: struct, position: 1 },
+      },
+      values: { 'PLC:Slaves': [{ sName: 'EK1100' }, { sName: 'EL2008' }] },
+    });
+    useConfigStore.setState({
+      dialogs: [
+        {
+          id: 'slave',
+          type: 'page',
+          title: 'Slave',
+          componentProperties: { slave: { type: 'ST_Slave', label: 'Slave' } },
+        },
+      ],
+    } as never);
+    renderGrid({
+      items: { $var: { path: 'PLC:Slaves' } },
+      columns: [{ member: 'sName' }],
+      onSelect: {
+        onSelect: [
+          {
+            type: 'openDialog',
+            pageId: 'slave',
+            componentProperties: { slave: { $repeatItem: {} } },
+          },
+        ],
+      },
+    });
+
+    await user.click(screen.getByText('EL2008'));
+
+    expect(useHmiStore.getState().openPageOverlays.at(-1)?.componentProperties).toEqual({
+      slave: { $var: { path: 'PLC:Slaves/Slaves[2]' } },
+    });
   });
 
   it('selects the row a bound value names and scrolls it into view', () => {

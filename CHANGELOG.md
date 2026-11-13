@@ -11,6 +11,31 @@ heading.
 
 ## [Unreleased]
 
+### Added
+
+- **A Data Grid column shows its values through a value map.** Each column
+  gains **Value map**: an EtherCAT table shows State as `OP`, CRC and Lost link
+  as text, instead of their numbers. A value no case matches shows the map's
+  default, or itself; sorting and the filter still work on the value. Renaming
+  the map takes the column along.
+
+### Fixed
+
+- **A dialog follows the Data Grid row it was opened for.** On Select handed
+  Repeat item to an Open Dialog as a copy of the row, so a details dialog read
+  the picked EtherCAT slave once and never updated, and a Binding input got
+  nothing at all. When Items is a tag, Repeat item and `[#]` now name the row's
+  own element, as in a Repeater copy, so the dialog stays live.
+
+- **Hidden rows no longer flash up as a page opens.** A widget whose Visible
+  reads a tag that has not arrived yet showed until the value came in. It now
+  stays hidden until then, or until the page's data has settled.
+
+- **Open and close folders while searching the binding picker.** During a
+  search every folder was forced open and a click on its arrow did nothing.
+  The arrows work during a search now; a new search opens every folder again,
+  and clearing it restores the tree as it was.
+
 ## [1.3.0] - 2026-11-13
 
 Keeps pace with large OPC-UA servers and shuts out what should not reach the

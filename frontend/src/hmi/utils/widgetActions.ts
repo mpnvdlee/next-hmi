@@ -25,6 +25,8 @@ import { ackAllAlarms } from '@hmi/components/alarmUtils';
 import { findValueMap, useConfigStore } from '@shared/store/configStore';
 import { findPageNodeById, findPagePath } from '@shared/utils/pageTree';
 import { inputMode } from '@shared/types/componentProperty';
+import { substituteRepeatRefs } from '@hmi/utils/repeatItemResolution';
+import type { RepeatScopeValue } from '@hmi/context/RepeatScopeContext';
 
 interface ActionContext {
   scope?: string;
@@ -33,6 +35,11 @@ interface ActionContext {
   evalCtx?: EvaluationContext;
   /** Element that fired the action, used to anchor `trigger-*` placements. */
   anchorEl?: HTMLElement | null;
+  /** The element of a widget's own items the actions run for — a Data Grid's
+   *  chosen row. Its `$repeatItem` and `[#]` resolve as in a Repeater copy: to
+   *  the element's own variable when the items come from one, so a dialog
+   *  handed it as a Binding follows it live. */
+  repeatItem?: Pick<RepeatScopeValue, 'index' | 'item' | 'arrayKey' | 'structArray'>;
 }
 
 /** Snapshot the trigger's bounds when an anchored placement is requested. */
@@ -124,6 +131,13 @@ export function executeWidgetActions(
   context: ActionContext = {},
 ): void {
   if (!actions || actions.length === 0) return;
+  if (context.repeatItem) {
+    const { repeatItem, ...rest } = context;
+    const copy: RepeatScopeValue = { ...repeatItem, key: '', first: true };
+    const { varMeta } = useVariableStore.getState();
+    executeWidgetActions(substituteRepeatRefs(actions, copy, varMeta) as ButtonAction[], rest);
+    return;
+  }
 
   const { scope = '', anchorEl } = context;
   const evalCtx: EvaluationContext = { ...storeEvalContext(scope), ...context.evalCtx };

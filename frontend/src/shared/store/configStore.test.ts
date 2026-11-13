@@ -1527,6 +1527,12 @@ describe('configStore', () => {
               main: [
                 { id: 'a', type: 'Label', name: 'A', properties: { text: ref('state') } },
                 { id: 'b', type: 'Label', name: 'B', properties: { text: ref('other') } },
+                {
+                  id: 'g',
+                  type: 'DataGrid',
+                  name: 'G',
+                  properties: { columns: [{ member: 'State', map: 'state' }, { member: 'Name' }] },
+                },
               ],
             },
           },
@@ -1574,6 +1580,7 @@ describe('configStore', () => {
       expect(p1.sections.main.map((w) => w.properties)).toEqual([
         { text: ref('machine-state') },
         { text: ref('other') },
+        { columns: [{ member: 'State', map: 'machine-state' }, { member: 'Name' }] },
       ]);
       expect(p2.sections.main[0].properties).toEqual({ x: ref('machine-state') });
       expect(s.header[0].properties).toEqual({ text: ref('machine-state') });
