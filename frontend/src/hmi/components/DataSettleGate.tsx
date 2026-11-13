@@ -69,7 +69,7 @@ export default function DataSettleGate({
   // `set_context` goes out: an id left over from an earlier ack would read as
   // done before the new context's metadata had landed. `metaCurrent` says so
   // without the ack, which a context the backend failed to apply never gets.
-  const metaSettled = done || settleKey === undefined || metaCurrent;
+  const metaSettled = done || settleKey === undefined || (metaCurrent && wait.closed);
   // Memoised: every bound widget reads this context.
   const value = useMemo(() => ({ settling, metaSettled }), [settling, metaSettled]);
   return <DataSettleContext.Provider value={value}>{children}</DataSettleContext.Provider>;

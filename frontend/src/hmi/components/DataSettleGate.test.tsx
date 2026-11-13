@@ -286,14 +286,25 @@ describe('PageDataSettleGate', () => {
     expect(renderFor('x1').container.querySelector('.hmi-binding-overlay')).toBeNull();
   });
 
-  it('takes the metadata as final once it answers the latest context, ack or no ack', () => {
+  it('takes the metadata as final once it answers the latest context and the grace ran out', () => {
     // A context the backend failed to apply never gets its ack; the metadata
     // frame naming that context still proves the metadata in hand is its own.
-    useVariableStore.setState({ varMeta: {}, contextReadyPageIds: [] });
-    const { container } = renderFor('x1');
-    expect(container.querySelector('.hmi-binding-overlay')).toBeNull();
+    // It is consulted only after the grace: on a normal switch the ack lands
+    // right behind it, and settling on each separately re-rendered every
+    // bound widget twice per page switch.
+    vi.useFakeTimers();
+    try {
+      useVariableStore.setState({ varMeta: {}, contextReadyPageIds: [] });
+      const { container } = renderFor('x1');
+      act(() => useVariableStore.getState().setMetaCurrent(true));
+      expect(container.querySelector('.hmi-binding-overlay')).toBeNull();
 
-    act(() => useVariableStore.getState().setMetaCurrent(true));
-    expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(3100);
+      });
+      expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
