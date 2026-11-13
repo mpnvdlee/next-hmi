@@ -117,6 +117,9 @@ export default function VariableBindingPicker() {
   const [dsFailed, setDsFailed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [collapsed, toggle, setCollapsed] = useToggleSet<string>();
+  // What the user opened or closed during a search, kept apart from the tree's
+  // own state so clearing the search restores it. A new query starts over.
+  const [searchToggles, setSearchToggles] = useState({ query: '', keys: new Set<string>() });
   const [loadError, setLoadError] = useState<string | null>(null);
   const seenDatasources = useRef<Set<string>>(new Set());
   const headersControllerRef = useRef<AbortController | null>(null);
@@ -174,6 +177,7 @@ export default function VariableBindingPicker() {
   useEffect(() => {
     if (!open) return;
     setSearch('');
+    setSearchToggles({ query: '', keys: new Set() });
     setShowAll(false);
     // Open on the bits when the field is bound to one, its word's list open.
     const boundBit = currentKey ? splitBitKey(currentKey) : null;
@@ -184,7 +188,6 @@ export default function VariableBindingPicker() {
     // The picker outlives every close, so a tree loaded on an earlier open is
     // stale once tags are enabled or browsed in: fetch each one again.
     setDsLoaded(new Set());
-    prevSearch.current = '';
     scrolledToSelection.current = false;
     if (isComponentPropMode && target?.componentPropSource) {
       const boundKey = target.componentPropSource.currentKey || null;
@@ -359,19 +362,43 @@ export default function VariableBindingPicker() {
     [setCollapsed],
   );
 
+  // A search opens every folder; a bit list stays as the user left it, since
+  // its key marks it open. Toggles made during the search flip either.
+  const searching = search.trim() !== '';
+  const shownCollapsed = useMemo(() => {
+    if (!searching) return collapsed;
+    const shown = new Set([...collapsed].filter((k) => k.endsWith(BIT_KEY)));
+    if (searchToggles.query !== search) return shown;
+    for (const k of searchToggles.keys) {
+      if (shown.has(k)) shown.delete(k);
+      else shown.add(k);
+    }
+    return shown;
+  }, [searching, search, collapsed, searchToggles]);
+
   // ── Var mode: load every datasource that is rendered expanded ─────────────
 
   // Loading is driven by rendered state rather than by the event that caused
   // the expansion, so no ordering between the header fetch, the auto-expand
-  // below and a user click can leave a datasource expanded-but-empty.
+  // below, a search (which opens every datasource) and a user click can leave
+  // a datasource expanded-but-empty.
   useEffect(() => {
     if (!open || !loadsDatasources) return;
     for (const ds of dsTree) {
-      if (collapsed.has(`ds:${ds.name}`)) continue;
+      if (shownCollapsed.has(`ds:${ds.name}`)) continue;
       if (dsLoaded.has(ds.name) || dsLoading.has(ds.name) || dsFailed.has(ds.name)) continue;
       loadDatasource(ds.name);
     }
-  }, [open, loadsDatasources, dsTree, collapsed, dsLoaded, dsLoading, dsFailed, loadDatasource]);
+  }, [
+    open,
+    loadsDatasources,
+    dsTree,
+    shownCollapsed,
+    dsLoaded,
+    dsLoading,
+    dsFailed,
+    loadDatasource,
+  ]);
 
   // ── Var mode: auto-expand to current binding ──────────────────────────────
 
@@ -392,22 +419,6 @@ export default function VariableBindingPicker() {
       return next.size === prev.size ? prev : next;
     });
   }, [open, currentKey, dsTree, setCollapsed]);
-
-  // ── Var mode: search triggers loading all unloaded datasources ────────────
-
-  const prevSearch = useRef('');
-  useEffect(() => {
-    if (!loadsDatasources) return;
-    const wasEmpty = prevSearch.current.trim() === '';
-    const isNowActive = search.trim() !== '';
-    prevSearch.current = search;
-    if (!isNowActive || !wasEmpty) return;
-    for (const ds of dsTree) {
-      if (!dsLoaded.has(ds.name) && !dsLoading.has(ds.name) && !dsFailed.has(ds.name)) {
-        loadDatasource(ds.name);
-      }
-    }
-  }, [loadsDatasources, search, dsTree, dsLoaded, dsLoading, dsFailed, loadDatasource]);
 
   // ── Build row list ────────────────────────────────────────────────────────
 
@@ -432,7 +443,7 @@ export default function VariableBindingPicker() {
         requiredFields,
         search,
         showAll,
-        collapsed,
+        shownCollapsed,
         { baseDepth: 1, write },
       );
       if (propRows.length === 0) return propRows;
@@ -442,7 +453,7 @@ export default function VariableBindingPicker() {
         name: 'Inputs',
         depth: 0,
       };
-      return collapsed.has(COMPONENT_PROP_SOURCE_KEY) ? [source] : [source, ...propRows];
+      return shownCollapsed.has(COMPONENT_PROP_SOURCE_KEY) ? [source] : [source, ...propRows];
     }
     if (repeatProperties) {
       const repeatRows = buildComponentPropRows(
@@ -451,7 +462,7 @@ export default function VariableBindingPicker() {
         undefined,
         search,
         true,
-        collapsed,
+        shownCollapsed,
         { keyPrefix: REPEAT_KEY_PREFIX, baseDepth: 1, searchPath: 'Repeat item' },
       );
       if (repeatRows.length === 0) return repeatRows;
@@ -462,9 +473,7 @@ export default function VariableBindingPicker() {
         meta: 'this copy',
         depth: 0,
       };
-      return collapsed.has(REPEAT_SOURCE_KEY) && !search.trim()
-        ? [source]
-        : [source, ...repeatRows];
+      return shownCollapsed.has(REPEAT_SOURCE_KEY) ? [source] : [source, ...repeatRows];
     }
     // Var mode
     const filtered: DatasourceNode[] = search.trim()
@@ -475,24 +484,14 @@ export default function VariableBindingPicker() {
           }))
           .filter((ds) => ds.children.length > 0)
       : typedDsTree;
-    // Search results must expose their matching descendants even when their
-    // datasource/folder was previously collapsed.
-    return flattenForRender(
-      filtered,
-      0,
-      // A search opens every folder; a bit list stays as the user left it,
-      // since its key marks it open.
-      search.trim() ? new Set([...collapsed].filter((k) => k.endsWith(BIT_KEY))) : collapsed,
-      target?.repeatIndex === true,
-      listBits,
-    );
+    return flattenForRender(filtered, 0, shownCollapsed, target?.repeatIndex === true, listBits);
   }, [
     isComponentPropMode,
     target,
     typedDsTree,
     search,
     showAll,
-    collapsed,
+    shownCollapsed,
     repeatProperties,
     listBits,
   ]);
@@ -579,10 +578,18 @@ export default function VariableBindingPicker() {
   }, [open, openSelectionKey, rows, rowVirtualizer]);
 
   function toggleCollapsed(key: string) {
-    toggle(key);
+    if (searching) {
+      setSearchToggles((prev) => {
+        const keys = new Set(prev.query === search ? prev.keys : []);
+        if (!keys.delete(key)) keys.add(key);
+        return { query: search, keys };
+      });
+    } else {
+      toggle(key);
+    }
     // Expanding a datasource that previously failed is a retry request; the
     // loader effect picks it up again once the failure memo is dropped.
-    if (collapsed.has(key) && key.startsWith('ds:')) {
+    if (shownCollapsed.has(key) && key.startsWith('ds:')) {
       const dsName = key.slice(3);
       setDsFailed((prev) => {
         if (!prev.has(dsName)) return prev;
@@ -925,7 +932,7 @@ export default function VariableBindingPicker() {
                   '--row-indent': treePaddingLeft(item.depth, { stepRem: 1, baseRem: 1 }),
                 } as CSSProperties,
                 selectedKey,
-                collapsed,
+                collapsed: shownCollapsed,
                 toggleCollapsed,
                 selectKey,
                 onPickAndClose: confirmKey,
