@@ -75,20 +75,23 @@ export function folderMemberLookup(folder: PickerFolderEntry): StructMemberLooku
   return memberLookup(variables, folders);
 }
 
-const ELEMENT_NAME = /\[(\d+)\]$/;
+export const ELEMENT_NAME = /\[(\d+)\]$/;
+
+/** A struct array's element folders in position order, as the backend's
+ *  `_element_paths` rank them: by the number each name ends in. */
+export function elementFolders(array: PickerFolderEntry): PickerFolderEntry[] {
+  return (array.children as PickerTreeNode[])
+    .filter((c): c is PickerFolderEntry => isFolder(c))
+    .map((f) => ({ f, n: Number(ELEMENT_NAME.exec(f.name)?.[1] ?? 0) }))
+    .sort((a, b) => a.n - b.n)
+    .map(({ f }) => f);
+}
 
 /** The element folder a struct array's shape is read off: the lowest-index
  *  one, since an array may count from 1 — the element the runtime and the
  *  backend validator judge an unindexed binding on. */
 export function shapeElementFolder(folder: PickerFolderEntry): PickerFolderEntry | undefined {
-  let lowest: { index: number; folder: PickerFolderEntry } | undefined;
-  for (const c of folder.children as PickerTreeNode[]) {
-    const match = isFolder(c) ? ELEMENT_NAME.exec(c.name) : null;
-    if (match && isFolder(c) && (!lowest || Number(match[1]) < lowest.index)) {
-      lowest = { index: Number(match[1]), folder: c };
-    }
-  }
-  return lowest?.folder;
+  return elementFolders(folder).find((f) => ELEMENT_NAME.test(f.name));
 }
 
 /**

@@ -89,6 +89,36 @@ class _BrowseProgress:
             logger.debug("Browse progress listener failed", exc_info=True)
 
 
+def _browsed_child(
+    ref: Any, parent_entry: dict[str, Any], parent_is_struct: bool, visited: set[str], skip: frozenset[str],
+) -> dict[str, Any] | None:
+    """The tree entry for *ref*, appended to *parent_entry*'s children — or
+    None for a reference the walk passes over: a struct's property rather
+    than a member, a node class the mask excluded, a node already reached, a
+    child the caller skips."""
+    if parent_is_struct and ref.ReferenceTypeId != _HAS_COMPONENT:
+        return None
+    if ref.NodeClass not in (ua.NodeClass.Object, ua.NodeClass.Variable):
+        # The mask asks the server not to send these; a server that ignores it
+        # must not get them into the tree.
+        return None
+    cid_str = ref.NodeId.to_string()
+    if cid_str in visited or cid_str in skip:
+        return None
+    visited.add(cid_str)
+    child_entry: dict[str, Any] = {
+        "node_id": cid_str,
+        "display_name": (ref.DisplayName.Text or cid_str),
+        "data_type": None,
+        "children": [],
+    }
+    parent_entry["children"].append(child_entry)
+    if parent_entry["data_type"] == "Unknown":
+        # Members make it a struct whatever its type read said.
+        parent_entry["data_type"] = "struct"
+    return child_entry
+
+
 def _node_ids_in(entry: dict[str, Any]) -> set[str]:
     found: set[str] = set()
     stack = [entry]
@@ -258,9 +288,8 @@ class AddressSpaceBrowser:
             except Exception:
                 continue
         present: list[str] = []
-        budget = self._limits.read_ops_budget()
-        for start in range(0, len(parsed), budget):
-            chunk = parsed[start : start + budget]
+        for span in self._limits.read_chunks([node_id for _, node_id in parsed]):
+            chunk = parsed[span]
             params = ua.ReadParameters()
             params.TimestampsToReturn = ua.TimestampsToReturn.Neither
             for _, node_id in chunk:
@@ -285,31 +314,6 @@ class AddressSpaceBrowser:
         return present
 
     # ── Batched browse helpers ────────────────────────────────────────────────
-
-    async def _batch_browse_nodes(
-        self,
-        nodes: list[Node],
-        chunk_size: int | None = None,
-        on_chunk: Callable[[int], None] | None = None,
-    ) -> list[list[ua.ReferenceDescription]]:
-        """Browse multiple parent nodes using one Browse request per chunk.
-
-        The OPC-UA Browse service accepts a list of BrowseDescriptions and
-        returns one BrowseResult per entry, so a single request suffices for
-        all nodes at a given BFS level.  Chunks respect the server's
-        MaxNodesPerBrowse, and a chunk the server still refuses is split and
-        retried rather than costing the whole level.
-        """
-        all_refs: list[list[ua.ReferenceDescription]] = [[] for _ in nodes]
-        budget = chunk_size or self._limits.browse_nodes_budget()
-        for start in range(0, len(nodes), budget):
-            chunk = nodes[start : start + budget]
-            chunk_refs = await self._browse_chunk(chunk)
-            for slot, refs in enumerate(chunk_refs):
-                all_refs[start + slot].extend(refs)
-            if on_chunk is not None:
-                on_chunk(len(chunk))
-        return all_refs
 
     async def _browse_chunk(
         self, nodes: list[Node]
@@ -397,7 +401,6 @@ class AddressSpaceBrowser:
     async def _batch_read_var_attrs(
         self,
         node_ids: list[ua.NodeId],
-        chunk_size: int | None = None,
         on_chunk: Callable[[int], None] | None = None,
     ) -> list[tuple[str, bool, int]]:
         """Batch-read DataType, ValueRank, ArrayDimensions and AccessLevel for a
@@ -408,7 +411,8 @@ class AddressSpaceBrowser:
         contains that size.  Reads are issued as one ReadRequest per chunk — far
         fewer round-trips than reading one node at a time — sized so the four
         attributes per node stay inside the server's MaxNodesPerRead, which
-        counts operations (node/attribute pairs), not nodes.
+        counts operations (node/attribute pairs), not nodes, and inside its
+        message size (see OperationLimits.read_chunks).
 
         DataType resolution is done purely from the returned NodeId:
           - ns=0, identifier 1..25  → ua.VariantType(id).name (no extra RPC)
@@ -417,10 +421,9 @@ class AddressSpaceBrowser:
         """
         if not node_ids:
             return []
-        nodes_per_chunk = chunk_size or max(1, self._limits.read_ops_budget() // len(_VAR_ATTRS))
         results_all: list[tuple[str, bool, int]] = []
-        for start in range(0, len(node_ids), nodes_per_chunk):
-            chunk = node_ids[start : start + nodes_per_chunk]
+        for span in self._limits.read_chunks(node_ids, len(_VAR_ATTRS)):
+            chunk = node_ids[span]
             results_all.extend(await self._read_var_attrs_chunk(chunk))
             if on_chunk is not None:
                 on_chunk(len(chunk))
@@ -600,61 +603,50 @@ class AddressSpaceBrowser:
 
         while queue:
             progress.level += 1
-            parent_nodes = [n for n, _, _ in queue]
-            try:
-                batch_refs = await self._batch_browse_nodes(
-                    parent_nodes, on_chunk=progress.advance
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Batch browse failed for %s: %s — skipping level",
-                    self.datasource_name, exc,
-                )
-                break
-
             next_queue: list[tuple[Node, dict, bool]] = []
             var_node_ids: list[ua.NodeId] = []
             var_entries: list[dict] = []
 
-            for (_, parent_entry, parent_is_struct), refs in zip(
-                queue, batch_refs, strict=False
-            ):
-                for ref in refs:
-                    if parent_is_struct and ref.ReferenceTypeId != _HAS_COMPONENT:
-                        continue
-                    if ref.NodeClass not in (ua.NodeClass.Object, ua.NodeClass.Variable):
-                        # The mask asks the server not to send these; a server
-                        # that ignores it must not get them into the tree.
-                        continue
-                    cid_str = ref.NodeId.to_string()
-                    if cid_str in visited:
-                        continue
-                    if parent_entry is root_entry and cid_str in skip_children:
-                        continue
-                    visited.add(cid_str)
-                    child_entry: dict[str, Any] = {
-                        "node_id": cid_str,
-                        "display_name": (ref.DisplayName.Text or cid_str),
-                        "data_type": None,
-                        "children": [],
-                    }
-                    parent_entry["children"].append(child_entry)
-                    if parent_entry["data_type"] == "Unknown":
-                        # Members make it a struct whatever its type read said.
-                        parent_entry["data_type"] = "struct"
-                    progress.nodes += 1
-                    if ref.NodeClass == ua.NodeClass.Variable:
-                        var_node_ids.append(ref.NodeId)
-                        var_entries.append(child_entry)
-                    else:
-                        next_queue.append(
-                            (Node(self._client.uaclient, ref.NodeId), child_entry, False)
-                        )
+            level_complete = True
+            budget = self._limits.browse_nodes_budget()
+            try:
+                # One Browse per chunk of parents, inside MaxNodesPerBrowse; each
+                # chunk is counted as it arrives, so progress moves while a level
+                # with thousands of parents is still being browsed.
+                for start in range(0, len(queue), budget):
+                    chunk = queue[start : start + budget]
+                    refs_per_parent = await self._browse_chunk([n for n, _, _ in chunk])
+                    found = 0
+                    for (_, parent_entry, parent_is_struct), refs in zip(
+                        chunk, refs_per_parent, strict=False
+                    ):
+                        skip = skip_children if parent_entry is root_entry else frozenset()
+                        for ref in refs:
+                            child_entry = _browsed_child(ref, parent_entry, parent_is_struct, visited, skip)
+                            if child_entry is None:
+                                continue
+                            found += 1
+                            if ref.NodeClass == ua.NodeClass.Variable:
+                                var_node_ids.append(ref.NodeId)
+                                var_entries.append(child_entry)
+                            else:
+                                next_queue.append(
+                                    (Node(self._client.uaclient, ref.NodeId), child_entry, False)
+                                )
+                    # What this chunk revealed: a Browse per object parent next
+                    # round, a typed Read per variable once the level is in.
+                    progress.nodes += found
+                    progress.expect(found)
+                    progress.advance(len(refs_per_parent))
 
-            # Everything this level revealed: a Browse per object parent next
-            # round, a typed Read per variable now.
-            progress.expect(len(next_queue) + len(var_node_ids))
-            progress.emit()
+            except Exception as exc:
+                # The chunks that did arrive are kept and typed below; only the
+                # walk below this level is given up.
+                logger.warning(
+                    "Batch browse failed for %s: %s — stopping below this level",
+                    self.datasource_name, exc,
+                )
+                level_complete = False
 
             if var_node_ids:
                 try:
@@ -691,6 +683,8 @@ class AddressSpaceBrowser:
                     for entry in var_entries:
                         entry["data_type"], entry["writable"], _ = _UNKNOWN_VAR_ATTRS
 
+            if not level_complete:
+                break
             queue = next_queue
         progress.settle()
         return root_entry

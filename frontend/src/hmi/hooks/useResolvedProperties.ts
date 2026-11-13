@@ -1,20 +1,31 @@
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { isLocSource } from '@shared/types/propertyValueGuards';
 import { useInputScope } from '../context/InputScopeContext';
 import { resolveComponentPropValue } from '../utils/componentPropResolution';
 import { useRepeatScope } from '../context/RepeatScopeContext';
 import { useVariableStore } from '../store/variableStore';
-import { containsRepeatRef, substituteRepeatRefs } from '../utils/repeatItemResolution';
-import { collectBoundIndexes, substituteBoundIndexes } from '../utils/boundIndexResolution';
+import {
+  containsRepeatRef,
+  memberLeafKey,
+  structElementPath,
+  substituteRepeatRefs,
+} from '../utils/repeatItemResolution';
+import {
+  collectBoundIndexes,
+  substituteBoundIndexes,
+  substituteMemberLeaves,
+} from '../utils/boundIndexResolution';
+import { analyzePropertyValue } from '../utils/analyzePropertyValue';
 import { extractVarKeys } from '../utils/extractVarKeys';
-import { resolveBoundIndex } from '../utils/propertySourceEval';
-import { useEvalContext } from './useEvalContext';
-import { useLiveScalars } from './useLiveScalars';
+import { resolveBoundIndex, type EvaluationContext } from '../utils/propertySourceEval';
+import { noSubscribe, useLiveScalars } from './useLiveScalars';
 
-const NO_META: Record<string, unknown> = {};
-
-export function useResolvedProperties(
+/**
+ * A widget's properties as its scope gives them: each `$loc` translated, each
+ * `$componentProp` and `$repeatItem` swapped for what it names.
+ */
+export function useScopedProperties(
   properties: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   const activeLanguage = useTranslationStore((s) => s.activeLanguage);
@@ -23,10 +34,13 @@ export function useResolvedProperties(
   const inputScope = useInputScope();
   const repeatScope = useRepeatScope();
   const repeats = repeatScope !== null && containsRepeatRef(properties);
-  // Only a struct-array copy needs the metadata (for its element's folder
-  // name); the rest must not re-render when it arrives.
-  const varMeta = useVariableStore((s) =>
-    repeats && repeatScope.structArray ? s.varMeta : NO_META,
+  // A struct-array copy reads one thing off the metadata: its element's folder
+  // name. Selecting the name rather than the map keeps a metadata frame that
+  // leaves it alone from re-rendering every copy.
+  const elementPath = useVariableStore((s) =>
+    repeats && repeatScope.structArray && repeatScope.arrayKey
+      ? structElementPath(s.varMeta, repeatScope.arrayKey, repeatScope.index)
+      : undefined,
   );
 
   const scoped = useMemo(() => {
@@ -54,32 +68,80 @@ export function useResolvedProperties(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [properties, resolve, activeLanguage, translations, inputScope]);
 
-  const repeated = useMemo(
-    () =>
-      repeats && scoped
-        ? (substituteRepeatRefs(scoped, repeatScope, varMeta) as Record<string, unknown>)
-        : scoped,
-    [scoped, repeats, repeatScope, varMeta],
-  );
-
-  // A bound `$var.index` (a dialog's `$componentProp`, a `$var`) becomes the
-  // number it resolves to now. A `$var` inside an index is subscribed here, and
-  // the resolved numbers key the memo: a moved index re-substitutes, so the
-  // widget follows the new element; an unchanged one keeps the same object.
-  const evalCtx = useEvalContext();
-  const boundIndexes = useMemo(() => collectBoundIndexes(repeated), [repeated]);
-  useLiveScalars(extractVarKeys(boundIndexes));
-  const resolvedIndexes = boundIndexes.map((i) => resolveBoundIndex(i, evalCtx)).join(',');
   return useMemo(
     () =>
-      resolvedIndexes
-        ? (substituteBoundIndexes(repeated, (i) => resolveBoundIndex(i, evalCtx)) as Record<
+      repeats && scoped
+        ? (substituteRepeatRefs(scoped, repeatScope, useVariableStore.getState().varMeta) as Record<
             string,
             unknown
           >)
-        : repeated,
+        : scoped,
+    // `elementPath` is all of the metadata the substitution reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scoped, repeats, repeatScope, elementPath],
+  );
+}
+
+/**
+ * Each bound `$var.index` (a dialog's `$componentProp`, a `$var`) in
+ * `properties` — a widget's properties or layout — as the number it resolves
+ * to now, and then each member of a struct-array element as its own leaf
+ * (`useMemberLeaves`). A `$var` inside an index is subscribed here, and the
+ * resolved numbers key the memo: a moved index re-substitutes, so the widget
+ * follows the new element; an unchanged one keeps the same object. `evalCtx`
+ * must follow the stores the indexes read.
+ */
+export function useBoundIndexes<T extends object>(
+  properties: T | undefined,
+  evalCtx: EvaluationContext,
+): T | undefined {
+  const boundIndexes = useMemo(() => collectBoundIndexes(properties), [properties]);
+  useLiveScalars(extractVarKeys(boundIndexes));
+  const resolvedIndexes = boundIndexes.map((i) => resolveBoundIndex(i, evalCtx)).join(',');
+  const indexed = useMemo(
+    () =>
+      resolvedIndexes
+        ? (substituteBoundIndexes(properties, (i) => resolveBoundIndex(i, evalCtx)) as T)
+        : properties,
     // evalCtx is read through `resolvedIndexes`, which changes whenever it matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [repeated, resolvedIndexes],
+    [properties, resolvedIndexes],
+  );
+  return useMemberLeaves(indexed);
+}
+
+/** The member leaves `substituteMemberLeaves` binds for these indexed refs,
+ *  as one string ('' for none): a snapshot equal by value while they stay. */
+function memberLeaves(
+  varMeta: Record<string, unknown>,
+  refs: readonly { key: string; index: number }[],
+): string {
+  let leaves = '';
+  for (const { key, index } of refs) {
+    const leaf = memberLeafKey(varMeta, key, index);
+    if (leaf !== undefined) leaves += `${leaf}\n`;
+  }
+  return leaves;
+}
+
+/**
+ * `value` with each member of one struct-array element named through the
+ * array — what `device/sName` makes of an input passing `PLC:Motors` at 1 —
+ * bound to that member's own leaf (`substituteMemberLeaves`), once the
+ * metadata names the element. Only a value with an indexed `$var` follows the
+ * metadata, and only a change in the leaves it names re-renders it.
+ */
+function useMemberLeaves<T>(value: T): T {
+  const refs = analyzePropertyValue(value).indexedVarRefs;
+  const read = () => (refs.length ? memberLeaves(useVariableStore.getState().varMeta, refs) : '');
+  const leaves = useSyncExternalStore(
+    refs.length ? useVariableStore.subscribe : noSubscribe,
+    read,
+    read,
+  );
+  return useMemo(
+    () =>
+      leaves ? (substituteMemberLeaves(value, useVariableStore.getState().varMeta) as T) : value,
+    [value, leaves],
   );
 }

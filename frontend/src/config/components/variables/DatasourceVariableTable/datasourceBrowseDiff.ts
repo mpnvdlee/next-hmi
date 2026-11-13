@@ -228,29 +228,26 @@ function cloneTree(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((n) => (isFolder(n) ? { ...n, children: cloneTree(n.children) } : { ...n }));
 }
 
-function findVarByNodeId(nodes: TreeNode[], nodeId: string): VariableEntry | null {
+/** node_id → its (first) variable in *nodes*, so a diff of tens of thousands
+ *  of rows looks each one up once instead of walking the tree per row. */
+function indexVarsByNodeId(nodes: TreeNode[], out: Map<string, VariableEntry>): void {
   for (const node of nodes) {
-    if (isFolder(node)) {
-      const hit = findVarByNodeId(node.children, nodeId);
-      if (hit) return hit;
-    } else if (node.node_id === nodeId) {
-      return node;
-    }
+    if (isFolder(node)) indexVarsByNodeId(node.children, out);
+    else if (node.node_id && !out.has(node.node_id)) out.set(node.node_id, node);
   }
-  return null;
 }
 
-function removeVarByNodeId(nodes: TreeNode[], nodeId: string): TreeNode[] {
+function removeVarsByNodeId(nodes: TreeNode[], nodeIds: ReadonlySet<string>): TreeNode[] {
   const out: TreeNode[] = [];
   for (const node of nodes) {
     if (isFolder(node)) {
-      const children = removeVarByNodeId(node.children, nodeId);
+      const children = removeVarsByNodeId(node.children, nodeIds);
       // Empty folders are pruned. The browse flow only runs against OPC-UA
       // datasources where folders mirror the server hierarchy — so a folder
       // with no remaining children is server state, not a user-authored
       // grouping worth preserving.
       if (children.length > 0) out.push({ ...node, children });
-    } else if (node.node_id !== nodeId) {
+    } else if (!node.node_id || !nodeIds.has(node.node_id)) {
       out.push(node);
     }
   }
@@ -298,56 +295,63 @@ export function diffSelectionKey(kind: 'added' | 'removed' | 'modified', nodeId:
   return `${kind}:${nodeId}`;
 }
 
-function applyModifiedRow(next: TreeNode[], row: ModifiedRow): TreeNode[] {
-  let out = removeVarByNodeId(next, row.node_id);
-  const inserted: VariableEntry = { ...row.before };
-  updateVarMetadata(inserted, row.after);
-  const afterParent = parentOf(row.afterPath);
-  out = insertVarAtPath(out, afterParent, inserted);
-  return out;
-}
-
 export function applyBrowseDiff({ savedTree, diff, selected }: ApplyParams): TreeNode[] {
   let next = cloneTree(savedTree);
+  const byNodeId = new Map<string, VariableEntry>();
+  indexVarsByNodeId(next, byNodeId);
+
+  // Deleted rows and moved rows leave the tree in one pass; moved ones are
+  // re-inserted under their new parent afterwards.
+  const dropped = new Set<string>();
+  const moved: ModifiedRow[] = [];
 
   for (const row of diff.removed) {
     if (selected.has(diffSelectionKey('removed', row.node_id))) {
-      next = removeVarByNodeId(next, row.node_id);
+      dropped.add(row.node_id);
     } else {
-      const hit = findVarByNodeId(next, row.node_id);
+      const hit = byNodeId.get(row.node_id);
       if (hit) hit.present_on_server = false;
     }
   }
 
   for (const row of diff.modified) {
     if (!selected.has(diffSelectionKey('modified', row.node_id))) continue;
-    if (row.kind === 'folder-rename') {
-      for (const member of row.rows) {
-        next = applyModifiedRow(next, member);
+    for (const member of row.kind === 'folder-rename' ? row.rows : [row]) {
+      if (row.kind === 'folder-rename' || member.changedFields.includes('parent_path')) {
+        dropped.add(member.node_id);
+        moved.push(member);
+      } else {
+        const hit = byNodeId.get(member.node_id);
+        if (hit) updateVarMetadata(hit, member.after);
       }
-      continue;
     }
-    const parentChanged = row.changedFields.includes('parent_path');
-    if (parentChanged) {
-      next = applyModifiedRow(next, row);
-    } else {
-      const hit = findVarByNodeId(next, row.node_id);
-      if (hit) updateVarMetadata(hit, row.after);
-    }
+  }
+
+  if (dropped.size > 0) {
+    next = removeVarsByNodeId(next, dropped);
+    for (const nodeId of dropped) byNodeId.delete(nodeId);
+  }
+
+  for (const row of moved) {
+    const inserted: VariableEntry = { ...row.before };
+    updateVarMetadata(inserted, row.after);
+    insertVarAtPath(next, parentOf(row.afterPath), inserted);
+    byNodeId.set(row.node_id, inserted);
   }
 
   for (const row of diff.added) {
     if (!selected.has(diffSelectionKey('added', row.node_id))) continue;
     // Guard against double-insert: the user may have hand-added a variable
     // with the same node_id between browse and apply.
-    if (findVarByNodeId(next, row.node_id)) continue;
+    if (byNodeId.has(row.node_id)) continue;
     const inserted: VariableEntry = { ...row.entry, enabled: false };
     delete inserted.present_on_server;
     insertVarAtPath(next, row.parentPath, inserted);
+    byNodeId.set(row.node_id, inserted);
   }
 
   for (const nodeId of diff.silentReactivations) {
-    const hit = findVarByNodeId(next, nodeId);
+    const hit = byNodeId.get(nodeId);
     if (hit) delete hit.present_on_server;
   }
 

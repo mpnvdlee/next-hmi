@@ -38,7 +38,7 @@ describe('useDatasourceSaveRegistration', () => {
         latestTree,
         dirtyRef: { current: true },
         clearVarsDraft: (name) => clearVarsDraftCalls.push(name),
-        onVariablesChange: (vars) => onVariablesChangeCalls.push(vars),
+        onVariablesChange: (_dsName, vars) => onVariablesChangeCalls.push(vars),
         setDirty: (v) => setDirtyCalls.push(v),
       });
       return latestTree;
@@ -81,7 +81,7 @@ describe('useDatasourceSaveRegistration', () => {
         latestTree,
         dirtyRef: { current: true },
         clearVarsDraft: (name) => clearVarsDraftCalls.push(name),
-        onVariablesChange: (vars) => onVariablesChangeCalls.push(vars),
+        onVariablesChange: (_dsName, vars) => onVariablesChangeCalls.push(vars),
         setDirty: (v) => setDirtyCalls.push(v),
       });
     });

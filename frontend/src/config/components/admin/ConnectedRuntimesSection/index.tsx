@@ -47,8 +47,8 @@ export default function ConnectedRuntimesSection({ runtimes, loading, error, onR
                 <td className="cfg-runtimes-table__time">
                   {new Date(r.connectedAt).toLocaleTimeString()}
                 </td>
-                <td className="cfg-runtimes-table__time">{r.keys ?? '–'}</td>
-                <td className="cfg-runtimes-table__time">
+                <td className="cfg-runtimes-table__count">{r.keys ?? '–'}</td>
+                <td className="cfg-runtimes-table__count">
                   {r.bytesSent === undefined ? '–' : formatBytes(r.bytesSent)}
                 </td>
               </tr>

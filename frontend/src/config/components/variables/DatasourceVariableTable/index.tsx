@@ -25,7 +25,7 @@ import ConfigWorkspace from '../../ui/ConfigWorkspace';
 
 interface Props {
   datasource: DatasourceConfig | null;
-  onVariablesChange: (variables: TreeNode[]) => void;
+  onVariablesChange: (dsName: string, variables: TreeNode[]) => void;
   error?: string | null;
 }
 

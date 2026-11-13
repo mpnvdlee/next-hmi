@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import Button from '@config/components/ui/Button';
+import VirtualTreeRows from '@config/components/shared/VirtualTreeRows';
 import { useVariablesDomainStore } from '@config/store/domains/variablesDomainStore';
 import {
   diffSelectionKey,
@@ -7,11 +9,29 @@ import {
   type BrowseDiff,
   type ChangedField,
   type FolderRenameRow,
+  type ModifiedEntry,
   type ModifiedRow,
   type RemovedRow,
 } from './datasourceBrowseDiff';
 
 type Category = 'added' | 'modified' | 'removed';
+
+const CATEGORIES: readonly Category[] = ['added', 'modified', 'removed'];
+
+// A re-browse can change tens of thousands of variables, so the list is
+// virtualized: group headers and rows are one flat list of fixed-height items.
+const GROUP_HEIGHT = 32;
+const ROW_HEIGHT = 30;
+
+type BannerItem =
+  | { kind: 'group'; category: Category }
+  | { kind: 'added'; row: AddedRow }
+  | { kind: 'modified'; row: ModifiedEntry }
+  | { kind: 'removed'; row: RemovedRow };
+
+function itemCategory(item: BannerItem): Category {
+  return item.kind === 'group' ? item.category : item.kind;
+}
 
 const CATEGORY_LABEL: Record<Category, string> = {
   added: 'Added',
@@ -94,18 +114,24 @@ function ModifiedRowItem({
       <input type="checkbox" checked={selected} onChange={onToggle} />
       <span className="cfg-browse-diff__path">{row.afterPath}</span>
       <span className="cfg-browse-diff__chips">
-        {row.changedFields.map((field) => (
-          <span key={field} className="cfg-browse-diff__chip">
-            <span className="cfg-browse-diff__chip-label">{formatField(field)}</span>
-            <span className="cfg-browse-diff__chip-before">
-              {formatValue(valueForField(row, field, 'before'))}
+        {row.changedFields.map((field) => {
+          const label = formatField(field);
+          const before = formatValue(valueForField(row, field, 'before'));
+          const after = formatValue(valueForField(row, field, 'after'));
+          // The row is one fixed-height line, so a long value is cut off.
+          return (
+            <span
+              key={field}
+              className="cfg-browse-diff__chip"
+              title={`${label}: ${before} → ${after}`}
+            >
+              <span className="cfg-browse-diff__chip-label">{label}</span>
+              <span className="cfg-browse-diff__chip-before">{before}</span>
+              <span className="cfg-browse-diff__chip-arrow">→</span>
+              <span className="cfg-browse-diff__chip-after">{after}</span>
             </span>
-            <span className="cfg-browse-diff__chip-arrow">→</span>
-            <span className="cfg-browse-diff__chip-after">
-              {formatValue(valueForField(row, field, 'after'))}
-            </span>
-          </span>
-        ))}
+          );
+        })}
       </span>
     </label>
   );
@@ -142,10 +168,51 @@ export default function DatasourceBrowseDiffBanner({ dsName, onApply }: Props) {
     modified: true,
     removed: true,
   });
+  const bodyRef = useRef<HTMLDivElement>(null);
 
-  if (!pending) return null;
+  const diff = pending?.diff;
+  const selected = pending?.selected;
 
-  const { diff, selected } = pending;
+  const items = useMemo((): BannerItem[] => {
+    if (!diff) return [];
+    const out: BannerItem[] = [];
+    for (const category of CATEGORIES) {
+      if (diff[category].length === 0) continue;
+      out.push({ kind: 'group', category });
+      if (!openCategories[category]) continue;
+      if (category === 'added') for (const row of diff.added) out.push({ kind: 'added', row });
+      if (category === 'modified')
+        for (const row of diff.modified) out.push({ kind: 'modified', row });
+      if (category === 'removed')
+        for (const row of diff.removed) out.push({ kind: 'removed', row });
+    }
+    return out;
+  }, [diff, openCategories]);
+
+  const allSelected = useMemo((): Record<Category, boolean> => {
+    const every = (category: Category): boolean => {
+      const rows = diff?.[category] ?? [];
+      return (
+        rows.length > 0 &&
+        rows.every((r) => selected?.has(diffSelectionKey(category, r.node_id)) ?? false)
+      );
+    };
+    return { added: every('added'), modified: every('modified'), removed: every('removed') };
+  }, [diff, selected]);
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => bodyRef.current,
+    estimateSize: (index) => (items[index].kind === 'group' ? GROUP_HEIGHT : ROW_HEIGHT),
+    overscan: 10,
+    getItemKey: (index) => {
+      const item = items[index];
+      return item.kind === 'group' ? `group:${item.category}` : `${item.kind}:${item.row.node_id}`;
+    },
+  });
+
+  if (!pending || !diff || !selected) return null;
+
   const counts: Record<Category, number> = {
     added: diff.added.length,
     modified: diff.modified.length,
@@ -156,12 +223,6 @@ export default function DatasourceBrowseDiffBanner({ dsName, onApply }: Props) {
   // a meaningful action — so we only block Apply when there's literally
   // nothing to commit.
   const canApply = selectedCount > 0 || counts.removed > 0;
-
-  const isCategorySelected = (category: Category): boolean => {
-    const rows = diff[category];
-    if (rows.length === 0) return false;
-    return rows.every((r) => selected.has(diffSelectionKey(category, r.node_id)));
-  };
 
   const handleApply = () => {
     onApply(diff, selected);
@@ -199,80 +260,53 @@ export default function DatasourceBrowseDiffBanner({ dsName, onApply }: Props) {
         </div>
       </div>
 
-      {(['added', 'modified', 'removed'] as const).map((category) => {
-        const rows = diff[category];
-        if (rows.length === 0) return null;
-        const open = openCategories[category];
-        const allSelected = isCategorySelected(category);
-        return (
-          <div
-            key={category}
-            className={`cfg-browse-diff__group cfg-browse-diff__group--${category}`}
-          >
-            <div className="cfg-browse-diff__group-header">
-              <button
-                type="button"
-                className="cfg-browse-diff__group-toggle"
-                onClick={() => toggleCategoryOpen(category)}
-                aria-expanded={open}
-              >
-                <span className="cfg-browse-diff__group-caret">{open ? '▾' : '▸'}</span>
-                <span>{CATEGORY_LABEL[category]}</span>
-                <span className="cfg-browse-diff__group-count">{rows.length}</span>
-              </button>
-              <label className="cfg-browse-diff__group-selectall">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={(e) => setCategorySelection(dsName, category, e.target.checked)}
-                />
-                Select all
-              </label>
-            </div>
-
-            {open && (
-              <div className="cfg-browse-diff__rows">
-                {category === 'added' &&
-                  diff.added.map((row) => (
-                    <AddedRowItem
-                      key={row.node_id}
-                      row={row}
-                      selected={selected.has(diffSelectionKey('added', row.node_id))}
-                      onToggle={() => toggle(dsName, diffSelectionKey('added', row.node_id))}
+      <div className="cfg-browse-diff__body" ref={bodyRef}>
+        <VirtualTreeRows
+          rows={items}
+          virtualizer={virtualizer}
+          getRowClassName={(item) => `cfg-browse-diff__group--${itemCategory(item)}`}
+          renderRow={(item) => {
+            if (item.kind === 'group') {
+              const { category } = item;
+              const open = openCategories[category];
+              return (
+                <div className="cfg-browse-diff__group-header">
+                  <button
+                    type="button"
+                    className="cfg-browse-diff__group-toggle"
+                    onClick={() => toggleCategoryOpen(category)}
+                    aria-expanded={open}
+                  >
+                    <span className="cfg-browse-diff__group-caret">{open ? '▾' : '▸'}</span>
+                    <span>{CATEGORY_LABEL[category]}</span>
+                    <span className="cfg-browse-diff__group-count">{counts[category]}</span>
+                  </button>
+                  <label className="cfg-browse-diff__group-selectall">
+                    <input
+                      type="checkbox"
+                      checked={allSelected[category]}
+                      onChange={(e) => setCategorySelection(dsName, category, e.target.checked)}
                     />
-                  ))}
-                {category === 'modified' &&
-                  diff.modified.map((row) =>
-                    row.kind === 'folder-rename' ? (
-                      <FolderRenameRowItem
-                        key={row.node_id}
-                        row={row}
-                        selected={selected.has(diffSelectionKey('modified', row.node_id))}
-                        onToggle={() => toggle(dsName, diffSelectionKey('modified', row.node_id))}
-                      />
-                    ) : (
-                      <ModifiedRowItem
-                        key={row.node_id}
-                        row={row}
-                        selected={selected.has(diffSelectionKey('modified', row.node_id))}
-                        onToggle={() => toggle(dsName, diffSelectionKey('modified', row.node_id))}
-                      />
-                    ),
-                  )}
-                {category === 'removed' &&
-                  diff.removed.map((row) => (
-                    <RemovedRowItem
-                      key={row.node_id}
-                      row={row}
-                      selected={selected.has(diffSelectionKey('removed', row.node_id))}
-                      onToggle={() => toggle(dsName, diffSelectionKey('removed', row.node_id))}
-                    />
-                  ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+                    Select all
+                  </label>
+                </div>
+              );
+            }
+            const key = diffSelectionKey(item.kind, item.row.node_id);
+            const rowSelected = selected.has(key);
+            const onToggle = () => toggle(dsName, key);
+            if (item.kind === 'added')
+              return <AddedRowItem row={item.row} selected={rowSelected} onToggle={onToggle} />;
+            if (item.kind === 'removed')
+              return <RemovedRowItem row={item.row} selected={rowSelected} onToggle={onToggle} />;
+            return item.row.kind === 'folder-rename' ? (
+              <FolderRenameRowItem row={item.row} selected={rowSelected} onToggle={onToggle} />
+            ) : (
+              <ModifiedRowItem row={item.row} selected={rowSelected} onToggle={onToggle} />
+            );
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -1,9 +1,10 @@
 // A test fixture: fast refresh never reloads it, so its view may sit beside the entries.
 /* eslint-disable react-refresh/only-export-components */
-import type { HmiWidgetProps } from '@shared/types/config';
+import { bindingKey, type HmiWidgetProps } from '@shared/types/config';
 import type { RegistryEntry } from '@shared/types/widgetSchema';
-import { isVarSource } from '@shared/types/propertyValueGuards';
+import { getVarBinding, isVarSource } from '@shared/types/propertyValueGuards';
 import { useVariableStore } from '../../store/variableStore';
+import { useBindingValue, useVariableMeta } from '../../hooks/useVariable';
 
 /**
  * Stand-ins for real built-in widgets in suites that mock the registry.
@@ -40,6 +41,37 @@ export const LabeledProbe: RegistryEntry = {
   category: 'Test',
   component: LabeledProbeView,
   schema: { value: { type: 'string', label: 'Value' } },
+};
+
+/** Reads its `variable` as a project's own widget does — the value, and the
+ *  metadata of `bindingKey` — and shows both as `value ≤ max`. */
+function MetaProbeView({ properties }: HmiWidgetProps) {
+  const binding = getVarBinding(properties?.variable);
+  const value = useBindingValue(binding);
+  const meta = useVariableMeta(bindingKey(binding));
+  return <span>{`${String(value)} ≤ ${String(meta?.max)}`}</span>;
+}
+
+export const MetaProbe: RegistryEntry = {
+  name: 'Meta Probe',
+  category: 'Test',
+  component: MetaProbeView,
+  schema: { variable: { type: ['float', 'integer'], label: 'Variable', write: true } },
+};
+
+/** Each CountingProbe's renders so far, by widget id. */
+export const renderCounts = new Map<string, number>();
+
+/** Counts its renders and draws its children — for asserting which widgets a
+ *  store update re-renders. */
+export const CountingProbe: RegistryEntry = {
+  name: 'Counting Probe',
+  category: 'Test',
+  component: ({ id = '', children }: HmiWidgetProps) => {
+    renderCounts.set(id, (renderCounts.get(id) ?? 0) + 1);
+    return <div>{children}</div>;
+  },
+  schema: {},
 };
 
 /** Throws on render, for the error-boundary path. */

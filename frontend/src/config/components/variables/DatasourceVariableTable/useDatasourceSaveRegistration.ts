@@ -9,7 +9,7 @@ interface Params {
   latestTree: MutableRefObject<TreeNode[]>;
   dirtyRef: MutableRefObject<boolean>;
   clearVarsDraft: (name: string) => void;
-  onVariablesChange: (variables: TreeNode[]) => void;
+  onVariablesChange: (dsName: string, variables: TreeNode[]) => void;
   setDirty: (value: boolean) => void;
 }
 
@@ -41,7 +41,7 @@ export function useDatasourceSaveRegistration({
       }
       setDirty(false);
       clearVarsDraft(dsName);
-      onVariablesChange(sentTree);
+      onVariablesChange(dsName, sentTree);
     } catch (e) {
       console.error('[useDatasourceSaveRegistration] save failed:', e);
       throw e;

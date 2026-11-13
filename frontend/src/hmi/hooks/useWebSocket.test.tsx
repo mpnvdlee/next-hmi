@@ -5,7 +5,12 @@ import { useHmiStore } from '../store/hmiStore';
 import { useVariableStore } from '../store/variableStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { identityRequest, loadSessionToken } from '../utils/runtimeSession';
-import { setBackendRestartHandler, useWebSocket } from './useWebSocket';
+import {
+  clearContextProducer,
+  setBackendRestartHandler,
+  setContextProducer,
+  useWebSocket,
+} from './useWebSocket';
 
 /** A WebSocket that never touches the network and fires its events on demand. */
 class FakeSocket {
@@ -238,6 +243,257 @@ describe('useWebSocket', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  describe('set_context', () => {
+    const sentContexts = (socket: FakeSocket) =>
+      socket.sent
+        .map((frame) => JSON.parse(frame) as { type: string; contextId?: number })
+        .filter((msg) => msg.type === 'set_context');
+    // The frames without their numbers, which only tell their acks apart.
+    const contexts = (socket: FakeSocket) =>
+      sentContexts(socket).map(({ contextId: _contextId, ...msg }) => msg);
+    const lastContextId = (socket: FakeSocket) => {
+      const sent = sentContexts(socket);
+      return sent[sent.length - 1]?.contextId;
+    };
+
+    afterEach(() => {
+      clearContextProducer('page');
+      clearContextProducer('table');
+    });
+
+    it('merges the producers and sends each distinct context once', () => {
+      render(<Probe />);
+      const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+      act(() => live.open());
+
+      setContextProducer('page', { currentPageIds: ['home'], priorityKeys: ['PLC:A'] });
+      setContextProducer('page', { currentPageIds: ['home'], priorityKeys: ['PLC:A'] });
+      // A variable table settling on the same rows again.
+      setContextProducer('table', { priorityKeys: ['PLC:Motors'] });
+      setContextProducer('table', { priorityKeys: ['PLC:Motors'] });
+      setContextProducer('table', { priorityKeys: ['PLC:Pumps'] });
+
+      expect(contexts(live)).toEqual([
+        { type: 'set_context', currentPageIds: ['home'], priorityKeys: ['PLC:A'] },
+        { type: 'set_context', currentPageIds: ['home'], priorityKeys: ['PLC:A', 'PLC:Motors'] },
+        { type: 'set_context', currentPageIds: ['home'], priorityKeys: ['PLC:A', 'PLC:Pumps'] },
+      ]);
+    });
+
+    it('sends the context again after a datasource or page edit, which it may now resolve differently', () => {
+      render(<Probe />);
+      const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+      act(() => live.open());
+      setContextProducer('table', { priorityKeys: ['PLC:Speed'] });
+      const changed = (artifact_type: string) =>
+        live.receive({
+          type: 'config_changed',
+          artifact_type,
+          artifact_ids: ['PLC'],
+          source: 'rest',
+          summary: '',
+        });
+
+      changed('variables');
+      changed('datasource');
+      changed('page');
+      changed('translations');
+
+      const table = { type: 'set_context', currentPageIds: [], priorityKeys: ['PLC:Speed'] };
+      expect(contexts(live)).toEqual([table, table, table, table]);
+      // Numbered apart all the same, so each one's ack is told from the others'.
+      expect(new Set(sentContexts(live).map((msg) => msg.contextId)).size).toBe(4);
+    });
+
+    it("forgets a page's ack once the context leaves it, so a return waits for its own", async () => {
+      render(<Probe />);
+      const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+      act(() => live.open());
+      const ready = () => useVariableStore.getState().contextReadyPageIds;
+      const ack = async (pageIds: string[], contextId = lastContextId(live)) => {
+        live.receive({ type: 'context_ready', currentPageIds: pageIds, contextId });
+        await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+      };
+
+      setContextProducer('page', { currentPageIds: ['A'] });
+      const firstVisit = lastContextId(live);
+      await ack(['A']);
+      expect(ready()).toEqual(['A']);
+      // An overlay opening keeps the page under it settled.
+      act(() => setContextProducer('page', { currentPageIds: ['A', 'O'] }));
+      expect(ready()).toEqual(['A']);
+
+      act(() => setContextProducer('page', { currentPageIds: ['B'] }));
+      const onB = lastContextId(live);
+      expect(ready()).toEqual([]);
+      // Back on A before B's slow read answered: A's old ack must not settle it.
+      act(() => setContextProducer('page', { currentPageIds: ['A'] }));
+      expect(ready()).toEqual([]);
+      await ack(['B'], onB); // superseded, dropped
+      expect(ready()).toEqual([]);
+      // The first visit's ack names the very same page, and is just as stale.
+      await ack(['A'], firstVisit);
+      expect(ready()).toEqual([]);
+      await ack(['A']);
+      expect(ready()).toEqual(['A']);
+
+      // An ack received but not yet flushed when the context moves on.
+      act(() => setContextProducer('page', { currentPageIds: ['B'] }));
+      live.receive({
+        type: 'context_ready',
+        currentPageIds: ['B'],
+        contextId: lastContextId(live),
+      });
+      act(() => setContextProducer('page', { currentPageIds: ['A'] }));
+      await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+      expect(ready()).toEqual([]);
+    });
+
+    it('sends the context again on a reconnect, and only once', () => {
+      vi.useFakeTimers();
+      try {
+        render(<Probe />);
+        const first = FakeSocket.instances[FakeSocket.instances.length - 1];
+        act(() => first.open());
+        setContextProducer('page', { currentPageIds: ['home'] });
+        act(() => first.fireClose());
+        act(() => {
+          vi.advanceTimersByTime(600);
+        });
+        const second = FakeSocket.instances[FakeSocket.instances.length - 1];
+
+        act(() => second.open());
+        // The page re-registers its unchanged context once it sees the socket back.
+        setContextProducer('page', { currentPageIds: ['home'] });
+
+        const home = { type: 'set_context', currentPageIds: ['home'], priorityKeys: [] };
+        expect(contexts(first)).toEqual([home]);
+        expect(contexts(second)).toEqual([home]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('values queued for the next frame', () => {
+    const nextFrame = () => act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    const values = () => useVariableStore.getState().values;
+
+    it('does not bring back a variable removed while its update waited', async () => {
+      render(<Probe />);
+      const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+      act(() => live.open());
+
+      live.receive({ type: 'var_update', values: { 'PLC:A': 1, 'PLC:B': 2 } });
+      live.receive({ type: 'var_removed', ids: ['PLC:A'] });
+      await nextFrame();
+
+      expect(values()).not.toHaveProperty('PLC:A');
+      expect(values()).toHaveProperty('PLC:B', 2);
+    });
+
+    it('holds values queued before a metadata frame to its prune', async () => {
+      render(<Probe />);
+      const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+      act(() => live.open());
+      const meta = (key: string) =>
+        live.receive({ type: 'var_metadata', meta: { [key]: { type: { kind: 'scalar' } } } });
+
+      meta('PLC:A');
+      live.receive({ type: 'var_update', values: { 'PLC:A': 1 } });
+      meta('PLC:B');
+      await nextFrame();
+      // The page just left keeps its value, for a return to it.
+      expect(values()).toHaveProperty('PLC:A', 1);
+
+      live.receive({ type: 'var_update', values: { 'PLC:A': 2 } });
+      // Two more frames before the next animation frame: A is no longer one
+      // of the last three, so its value goes, queued or not.
+      meta('PLC:C');
+      meta('PLC:D');
+      await nextFrame();
+      expect(values()).not.toHaveProperty('PLC:A');
+    });
+
+    describe('a struct-array element', () => {
+      const S = { kind: 'struct', name: 'Motor', array: true, fields: ['fSpeed', 'stState'] };
+      // What the server describes for a page binding `PLC:Motors` whole, or
+      // one of its leaves: the element and the leaves below it.
+      const META = {
+        'PLC:Motors': { type: S },
+        'PLC:Motors/[1]': { type: { ...S, array: false }, position: 0 },
+        'PLC:Motors/[1]/fSpeed': { type: { kind: 'scalar', base: 'Float', array: false } },
+        'PLC:Motors/[1]/stState': { type: { kind: 'struct', name: 'State', array: false } },
+        'PLC:Motors/[1]/stState/bOn': { type: { kind: 'scalar', base: 'Boolean', array: false } },
+      };
+      const ELEMENT = 'PLC:Motors/[1]';
+      const LEAF = 'PLC:Motors/[1]/fSpeed';
+      const element = (fSpeed: number) => ({ fSpeed, stState: { bOn: true } });
+
+      function connect() {
+        render(<Probe />);
+        const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+        act(() => live.open());
+        const update = (values: Record<string, unknown>) =>
+          live.receive({ type: 'var_update', values });
+        const page = () => live.receive({ type: 'var_metadata', meta: META });
+        return { update, page };
+      }
+
+      it('fills in the members below it as it arrives', async () => {
+        const { update, page } = connect();
+        page();
+        update({ [ELEMENT]: element(1) });
+        await nextFrame();
+        expect(values()).toMatchObject({
+          [LEAF]: 1,
+          'PLC:Motors/[1]/stState': { bOn: true },
+          'PLC:Motors/[1]/stState/bOn': true,
+        });
+        // In one frame the member the server ships itself wins: it is never the older.
+        update({ [ELEMENT]: element(2), [LEAF]: 3 });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(3);
+      });
+
+      it('reads the live value through a dialog binding the leaf and back', async () => {
+        const { update, page } = connect();
+        // The overview's Repeater: the server ships the element.
+        page();
+        update({ [ELEMENT]: element(1) });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(1);
+
+        // A dialog binding the leaf opens: both are shipped, the last one wins.
+        update({ [LEAF]: 2 });
+        update({ [ELEMENT]: element(2) });
+        update({ [LEAF]: 3 });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(3);
+
+        // It closes: the leaf is no longer shipped, the element is.
+        update({ [ELEMENT]: element(4) });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(4);
+
+        // A page binding only the leaf: the element it still holds is frozen.
+        page();
+        update({ [LEAF]: 5 });
+        await nextFrame();
+        update({ [LEAF]: 6 });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(6);
+        expect(values()[ELEMENT]).toEqual(element(4));
+
+        // Back to the overview: the element is shipped again, current.
+        page();
+        update({ [ELEMENT]: element(7) });
+        await nextFrame();
+        expect(values()[LEAF]).toBe(7);
+      });
+    });
   });
 
   it('settles an alarm ack on its correlated response or error', async () => {

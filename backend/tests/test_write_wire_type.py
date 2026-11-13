@@ -203,6 +203,32 @@ def test_datachange_records_the_wire_type():
     assert engine._wire_types[node_id] == ua.VariantType.Boolean
 
 
+@pytest.mark.asyncio
+async def test_a_write_carries_no_timestamp():
+    """TwinCAT and S7 refuse a timestamped write (BadWriteNotSupported), and
+    asyncua stamps a SourceTimestamp on anything that is not a DataValue."""
+    sent: list[Any] = []
+
+    class _Node:
+        async def write_value(self, value: Any, varianttype: Any = None) -> None:
+            sent.append(value)
+
+    class _Client:
+        def get_node(self, node_id: str) -> _Node:
+            return _Node()
+
+    engine = DatasourceOpcuaEngine("PLC")
+    engine._client = _Client()
+    engine._connected = True
+
+    await engine.write_node("ns=2;s=Tag", True, ua.VariantType.Boolean)
+    await engine.write_node("ns=2;s=Tag", 5)
+
+    assert [type(dv) for dv in sent] == [ua.DataValue, ua.DataValue]
+    assert all(dv.SourceTimestamp is None and dv.ServerTimestamp is None for dv in sent)
+    assert sent[0].Value == ua.Variant(True, ua.VariantType.Boolean)
+
+
 def _free_url(suffix: str) -> str:
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))

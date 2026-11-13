@@ -1,42 +1,138 @@
 import type { RepeatScopeValue } from '../context/RepeatScopeContext';
 import { isRecord } from '@shared/types/propertyValueGuards';
 
-const ELEMENT_NAME = /\[(\d+)\]$/;
-
 /**
  * A struct-array element is a sub-folder whose name only *ends* in `[N]` — a
  * static server may call it `Line[2]` — so the leaf path of one of its members
  * cannot be built from the index alone. Read the real folder name off the
- * variable metadata, which lists every leaf.
+ * variable metadata.
  *
  * Keyed by position, not by the `N` in the name: the array value counts from 0
  * whatever the PLC does, as the backend's `_element_paths` do, so the copy at
- * position 0 of a PLC array `A[1..500]` is `A[1]`.
+ * position 0 of a PLC array `A[1..500]` is `A[1]`. The backend names each
+ * element's `position`, since a page's metadata holds only the elements it
+ * binds and their rank among those is not their place in the array.
  */
-const elementPathCache = new WeakMap<object, Map<string, Map<number, string>>>();
+interface ElementIndex {
+  /** Position → element path, per array whose elements name their position. */
+  positioned: Map<string, Map<number, string>>;
+  /** Each array asked about so far, its elements in position order. */
+  ordered: Map<string, ReadonlyMap<number, string>>;
+  /** Built on first use (`elementMembers`). */
+  members?: Map<string, ElementMember[]>;
+}
+/** A key below an element: the key, and its path inside the element's value. */
+type ElementMember = readonly [key: string, path: readonly string[]];
+const NO_MEMBERS: readonly ElementMember[] = [];
+const elementIndexCache = new WeakMap<object, ElementIndex>();
 
-function elementPaths(varMeta: Record<string, unknown>, arrayKey: string): Map<number, string> {
-  let byArray = elementPathCache.get(varMeta);
-  if (!byArray) {
-    byArray = new Map();
-    elementPathCache.set(varMeta, byArray);
+/** The position the metadata names for an element folder's key. */
+function positionOf(varMeta: Record<string, unknown>, key: string): number | undefined {
+  const meta = varMeta[key];
+  const position = isRecord(meta) ? meta.position : undefined;
+  return typeof position === 'number' ? position : undefined;
+}
+
+function elementIndex(varMeta: Record<string, unknown>): ElementIndex {
+  let index = elementIndexCache.get(varMeta);
+  if (index) return index;
+  const positioned = new Map<string, Map<number, string>>();
+  for (const key in varMeta) {
+    const position = positionOf(varMeta, key);
+    if (position === undefined) continue;
+    const arrayKey = key.slice(0, key.lastIndexOf('/'));
+    let elements = positioned.get(arrayKey);
+    if (!elements) positioned.set(arrayKey, (elements = new Map()));
+    elements.set(position, key);
   }
-  let byIndex = byArray.get(arrayKey);
-  if (!byIndex) {
-    const byNumber = new Map<number, string>();
-    const prefix = `${arrayKey}/`;
-    for (const key of Object.keys(varMeta)) {
-      if (!key.startsWith(prefix)) continue;
-      const name = key.slice(prefix.length).split('/', 1)[0];
-      const m = name.match(ELEMENT_NAME);
-      if (m) byNumber.set(Number(m[1]), `${prefix}${name}`);
+  index = { positioned, ordered: new Map() };
+  elementIndexCache.set(varMeta, index);
+  return index;
+}
+
+/**
+ * Each element's members the metadata lists — every key below it, a struct
+ * member and its leaves alike — with the path to each inside the element's
+ * value. A nested array is a list there, so a nested element's segment is its
+ * position: `Axes/Axes[1]/Pos` is `Axes/1/Pos`. A member is listed under every
+ * element it sits in, so an inner element shipped on its own feeds it too.
+ */
+function elementMembers(varMeta: Record<string, unknown>, index: ElementIndex) {
+  if (index.members) return index.members;
+  const members = new Map<string, ElementMember[]>();
+  // Per key: every element it sits in, innermost first, with its path there.
+  const within = new Map<string, readonly ElementMember[]>();
+  const elementsOf = (key: string): readonly ElementMember[] => {
+    let found = within.get(key);
+    if (found) return found;
+    found = NO_MEMBERS;
+    const cut = key.lastIndexOf('/');
+    if (cut > 0) {
+      const parent = key.slice(0, cut);
+      const outer = elementsOf(parent);
+      const inElement = positionOf(varMeta, parent) !== undefined;
+      if (outer.length || inElement) {
+        const position = positionOf(varMeta, key);
+        const segment = position === undefined ? key.slice(cut + 1) : String(position);
+        const deeper = outer.map(([element, path]) => [element, [...path, segment]] as const);
+        found = inElement ? [[parent, [segment]], ...deeper] : deeper;
+      }
     }
-    byIndex = new Map(
-      [...byNumber.entries()].sort((a, b) => a[0] - b[0]).map(([, path], i) => [i, path]),
-    );
-    byArray.set(arrayKey, byIndex);
+    within.set(key, found);
+    return found;
+  };
+  if (index.positioned.size > 0) {
+    for (const key in varMeta) {
+      for (const [element, path] of elementsOf(key)) {
+        let listed = members.get(element);
+        if (!listed) members.set(element, (listed = []));
+        listed.push([key, path]);
+      }
+    }
   }
-  return byIndex;
+  index.members = members;
+  return members;
+}
+
+/**
+ * What each struct-array element in `values` holds for the members below it
+ * that the metadata lists, under each member's own key; `undefined` when
+ * nothing. The server ships an element whole, never these members, so applied
+ * with the element they keep each member in step with it: a widget bound to
+ * one reads, writes and subscribes to it as to any variable. A member the
+ * server ships itself, for a page binding it, arrives under its key too, and
+ * whichever arrived last is current.
+ */
+export function elementMemberValues(
+  values: Record<string, unknown>,
+  varMeta: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const index = elementIndex(varMeta);
+  if (index.positioned.size === 0) return undefined;
+  const members = elementMembers(varMeta, index);
+  let out: Record<string, unknown> | undefined;
+  for (const key in values) {
+    const listed = members.get(key);
+    if (!listed) continue;
+    for (const [member, path] of listed) {
+      const value = pickPath(values[key], path);
+      if (value !== undefined) (out ??= {})[member] = value;
+    }
+  }
+  return out;
+}
+
+function elementPaths(
+  varMeta: Record<string, unknown>,
+  arrayKey: string,
+): ReadonlyMap<number, string> {
+  const { positioned, ordered } = elementIndex(varMeta);
+  let paths = ordered.get(arrayKey);
+  if (!paths) {
+    paths = new Map([...(positioned.get(arrayKey) ?? [])].sort((a, b) => a[0] - b[0]));
+    ordered.set(arrayKey, paths);
+  }
+  return paths;
 }
 
 export function structElementPath(
@@ -47,52 +143,94 @@ export function structElementPath(
   return elementPaths(varMeta, arrayKey).get(index);
 }
 
-/** The store key a struct array's element at position `index` lives under:
- *  the element folder named in the metadata, else the `[index]` name a
- *  metadata-less test fixture uses. The backend ships an indexed element
- *  under this key and not inside the whole array. */
+/** Whether an array's elements may arrive under keys of their own: a struct
+ *  array's do, a scalar array's never — it arrives whole. Until the array's
+ *  metadata arrives its kind is unknown, so its elements are looked for too. */
+export function mayHaveElementKeys(varMeta: Record<string, unknown>, arrayKey: string): boolean {
+  const meta = varMeta[arrayKey];
+  return !(isRecord(meta) && isRecord(meta.type) && meta.type.kind === 'scalar');
+}
+
+/** The store key a struct array's element at position `index` lives under —
+ *  the backend ships an indexed element under it, not inside the whole array:
+ *  the element folder the metadata names at that position. `undefined` for a
+ *  scalar array, and until the metadata names the element: no name can be
+ *  built from the index, `[1]` being position 0 of an array counting from 1. */
 export function structElementKey(
   varMeta: Record<string, unknown>,
   arrayKey: string,
   index: number,
-): string {
-  return structElementPath(varMeta, arrayKey, index) ?? `${arrayKey}/[${index}]`;
+): string | undefined {
+  return mayHaveElementKeys(varMeta, arrayKey)
+    ? structElementPath(varMeta, arrayKey, index)
+    : undefined;
+}
+
+/**
+ * The leaf of a member of one struct-array element, addressed as the array's
+ * path plus the member path at an index: what `{ $componentProp: 'device/sName' }`
+ * makes of an input passing `{ path: 'PLC:Motors', index: 1 }`. That key names
+ * no variable, so it has no metadata; its nearest ancestor that has some is the
+ * array. `undefined` for a key with metadata of its own, without an index, and
+ * when that ancestor is not a struct array or holds no element at `index`.
+ */
+export function memberLeafKey(
+  varMeta: Record<string, unknown>,
+  key: string,
+  index: number | undefined,
+): string | undefined {
+  if (index === undefined || varMeta[key] !== undefined) return undefined;
+  for (let slash = key.lastIndexOf('/'); slash > 0; slash = key.lastIndexOf('/', slash - 1)) {
+    const meta = varMeta[key.slice(0, slash)];
+    if (meta === undefined) continue;
+    const type = isRecord(meta) && isRecord(meta.type) ? meta.type : undefined;
+    if (type?.kind !== 'struct' || type.array !== true) return undefined;
+    const element = structElementPath(varMeta, key.slice(0, slash), index);
+    return element === undefined ? undefined : `${element}/${key.slice(slash + 1)}`;
+  }
+  return undefined;
 }
 
 /** One element of an array variable as the store holds it: a struct array's
  *  element under its own key, else the whole value sliced; `undefined` when
- *  neither has arrived. */
+ *  neither has arrived. A member of an element (`memberLeafKey`) is its leaf,
+ *  which the store keeps in step with the element (`elementMemberValues`). */
 export function readArrayElement(
   values: Record<string, unknown>,
   varMeta: Record<string, unknown>,
   arrayKey: string,
   index: number,
 ): unknown {
-  const element = values[structElementKey(varMeta, arrayKey, index)];
+  const leaf = memberLeafKey(varMeta, arrayKey, index);
+  if (leaf !== undefined) return values[leaf];
+  const key = structElementKey(varMeta, arrayKey, index);
+  const element = key === undefined ? undefined : values[key];
   if (element !== undefined) return element;
   const whole = values[arrayKey];
   return Array.isArray(whole) ? whole[index] : undefined;
 }
 
 /** The element a struct array's shape is read off: the one at position `index`
- *  when given and present, otherwise the first. Mirrored by `_element_path` in
- *  the backend validator. */
+ *  when given and present, otherwise the lowest-positioned one the metadata
+ *  holds. The backend validator's `_element_path` sees every element, so its
+ *  fallback is always position 0. */
 export function structShapeElementPath(
   varMeta: Record<string, unknown>,
   arrayKey: string,
   index?: number,
 ): string | undefined {
   const paths = elementPaths(varMeta, arrayKey);
-  const bound = index === undefined ? undefined : paths.get(index);
-  if (bound !== undefined || paths.size === 0) return bound;
-  return paths.get(0);
+  return (index === undefined ? undefined : paths.get(index)) ?? paths.values().next().value;
 }
 
 /** Read a slash-path out of a record element; numeric segments index arrays. */
 function pickMember(item: unknown, member: string | undefined): unknown {
-  if (!member) return item;
+  return member ? pickPath(item, member.split('/')) : item;
+}
+
+function pickPath(item: unknown, path: readonly string[]): unknown {
   let cur: unknown = item;
-  for (const seg of member.split('/')) {
+  for (const seg of path) {
     if (Array.isArray(cur)) cur = cur[Number(seg)];
     else if (isRecord(cur)) cur = cur[seg];
     else return undefined;
@@ -182,7 +320,7 @@ export function containsRepeatRef(value: unknown): boolean {
  * included — and `$var` with `repeatIndex` into a plain indexed `$var`.
  *
  * Done once, up front, for the same reason `$componentProp` is substituted in
- * `useResolvedProperties`: everything downstream — the live subscription, the
+ * `useScopedProperties`: everything downstream — the live subscription, the
  * binding overlay, the widget's own writer — then sees an ordinary `$var` and
  * needs no knowledge of repeaters. Unchanged subtrees keep their identity.
  */

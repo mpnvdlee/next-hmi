@@ -2,6 +2,7 @@
 import asyncio
 import json
 import sys
+import threading
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -11,6 +12,7 @@ import api.datasource_api as datasource_api_module
 import core.storage as storage
 import httpx
 import pytest
+import services.datasource_manager as datasource_manager_module
 from core.exceptions import register_exception_handlers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -1096,3 +1098,291 @@ def test_discover_response_carries_the_supported_flag(ds_client, monkeypatch):
 
     assert resp.status_code == 200
     assert [ep["supported"] for ep in resp.json()["endpoints"]] == [False, True]
+
+
+# ── Saves leave the event loop ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_datasource_saves_write_and_build_off_the_event_loop(
+    monkeypatch, tmp_path, live_project_root: Path
+):
+    """A large datasource takes tens of milliseconds to write and as long again
+    to build its registry, and the same loop drives every live value. Each
+    route that saves does both in a worker thread, and still swaps the new
+    entry in on the loop and persists exactly what it applies."""
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    manager = DatasourceManager()
+    certificate = _presented(tmp_path, "untrusted")
+    monkeypatch.setattr(datasource_api_module, "datasource_manager", manager)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", _CertificatePool(certificate))
+    monkeypatch.setattr(datasource_api_module, "_test_server_pool", None)
+
+    threads: dict[str, set[int]] = {"write": set(), "build": set(), "apply": set()}
+    real_write, real_apply = datasource_manager_module.write_json, manager.apply_config
+
+    def write_json(path, data):
+        threads["write"].add(threading.get_ident())
+        real_write(path, data)
+
+    class RecordingEntry(datasource_manager_module.DatasourceEntry):
+        def __init__(self, config):
+            threads["build"].add(threading.get_ident())
+            super().__init__(config)
+
+    def apply_config(*args, **kwargs):
+        threads["apply"].add(threading.get_ident())
+        return real_apply(*args, **kwargs)
+
+    monkeypatch.setattr(datasource_manager_module, "write_json", write_json)
+    monkeypatch.setattr(datasource_manager_module, "DatasourceEntry", RecordingEntry)
+    monkeypatch.setattr(manager, "apply_config", apply_config)
+
+    from api.datasource_api import router
+
+    test_app = FastAPI()
+    register_exception_handlers(test_app)
+    test_app.include_router(router)
+    settings = {"server_url": "opc.tcp://plc:4840", "server_certificate": ""}
+    transport = httpx.ASGITransport(app=test_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        responses = [
+            await ac.put(
+                "/api/datasources/plc1",
+                json={"type": "opcua-client", "settings": settings, "variables": []},
+            ),
+            await ac.put(
+                "/api/datasources/plc1/variables",
+                json=[{"display_name": "Temp", "data_type": "Float"}],
+            ),
+            await ac.post(
+                "/api/datasources/plc1/server-certificate/trust",
+                json={"fingerprint": certificate.fingerprint},
+            ),
+        ]
+
+    assert [resp.status_code for resp in responses] == [200, 200, 200]
+    loop_thread = threading.get_ident()
+    assert threads["write"] and loop_thread not in threads["write"]
+    assert threads["build"] and loop_thread not in threads["build"]
+    assert threads["apply"] == {loop_thread}
+    config = manager.get("plc1").config
+    assert storage.read_json(storage.active_datasources_dir() / "plc1.json") == config
+    assert config["settings"]["server_certificate"] == "certs/plc1-server.der"
+    assert [v["display_name"] for v in config["variables"]] == ["Temp"]
+
+
+def test_saving_a_static_datasource_keeps_live_values_and_rechecks_alarms(
+    ds_client, monkeypatch
+):
+    """The static datasource's cache carry-over and its alarm re-check run as
+    they did before saves left the loop."""
+    client, manager = ds_client
+    count = {"display_name": "Count", "data_type": "Integer", "enabled": True}
+    manager.save("DS", {"name": "DS", "type": "static", "variables": [count]})
+    manager.update_static_value("DS", "Count", 42)
+    from services.alarm_manager import alarm_manager
+
+    evaluated: list[bool] = []
+    monkeypatch.setattr(alarm_manager, "evaluate_cached", lambda: evaluated.append(True))
+
+    new = {"display_name": "New", "data_type": "Integer", "enabled": True}
+    resp = client.put("/api/datasources/DS/variables", json=[count, new])
+
+    assert resp.status_code == 200
+    assert manager.get_cached_values({"DS:Count", "DS:New"}) == {"DS:Count": 42, "DS:New": 0}
+    assert len(evaluated) == 1
+
+
+def test_put_clears_removed_keys_once_the_new_entry_is_in(ds_client, monkeypatch):
+    """Cleared before the swap, a page switch while the save runs would fetch
+    the removed keys' values back from the old entry, and nothing would clear
+    them again."""
+    client, manager = ds_client
+    old = {"display_name": "Old", "data_type": "Integer", "enabled": True}
+    manager.save("plc1", {"name": "plc1", "type": "static", "variables": [old]})
+    seen = []
+
+    async def record(keys):
+        seen.append((keys, [v["display_name"] for v in manager.get("plc1").config["variables"]]))
+
+    monkeypatch.setattr(datasource_api_module, "_broadcast_removed_keys", record)
+    new = {"display_name": "New", "data_type": "Integer", "enabled": True}
+    resp = client.put("/api/datasources/plc1", json={"type": "static", "variables": [new]})
+
+    assert resp.status_code == 200
+    assert seen == [(["plc1:Old"], ["New"])]
+
+
+def _slow_builds(monkeypatch) -> None:
+    """Building the registry of a config whose settings say ``slow`` takes 0.2 s."""
+
+    class SlowEntry(datasource_manager_module.DatasourceEntry):
+        def __init__(self, config):
+            if config["settings"].get("slow"):
+                time.sleep(0.2)
+            super().__init__(config)
+
+    monkeypatch.setattr(datasource_manager_module, "DatasourceEntry", SlowEntry)
+
+
+@pytest.mark.asyncio
+async def test_a_variables_save_builds_on_an_overlapping_settings_save(
+    monkeypatch, live_project_root: Path
+):
+    """A slow build must not let a save apply over a later save's file; and a
+    variables save must build on the settings a save that overlapped it
+    committed, not write them back old."""
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    manager = DatasourceManager()
+    monkeypatch.setattr(datasource_api_module, "datasource_manager", manager)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", None)
+    monkeypatch.setattr(datasource_api_module, "_test_server_pool", None)
+    _slow_builds(monkeypatch)
+    manager.save("DS", {"name": "DS", "type": "opcua-client", "settings": {}, "variables": []})
+
+    from api.datasource_api import router
+
+    test_app = FastAPI()
+    register_exception_handlers(test_app)
+    test_app.include_router(router)
+    settings = {"slow": True, "server_url": "opc.tcp://plc:4840"}
+    variables = [{"display_name": "Temp", "data_type": "Float"}]
+    first = asyncio.create_task(manager.save_async(
+        "DS", {"name": "DS", "type": "opcua-client", "settings": settings, "variables": []},
+    ))
+    await asyncio.sleep(0.05)
+    transport = httpx.ASGITransport(app=test_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.put("/api/datasources/DS/variables", json=variables)
+    await first
+
+    assert resp.status_code == 200
+    expected = {"name": "DS", "type": "opcua-client", "settings": settings, "variables": variables}
+    assert manager.get("DS").config == expected
+    assert storage.read_json(storage.active_datasources_dir() / "DS.json") == expected
+
+
+@pytest.mark.asyncio
+async def test_a_settings_save_keeps_the_variables_an_overlapping_save_committed(
+    monkeypatch, live_project_root: Path
+):
+    """A settings-only PUT keeps the variable tree as the save lock finds it:
+    read before waiting for the lock, it wrote back the tree a variables save
+    committed meanwhile."""
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    manager = DatasourceManager()
+    monkeypatch.setattr(datasource_api_module, "datasource_manager", manager)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", None)
+    monkeypatch.setattr(datasource_api_module, "_test_server_pool", None)
+    _slow_builds(monkeypatch)
+    manager.save("DS", {"name": "DS", "type": "opcua-client", "settings": {}, "variables": []})
+
+    from api.datasource_api import router
+
+    test_app = FastAPI()
+    register_exception_handlers(test_app)
+    test_app.include_router(router)
+    variables = [{"display_name": "Temp", "data_type": "Float"}]
+    first = asyncio.create_task(manager.save_async(
+        "DS", {"name": "DS", "type": "opcua-client", "settings": {"slow": True}, "variables": variables},
+    ))
+    await asyncio.sleep(0.05)
+    transport = httpx.ASGITransport(app=test_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.put(
+            "/api/datasources/DS",
+            json={"type": "opcua-client", "settings": {"server_url": "opc.tcp://plc:4840"}},
+        )
+    await first
+
+    assert resp.status_code == 200 and resp.json()["variables"] == variables
+    assert manager.get("DS").config["variables"] == variables
+    assert storage.read_json(storage.active_datasources_dir() / "DS.json")["variables"] == variables
+
+
+@pytest.mark.asyncio
+async def test_a_settings_save_clears_the_keys_an_overlapping_save_added(
+    monkeypatch, live_project_root: Path
+):
+    """A full PUT clears the keys of the entry its save replaced: taken from
+    the entry read before waiting for the lock, a variable an overlapping save
+    added kept its value from the old runtime."""
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    manager = DatasourceManager()
+    monkeypatch.setattr(datasource_api_module, "datasource_manager", manager)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", None)
+    monkeypatch.setattr(datasource_api_module, "_test_server_pool", None)
+    _slow_builds(monkeypatch)
+    manager.save("DS", {"name": "DS", "type": "opcua-client", "settings": {}, "variables": []})
+    cleared: list[list[str]] = []
+
+    async def record(keys):
+        cleared.append(keys)
+
+    monkeypatch.setattr(datasource_api_module, "_broadcast_removed_keys", record)
+
+    from api.datasource_api import router
+
+    test_app = FastAPI()
+    register_exception_handlers(test_app)
+    test_app.include_router(router)
+    variables = [{"display_name": "Temp", "data_type": "Float", "enabled": True}]
+    first = asyncio.create_task(manager.save_async(
+        "DS", {"name": "DS", "type": "opcua-client", "settings": {"slow": True}, "variables": variables},
+    ))
+    await asyncio.sleep(0.05)
+    transport = httpx.ASGITransport(app=test_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.put(
+            "/api/datasources/DS",
+            json={"type": "opcua-client", "settings": {"server_url": "opc.tcp://plc:4840"}},
+        )
+    await first
+
+    assert resp.status_code == 200
+    assert cleared == [["DS:Temp"]]
+
+
+@pytest.mark.asyncio
+async def test_a_delete_waits_for_a_save_in_flight(monkeypatch, live_project_root: Path):
+    """A delete landing while a save's threads ran was undone when the save
+    then swapped its entry in."""
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    manager = DatasourceManager()
+    _slow_builds(monkeypatch)
+    manager.save("DS", {"name": "DS", "type": "opcua-client", "settings": {}, "variables": []})
+
+    save = asyncio.create_task(manager.save_async(
+        "DS", {"name": "DS", "type": "opcua-client", "settings": {"slow": True}, "variables": []},
+    ))
+    await asyncio.sleep(0.05)
+    await manager.delete_async("DS")
+    await save
+
+    assert manager.get("DS") is None
+    assert not (storage.active_datasources_dir() / "DS.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_save_still_applies_what_it_wrote(
+    monkeypatch, live_project_root: Path
+):
+    """A request cancelled mid-save must not leave the new file on disk and the
+    old entry in memory, nor let the next save start before it is done."""
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    manager = DatasourceManager()
+    _slow_builds(monkeypatch)
+    cancelled = {"name": "DS", "type": "opcua-client", "settings": {"slow": True}, "variables": []}
+
+    task = asyncio.create_task(manager.save_async("DS", cancelled))
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+    replaced = await manager.save_async(
+        "DS", {"name": "DS", "type": "opcua-client", "settings": {}, "variables": []},
+    )
+
+    assert replaced is not None
+    assert replaced.config == cancelled

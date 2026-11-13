@@ -283,7 +283,11 @@ validates it, both doc trees describe it.
 1. `frontend/src/shared/types/config.ts` — the persisted shape.
 2. `frontend/src/hmi/utils/propertySourceRegistry.ts` — descriptor: label,
    produced value type, default-value factory, content tier.
-3. `frontend/src/hmi/utils/propertySourceEval.ts` — evaluation.
+3. `frontend/src/hmi/utils/propertySourceEval.ts` — evaluation. A source
+   that reads a store through the eval context (alarms, recipes, widget
+   props, …) also needs its store bit in `STORES_OF_SOURCE`
+   (`frontend/src/hmi/hooks/useEvalContext.ts`), or a widget reading it never
+   re-renders when that store changes.
 4. An editor under `frontend/src/config/components/editor/PropertySourceEditor/editors/`
    — its own file, or beside its relatives (`conditional.tsx` holds `$if`,
    `$compare`, `$not`, `$and` / `$or`, `$switch`; `leaf.tsx` the one-control sources) —

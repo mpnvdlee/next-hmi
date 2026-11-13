@@ -8,6 +8,7 @@ server).  Conversion real → simple happens at the HMI boundaries.
 """
 
 import base64
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -212,3 +213,34 @@ def json_ready(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [json_ready(v) for v in value]
     return json_ready_scalar(value)
+
+
+def _member(node: Any, step: str | int) -> Any:
+    """*node*'s list item or dict field *step*, or None when it has none."""
+    if isinstance(step, int):
+        return node[step] if isinstance(node, list) and step < len(node) else None
+    return node.get(step) if isinstance(node, dict) else None
+
+
+def _place(
+    container: dict | list,
+    steps: tuple[str | int, ...],
+    value: Any,
+    make: Callable[[Any, type], Any] = lambda node, kind: node if isinstance(node, kind) else kind(),
+) -> dict | list:
+    """Set *value* at *steps* in *container*: a ``str`` step is a dict field,
+    an ``int`` step a list element (the list grows with empty elements up to
+    it). Each container on the way is ``make(member, kind)`` — by default the
+    member itself when it is a *kind*, else a new one. Returns the container
+    *value* went into."""
+    for i, step in enumerate(steps):
+        if isinstance(step, int) and step >= len(container):
+            container.extend({} for _ in range(step + 1 - len(container)))
+        if i == len(steps) - 1:
+            container[step] = value
+            return container
+        member = _member(container, step)
+        child = make(member, list if isinstance(steps[i + 1], int) else dict)
+        if child is not member:
+            container[step] = child
+        container = child

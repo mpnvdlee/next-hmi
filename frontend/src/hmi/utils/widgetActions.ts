@@ -5,15 +5,16 @@ import type {
   OverlayPlacement,
 } from '@shared/types/config';
 import { USER_ACTIONS, isUserAction, writeTargetAddress } from '@shared/types/config';
-import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
+import type { EvaluationContext } from '@hmi/utils/propertySourceEval';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { evaluatePropertyValue, resolveBoundIndex } from '@hmi/utils/propertySourceEval';
 import { toNumber } from '@hmi/utils/coercion';
 import { formatNumber } from '@shared/utils/formatNumber';
-import { substituteBoundIndexes } from '@hmi/utils/boundIndexResolution';
+import { substituteBoundIndexes, substituteMemberLeaves } from '@hmi/utils/boundIndexResolution';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { resolveComponentPropValue } from '@hmi/utils/componentPropResolution';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
+import { readStoredVariable, STORE_VARIABLE_RESOLVERS } from '@hmi/hooks/useEvalContext';
 import { resolveUserField, useHmiStore } from '@hmi/store/hmiStore';
 import { useThemeRuntimeStore } from '@hmi/store/themeRuntimeStore';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -51,18 +52,14 @@ function anchorRectFor(
   };
 }
 
-function readStoredVariable(datasource: string, path: string): ResolvedValue {
-  const value = useVariableStore.getState().values[`${datasource}:${path}`];
-  return (value !== undefined ? value : null) as ResolvedValue;
-}
-
 /** A write target as it stands at the moment of the write: a component input it
- *  names swapped for the binding the instance passed, and its bound index
- *  resolved — an action fired by a page or global event never passed through a
- *  widget's resolution. */
+ *  names swapped for the binding the instance passed, its bound index resolved,
+ *  and a member of a struct-array element bound to its own leaf — an action
+ *  fired by a page or global event never passed through a widget's resolution. */
 function resolveWriteTarget(target: unknown, ctx: EvaluationContext): unknown {
   const bound = resolveComponentPropValue(target, ctx.inputScopeProps);
-  return substituteBoundIndexes(bound, (index) => resolveBoundIndex(index, ctx));
+  const resolved = substituteBoundIndexes(bound, (index) => resolveBoundIndex(index, ctx));
+  return substituteMemberLeaves(resolved, useVariableStore.getState().varMeta);
 }
 
 /** The value a write address holds now. A struct member read outside a widget
@@ -88,7 +85,9 @@ function configuredRange(address: { datasource: string; path: string }): {
   integer: boolean;
 } {
   const { varMeta } = useVariableStore.getState();
-  const location = address.path.replace(/\[-?\d+\]/g, '');
+  // Only the trailing slot of an array write: an element folder's own `[N]`
+  // (`Motors/Motors[1]/fSpeed`) is part of the leaf's path.
+  const location = address.path.replace(/\[-?\d+\]$/, '');
   const own = varMeta[`${address.datasource}:${location}`];
   if (own) {
     const integer = own.type.kind === 'scalar' && own.type.base === 'Integer';
@@ -112,7 +111,7 @@ function optionalNumber(value: unknown, ctx: EvaluationContext): number | undefi
 function storeEvalContext(scope: string): EvaluationContext {
   const currentUser = () => useHmiStore.getState().currentUsersByScope[scope];
   return {
-    resolveVariable: readStoredVariable,
+    ...STORE_VARIABLE_RESOLVERS,
     resolveTranslation: (key) => useTranslationStore.getState().resolve(key),
     resolveValueMap: findValueMap,
     resolveUser: (field) => resolveUserField(currentUser(), field),

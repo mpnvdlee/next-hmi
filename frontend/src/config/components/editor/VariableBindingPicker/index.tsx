@@ -42,11 +42,10 @@ import { acceptedValueTypes, isStructType, primaryType } from '@shared/utils/val
 import { useToggleSet } from '@shared/hooks/useToggleSet';
 import { treePaddingLeft } from '@config/utils/treeRowLayout';
 import { widgetRegistry } from '@hmi/registry/widgetRegistry';
-import { useVariableStore } from '@hmi/store/variableStore';
 import type { VariableBinding } from '@shared/types/config';
 import type { DatasourceListItem } from '@shared/types/datasource';
 import { parseVarKey } from '@shared/types/datasource';
-import { isArrayShape, isFixedArray } from '@shared/types/arrayShape';
+import { isArrayShape, isDynamicArray } from '@shared/types/arrayShape';
 import { findComponentInPages } from '@shared/utils/widgetTree';
 import { allPageRootNodes } from '@shared/utils/pageTree';
 import { apiJson } from '@shared/utils/api';
@@ -61,6 +60,7 @@ import {
   typeFilter,
   findRawFolder,
   collectFolderKeys,
+  elementNameAt,
   resolveElementBinding,
   rowSelectionKey,
   BIT_KEY,
@@ -157,14 +157,18 @@ export default function VariableBindingPicker() {
     const base = wrapped.path;
     if (wrapped.repeatIndex) return `${base}${REPEAT_INDEX_SUFFIX}`;
     if (wrapped.bit !== undefined) return `${base}${BIT_KEY}${wrapped.bit}`;
-    if (wrapped.index === undefined) return base;
+    // A bound index names no element: the picker opens on the array.
+    if (typeof wrapped.index !== 'number') return base;
     // struct[] elements are addressed by folder path (".../[N]"), scalar
-    // arrays by a bracket suffix on the variable's own path —
-    // mirrors the encodings handleConfirm produces below.
-    const baseType = useVariableStore.getState().varMeta[base]?.type;
-    const isStructArray = baseType?.kind === 'struct' && baseType.array;
-    return isStructArray ? `${base}/[${wrapped.index}]` : `${base}[${wrapped.index}]`;
-  }, [isComponentPropMode, comp, target]);
+    // arrays by a bracket suffix on the variable's own path — mirrors the
+    // encodings handleConfirm produces below. A struct[] index is a position,
+    // named by the element folder there. Without one (past the end, or the
+    // tree not loaded yet) it keeps the suffix, which no struct[] row has: the
+    // drawer says Not found rather than show an element merely named like it.
+    const array = findRawFolder(dsTree, base);
+    const name = array && isArrayShape(array) ? elementNameAt(array, wrapped.index) : undefined;
+    return name ? `${base}/${name}` : `${base}[${wrapped.index}]`;
+  }, [isComponentPropMode, comp, target, dsTree]);
 
   // Reset shared state on open
   useEffect(() => {
@@ -201,6 +205,16 @@ export default function VariableBindingPicker() {
     // currentKey is intentionally excluded — we only want to capture it at open time
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isComponentPropMode]);
+
+  // A struct[] element's name needs its datasource's tree, which loads after
+  // the picker opens: the preselect follows `currentKey` as it resolves,
+  // unless the user has selected something else meanwhile.
+  const lastCurrentKey = useRef(currentKey);
+  useEffect(() => {
+    const previous = lastCurrentKey.current;
+    lastCurrentKey.current = currentKey;
+    if (open) setSelectedKey((key) => (key === previous ? currentKey : key));
+  }, [open, currentKey]);
 
   // Cleanup abort controllers on close
   useEffect(() => {
@@ -497,15 +511,18 @@ export default function VariableBindingPicker() {
   }, [isComponentPropMode, dsTree, listBits]);
 
   // A dynamic array's `[#]` rows follow its live length, which only arrives
-  // for keys some context asked for — so ask for them while the picker is open.
+  // for keys some context asked for — so ask for them while the picker is open
+  // (it stays mounted after a close, so only `open` says so).
   useEffect(() => {
+    if (!open) return;
     const keys = allVars
-      .filter((v) => isArrayShape(v) && !isFixedArray(v))
+      .filter(isDynamicArray)
+      // Bounds the fast-subscription set the open picker asks for.
       .slice(0, 500)
       .map((v) => buildVarKey(v._datasource ?? '', v._path ?? v.display_name));
     setContextProducer('binding-picker', { priorityKeys: keys });
     return () => clearContextProducer('binding-picker');
-  }, [allVars]);
+  }, [open, allVars]);
 
   // The type-filtered tree a selected folder is judged against, even while
   // "Show all" lists everything.

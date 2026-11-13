@@ -3,7 +3,12 @@
   color: var(--cfg-text-muted);
 }
 
-.cfg-runtimes-table__time {
+.cfg-runtimes-table__time,
+.cfg-runtimes-table__count {
   color: var(--cfg-text-muted);
   white-space: nowrap;
+}
+
+.cfg-runtimes-table__count {
+  font-variant-numeric: tabular-nums;
 }

@@ -17,7 +17,7 @@ export function isFixedArray(node: ArrayShapeNode): boolean {
   return isArrayShape(node) && typeof node.array_length === 'number' && node.array_length > 0;
 }
 
-function isDynamicArray(node: ArrayShapeNode): boolean {
+export function isDynamicArray(node: ArrayShapeNode): boolean {
   return isArrayShape(node) && !isFixedArray(node);
 }
 

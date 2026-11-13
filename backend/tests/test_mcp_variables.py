@@ -58,6 +58,52 @@ def test_variables_add_at_root_writes_canonical_shape():
     ]
 
 
+def _child_answers(monkeypatch, status: int, body: dict) -> list:
+    """A running child for the project in scope, answering *status* and *body*."""
+    import httpx
+    from services.supervisor import supervisor
+
+    seen: list = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(status, json=body)
+
+    monkeypatch.setattr(variables_tools, "current_scoped_project_id", lambda: "plant")
+    monkeypatch.setattr(supervisor, "port_for", lambda project_id: 65000)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(variables_tools, "loopback_client", lambda: client)
+    return seen
+
+
+def test_a_running_project_s_child_runs_the_tool(monkeypatch):
+    """The child saves the datasource from the editor under a lock this process
+    cannot take: it runs the edit, and this process writes nothing."""
+    path = _write_ds("Static", {"name": "Static", "type": "static", "variables": []})
+    seen = _child_answers(monkeypatch, 200, {"result": "applied", "path": "myFlag"})
+
+    response = _run(variables_tools.variables_add(datasource="Static", name="myFlag", data_type="boolean"))
+
+    assert response == {"result": "applied", "path": "myFlag"}
+    assert json.loads(path.read_text())["variables"] == []
+    assert len(seen) == 1
+    url_path, body = seen[0]
+    assert url_path == "/api/internal/variables/variables_add"
+    assert body["args"] == {
+        "datasource": "Static", "name": "myFlag", "data_type": "boolean",
+        "parent_path": None, "settings": None, "idempotency_key": None,
+    }
+
+
+def test_a_child_s_refusal_is_raised_as_the_same_error(monkeypatch):
+    from core.exceptions import ConfigNotFoundError
+
+    _child_answers(monkeypatch, 404, {"detail": "Variable 'Static:x' not found"})
+
+    with pytest.raises(ConfigNotFoundError, match="Static:x"):
+        _run(variables_tools.variables_delete(datasource="Static", path="x", confirm=True))
+
+
 def test_variables_add_under_existing_folder():
     _write_ds(
         "PLC",

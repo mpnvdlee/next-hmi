@@ -13,8 +13,10 @@ import {
  *  - the subset of those keys the render actually *reads* (see
  *    `renderedVarKeys` below),
  *  - whether a `$time` source appears anywhere inside it,
- *  - whether an `$http` source appears anywhere inside it, and
- *  - whether a `$if` / `$switch` appears anywhere inside it.
+ *  - whether an `$http` source appears anywhere inside it,
+ *  - the recipe types a `$recipe` reads a changed field of,
+ *  - whether a `$if` / `$switch` appears anywhere inside it, and
+ *  - every property-source key anywhere inside it.
  *
  * `extractVarKeys`, `extractRenderedVarKeys`, `usesTime` and `usesHttp` are thin
  * accessors over this, so a widget that needs several of them (WidgetRenderer)
@@ -48,9 +50,16 @@ interface PropertyValueAnalysis {
   indexedVarRefs: readonly { key: string; index: number }[];
   usesTime: boolean;
   usesHttp: boolean;
+  /** Recipe types a `$recipe` reads a changed field of (`parametersChanged`,
+   *  `parameterChanged`, `changedCount`). Those compare the loaded dataset with
+   *  the parameters' live values, whose keys the source does not name. */
+  recipeChangeTypes: readonly string[];
   /** Lets the binding overlay skip its per-render branch walk for a value with
    *  no branch to take — the common case. */
   usesBranch: boolean;
+  /** `$alarmCount`, `$widgetProp`, … — lets an eval context follow only the
+   *  stores its reader's sources read (`storesReadBy`). */
+  sourceKeys: readonly string[];
 }
 
 interface WalkState {
@@ -58,7 +67,11 @@ interface WalkState {
   usesHttp: boolean;
   usesBranch: boolean;
   indexed: { key: string; index: number }[];
+  recipeChangeTypes: string[];
+  sourceKeys: string[];
 }
+
+const RECIPE_CHANGE_FIELDS = new Set(['parametersChanged', 'parameterChanged', 'changedCount']);
 
 const EMPTY_KEYS: readonly string[] = Object.freeze([]);
 const EMPTY_REFS: readonly { key: string; index: number }[] = Object.freeze([]);
@@ -68,7 +81,9 @@ const EMPTY: PropertyValueAnalysis = Object.freeze({
   indexedVarRefs: EMPTY_REFS,
   usesTime: false,
   usesHttp: false,
+  recipeChangeTypes: EMPTY_KEYS,
   usesBranch: false,
+  sourceKeys: EMPTY_KEYS,
 });
 const cache = new WeakMap<object, PropertyValueAnalysis>();
 
@@ -80,20 +95,29 @@ export function analyzePropertyValue(value: unknown): PropertyValueAnalysis {
   const keys: string[] = [];
   const seen = new Set<string>();
   const rendered = new Set<string>();
-  const state: WalkState = { usesTime: false, usesHttp: false, usesBranch: false, indexed: [] };
+  const state: WalkState = {
+    usesTime: false,
+    usesHttp: false,
+    usesBranch: false,
+    indexed: [],
+    recipeChangeTypes: [],
+    sourceKeys: [],
+  };
   walk(value, keys, seen, rendered, state, true);
 
-  const result: PropertyValueAnalysis =
-    keys.length || state.usesTime || state.usesHttp || state.usesBranch
-      ? {
-          varKeys: keys.length ? keys : EMPTY_KEYS,
-          renderedVarKeys: rendered.size ? keys.filter((key) => rendered.has(key)) : EMPTY_KEYS,
-          indexedVarRefs: state.indexed.length ? state.indexed : EMPTY_REFS,
-          usesTime: state.usesTime,
-          usesHttp: state.usesHttp,
-          usesBranch: state.usesBranch,
-        }
-      : EMPTY;
+  // Every other finding sits on an object with a `$` key, so no source key means none.
+  const result: PropertyValueAnalysis = state.sourceKeys.length
+    ? {
+        varKeys: keys.length ? keys : EMPTY_KEYS,
+        renderedVarKeys: rendered.size ? keys.filter((key) => rendered.has(key)) : EMPTY_KEYS,
+        indexedVarRefs: state.indexed.length ? state.indexed : EMPTY_REFS,
+        usesTime: state.usesTime,
+        usesHttp: state.usesHttp,
+        recipeChangeTypes: state.recipeChangeTypes.length ? state.recipeChangeTypes : EMPTY_KEYS,
+        usesBranch: state.usesBranch,
+        sourceKeys: state.sourceKeys,
+      }
+    : EMPTY;
   cache.set(value, result);
   return result;
 }
@@ -111,6 +135,10 @@ function walk(
   if (Array.isArray(value)) {
     for (const el of value) walk(el, keys, seen, rendered, state, onScreen);
     return;
+  }
+
+  for (const key of Object.keys(value)) {
+    if (key.startsWith('$') && !state.sourceKeys.includes(key)) state.sourceKeys.push(key);
   }
 
   if (isVarSource(value)) {
@@ -139,6 +167,15 @@ function walk(
   // `$if` / `$switch` results are alternatives: still subscribed to (the branch
   // taken can change), but only the discriminants are read on every render.
   const record = value as Record<string, unknown>;
+  const recipe = record.$recipe;
+  if (
+    isRecord(recipe) &&
+    typeof recipe.type === 'string' &&
+    RECIPE_CHANGE_FIELDS.has(String(recipe.field)) &&
+    !state.recipeChangeTypes.includes(recipe.type)
+  ) {
+    state.recipeChangeTypes.push(recipe.type);
+  }
   if (isRecord(record.$if) || isRecord(record.$switch)) state.usesBranch = true;
   const ifSource = record.$if;
   if (onScreen && isRecord(ifSource)) {

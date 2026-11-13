@@ -1,5 +1,5 @@
 import { analyzePropertyValue } from './analyzePropertyValue';
-import { structElementPath } from './repeatItemResolution';
+import { mayHaveElementKeys, structElementPath } from './repeatItemResolution';
 
 /**
  * Every scalar variable key (`datasource:path`) referenced by a `$var` wrapper
@@ -16,13 +16,18 @@ export function extractVarKeys(value: unknown): readonly string[] {
   return analyzePropertyValue(value).varKeys;
 }
 
-const liveKeysCache = new WeakMap<readonly string[], WeakMap<object, readonly string[]>>();
+// The list each analysis was last answered with. Keyed by the analysis and
+// holding no metadata: a frame is kept alive by nothing here once the store
+// has moved on.
+const lastLiveKeys = new WeakMap<readonly string[], readonly string[]>();
 
 /**
  * {@link extractVarKeys} plus the element keys of every struct array bound at
  * a literal index: the backend ships such an element under its own key and
  * not the whole array, so a live subscription on the array alone would never
- * tick. Memoised per (analysis, metadata) like the analysis itself.
+ * tick. Answers that name the same keys as the last one return the very same
+ * list — the `extractVarKeys` one when there is no element to add — so a new
+ * metadata frame re-renders no subscriber.
  */
 export function extractLiveKeys(
   value: unknown,
@@ -30,19 +35,18 @@ export function extractLiveKeys(
 ): readonly string[] {
   const analysis = analyzePropertyValue(value);
   if (analysis.indexedVarRefs.length === 0) return analysis.varKeys;
-  let byMeta = liveKeysCache.get(analysis.varKeys);
-  if (!byMeta) {
-    byMeta = new WeakMap();
-    liveKeysCache.set(analysis.varKeys, byMeta);
-  }
-  const cached = byMeta.get(varMeta);
-  if (cached) return cached;
-  const keys = [...analysis.varKeys];
+  const added: string[] = [];
   for (const { key, index } of analysis.indexedVarRefs) {
+    if (!mayHaveElementKeys(varMeta, key)) continue;
     const elementKey = structElementPath(varMeta, key, index);
-    if (elementKey !== undefined && !keys.includes(elementKey)) keys.push(elementKey);
+    if (elementKey !== undefined && !analysis.varKeys.includes(elementKey)) {
+      if (!added.includes(elementKey)) added.push(elementKey);
+    }
   }
-  byMeta.set(varMeta, keys);
+  const keys = added.length ? [...analysis.varKeys, ...added] : analysis.varKeys;
+  const last = lastLiveKeys.get(analysis.varKeys);
+  if (last && last.length === keys.length && last.every((k, i) => k === keys[i])) return last;
+  lastLiveKeys.set(analysis.varKeys, keys);
   return keys;
 }
 

@@ -7,6 +7,7 @@ import {
   type BindingStoreSlice,
 } from './bindingValidation';
 import type { VarMeta } from '../store/variableStore';
+import { elementMemberValues } from './repeatItemResolution';
 import type { EvaluationContext, ResolvedValue } from './propertySourceEval';
 import type { AcceptType, VarType } from '@shared/types/varType';
 
@@ -167,7 +168,10 @@ describe('checkBindingSpec', () => {
     });
     const base = slice({
       values: { 'PLC:Alarms': [{ id: 1 }, { id: 2 }] },
-      varMeta: { 'PLC:Alarms': meta(structArray) },
+      varMeta: {
+        'PLC:Alarms': meta(structArray),
+        'PLC:Alarms/[1]': meta({ ...structArray, array: false }, { position: 1 }),
+      },
     });
 
     expect(checkBindingSpec(spec, base, true)).toBe('pending');
@@ -255,8 +259,11 @@ describe('checkBindingSpec — base types and struct members', () => {
 
   const motors: VarType = { ...motor, name: 'Motors', array: true };
   const writtenSpeed = [{ name: 'Speed', write: true }];
+  // Each element folder names its position, from 0 whatever the PLC counts from.
   const motorsMeta = (first: number) => ({
     'PLC:Motors': meta(motors),
+    [`PLC:Motors/Line[${first}]`]: meta(motor, { position: 0 }),
+    [`PLC:Motors/Line[${first + 1}]`]: meta(motor, { position: 1 }),
     [`PLC:Motors/Line[${first}]/Speed`]: meta(float, { writable: false }),
     [`PLC:Motors/Line[${first}]/Name`]: meta(float),
     [`PLC:Motors/Line[${first + 1}]/Speed`]: meta(float, { writable: true }),
@@ -330,6 +337,84 @@ describe('checkBindingSpec — base types and struct members', () => {
       'PLC:Motor/Name': { ...motorMeta['PLC:Motor/Name'], writable: true },
     };
     expect(selector({ ...base, varMeta: nameWritable })).toBe('ok');
+  });
+});
+
+describe('checkBindingSpec — a member of a struct bound whole', () => {
+  // A dialog handed `device` = `PLC:M1/sstDev` reads `device/Hmi/fPos`; only the
+  // struct is subscribed, so the member arrives inside its record.
+  const float = meta({ kind: 'scalar', base: 'Float', array: false });
+  const leaf = 'PLC:M1/sstDev/Hmi/fPos';
+  const spec: BindingSpec = { id: leaf, accept: [] };
+
+  it('is ok once the struct holding it has arrived', () => {
+    const s = slice({
+      values: { 'PLC:M1/sstDev': { Hmi: { fPos: 0 } } },
+      varMeta: { [leaf]: float },
+    });
+    expect(checkBindingSpec(spec, s, true)).toBe('ok');
+  });
+
+  it('is pending while neither it nor the struct has', () => {
+    expect(checkBindingSpec(spec, slice({ varMeta: { [leaf]: float } }), true)).toBe('pending');
+  });
+
+  it('is re-judged when only the struct holding it changes', () => {
+    const selector = createBindingStatusSelector([spec]);
+    const before = slice({ values: {}, varMeta: { [leaf]: float } });
+    expect(selector(before)).toBe('nodata');
+    expect(selector({ ...before, values: { 'PLC:M1/sstDev': { Hmi: { fPos: 1 } } } })).toBe('ok');
+  });
+});
+
+describe('checkBindingSpec — a member of a struct-array element', () => {
+  // `$componentProp: "device/sName"` on an instance passing `PLC:Motors` at 1,
+  // a TwinCAT array counting from 1, binds the member's leaf. The server ships
+  // element [2] and the metadata below it; the leaf is filled in from it.
+  const motors: VarType = { kind: 'struct', name: 'Motor', array: true, fields: ['sName'] };
+  const elementMeta = {
+    'PLC:Motors': meta(motors),
+    'PLC:Motors/Motors[2]': meta({ ...motors, array: false }, { position: 1 }),
+    'PLC:Motors/Motors[2]/sName': meta(
+      { kind: 'scalar', base: 'String', array: false },
+      { writable: true },
+    ),
+  };
+  const shipped = { 'PLC:Motors/Motors[2]': { sName: 'Pump 2' } };
+  const arrived = slice({
+    values: { ...shipped, ...elementMemberValues(shipped, elementMeta) },
+    varMeta: elementMeta,
+  });
+  const member = (overrides: Partial<BindingSpec> = {}): BindingSpec => ({
+    id: 'PLC:Motors/Motors[2]/sName',
+    accept: [{ kind: 'scalar', base: 'String', array: false }],
+    ...overrides,
+  });
+
+  it('is ok once the element arrives', () => {
+    expect(checkBindingSpec(member(), arrived, true)).toBe('ok');
+    expect(checkBindingSpec(member({ write: true }), arrived, true)).toBe('ok');
+  });
+
+  it('waits for the element', () => {
+    expect(checkBindingSpec(member(), { ...arrived, values: {} }, true)).toBe('pending');
+  });
+
+  it("is invalid for the leaf's wrong type or access, or a member the element lacks", () => {
+    const integer: AcceptType = { kind: 'scalar', base: 'Integer', array: false };
+    expect(checkBindingSpec(member({ accept: [integer] }), arrived, true)).toBe('invalid');
+    const readOnly = slice({
+      ...arrived,
+      varMeta: {
+        ...elementMeta,
+        'PLC:Motors/Motors[2]/sName': meta({ kind: 'scalar', base: 'String', array: false }),
+      },
+    });
+    expect(checkBindingSpec(member({ write: true }), readOnly, true)).toBe('invalid');
+    const missing = member({ id: 'PLC:Motors/Motors[2]/sMissing' });
+    expect(checkBindingSpec(missing, arrived, true)).toBe('invalid');
+    // Until the metadata is authoritative a missing member only waits.
+    expect(checkBindingSpec(missing, arrived, false)).toBe('pending');
   });
 });
 
@@ -659,7 +744,7 @@ describe('createBindingStatusSelector', () => {
     const specA: BindingSpec = { id: 'PLC:A', accept: [] };
 
     let recomputeCount = 0;
-    const selector = createBindingStatusSelector([specA], () => {
+    const selector = createBindingStatusSelector([specA], true, () => {
       recomputeCount++;
     });
 
@@ -687,7 +772,7 @@ describe('createBindingStatusSelector', () => {
     const specA: BindingSpec = { id: 'PLC:A', accept: [] };
 
     let recomputeCount = 0;
-    const selector = createBindingStatusSelector([specA], () => {
+    const selector = createBindingStatusSelector([specA], true, () => {
       recomputeCount++;
     });
 
@@ -712,7 +797,10 @@ describe('createBindingStatusSelector', () => {
       values: {
         'PLC:Alarms': [{ id: 1 }, { id: 2 }],
       },
-      varMeta: { 'PLC:Alarms': meta(structArray) },
+      varMeta: {
+        'PLC:Alarms': meta(structArray),
+        'PLC:Alarms/[1]': meta({ ...structArray, array: false }, { position: 1 }),
+      },
     });
 
     // The element key has not been delivered yet — no data, not a bad binding.
@@ -723,5 +811,82 @@ describe('createBindingStatusSelector', () => {
         values: { ...base.values, 'PLC:Alarms/[1]': { id: 2 } },
       }),
     ).toBe('ok');
+  });
+
+  it('waits on the element a page metadata positions, not the one its rank gives', () => {
+    // TwinCAT ARRAY[1..10] bound at position 5 only: the page holds element [6] alone.
+    const selector = createBindingStatusSelector([
+      { id: 'PLC:Alarms', index: 5, accept: [{ kind: 'struct', array: false }] },
+    ]);
+    const base = slice({
+      varMeta: {
+        'PLC:Alarms': meta(structArray),
+        'PLC:Alarms/[6]': meta({ ...structArray, array: false }, { position: 5 }),
+      },
+    });
+    expect(selector(base)).toBe('nodata');
+    expect(selector({ ...base, values: { 'PLC:Alarms/[6]': { id: 6 } } })).toBe('ok');
+  });
+
+  it('never takes another position for a bound index the metadata holds no element at', () => {
+    const elementMeta = (position: number) => meta({ ...structArray, array: false }, { position });
+    const status = (index: number, s: BindingStoreSlice) =>
+      createBindingStatusSelector([
+        { id: 'PLC:Alarms', index, accept: [{ kind: 'struct', array: false }] },
+      ])(s);
+    // ARRAY[1..10] bound at 9 and 10: only position 9, element [10], exists.
+    const pastEnd = slice({
+      values: { 'PLC:Alarms/[10]': { id: 10 } },
+      varMeta: { 'PLC:Alarms': meta(structArray), 'PLC:Alarms/[10]': elementMeta(9) },
+    });
+    expect(status(9, pastEnd)).toBe('ok');
+    expect(status(10, pastEnd)).toBe('nodata');
+    // The previous page's metadata, which held position 0 — element [1].
+    const stale = slice({
+      values: { 'PLC:Alarms/[1]': { id: 1 } },
+      varMeta: { 'PLC:Alarms': meta(structArray), 'PLC:Alarms/[1]': elementMeta(0) },
+    });
+    expect(status(1, stale)).toBe('nodata');
+  });
+
+  it('re-judges a member of an element when its metadata lands after the value', () => {
+    const selector = createBindingStatusSelector([
+      { id: 'PLC:Motors/[1]/sName', accept: [{ kind: 'scalar', base: 'String', array: false }] },
+    ]);
+    const motors: VarType = { kind: 'struct', name: 'Motor', array: true, fields: ['sName'] };
+    // This page's element has arrived; the previous page's metadata is still in the store.
+    const previous = slice({
+      values: { 'PLC:Motors/[1]': { sName: 'Pump 1' }, 'PLC:Motors/[1]/sName': 'Pump 1' },
+      varMeta: { 'PLC:Other': meta({ kind: 'scalar', base: 'Float', array: false }) },
+    });
+    expect(selector(previous)).toBe('disabled');
+    // This page's metadata, the same values object.
+    const landed = {
+      ...previous,
+      varMeta: {
+        'PLC:Motors': meta(motors),
+        'PLC:Motors/[1]': meta({ ...motors, array: false }, { position: 0 }),
+        'PLC:Motors/[1]/sName': meta({ kind: 'scalar', base: 'String', array: false }),
+      },
+    };
+    expect(selector(landed)).toBe('ok');
+    expect(selector({ ...landed, values: {} })).toBe('nodata');
+  });
+
+  it('watches no element key for a scalar array bound at an index', () => {
+    let recomputeCount = 0;
+    const selector = createBindingStatusSelector(
+      [{ id: 'PLC:Zones', index: 1, accept: [] }],
+      true,
+      () => recomputeCount++,
+    );
+    const base = slice({
+      values: { 'PLC:Zones': [10, 20, 30] },
+      varMeta: { 'PLC:Zones': meta({ kind: 'scalar', base: 'Integer', array: true }) },
+    });
+    expect(selector(base)).toBe('ok');
+    // A key in `[N]` form is no element of a scalar array, so it is no dependency.
+    selector({ ...base, values: { ...base.values, 'PLC:Zones/[1]': 99 } });
+    expect(recomputeCount).toBe(1);
   });
 });

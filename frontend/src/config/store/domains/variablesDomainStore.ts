@@ -41,6 +41,8 @@ interface VariablesViewState {
   deleteDatasource(name: string): Promise<void>;
   saveSettings(config: DatasourceConfig): Promise<void>;
   refreshSelected(): Promise<void>;
+  /** Adopt a variable tree this tab just saved, without fetching it back. */
+  applySavedVariables(name: string, variables: TreeNode[]): void;
   /** Record a server certificate the backend just pinned, in the loaded config
    *  and in any unsaved settings draft, so a later save does not unpin it. */
   pinServerCertificate(name: string, path: string): void;
@@ -235,6 +237,16 @@ export const useVariablesDomainStore = create<VariablesDomainStore>((set, get) =
       const selectedName = get().selectedName;
       if (selectedName) await get().loadConfig(selectedName);
     },
+
+    // PUT /variables stores the body verbatim, so the saved tree is the one in
+    // hand. Re-fetching it cost a 15 MB download for a large PLC and emptied
+    // the table while it was in flight.
+    applySavedVariables: (name, variables) =>
+      set((state) =>
+        state.selectedConfig?.name === name
+          ? { selectedConfig: { ...state.selectedConfig, variables } }
+          : state,
+      ),
 
     pinServerCertificate: (name, path) =>
       set((state) => {

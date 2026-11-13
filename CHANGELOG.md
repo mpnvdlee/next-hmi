@@ -42,6 +42,22 @@ heading.
   connection settings saves them first and browses once the datasource has
   reconnected, instead of walking the server with the old settings.
 
+- **A component input bound to an array element showed red.** An instance
+  passing one element of a struct array to a component input showed a red
+  cross on every widget reading a member of it (`device/sName`), with no
+  value, and writing that member was refused. The member now shows and is
+  written.
+
+- **A Repeater over an array of structs showed its members as no data.** A
+  widget showing one member of its copy's element stayed empty under an amber
+  mark, because the server sends each element whole, not its members one by
+  one. The member is now read from its element, and writes still reach it.
+
+- **Edit Value on a Repeater item showed no range.** On a member of an element
+  of an array of structs, the numpad showed no configured range and took
+  decimals for a whole-number variable. It now uses the member's own range and
+  type.
+
 - **A Repeater over a PLC array that counts from 1.** Over a struct array
   `A[1..500]`, the first two copies both showed `A[1]` and `A[500]` was never
   drawn. A copy now shows the element at its position, counted from 0 as the
@@ -73,6 +89,171 @@ heading.
   timeout** sits beside it in the datasource panel. The Admin page's
   Connected Runtimes table shows per browser how many keys its context holds
   and how much it has been sent.
+
+- **Writes to TwinCAT and S7 PLCs were refused.** A write carried a source
+  timestamp, which they reject (`BadWriteNotSupported`); it now sends the
+  value alone.
+
+- **A page with about 1,800 bindings never loaded.** Its request to the
+  server was over 64 KB and was dropped whole; the limit is now 1 MiB.
+
+- **The no-connection cross no longer flashes on every navigation.** A
+  revisited page shows its last values until fresh ones arrive, and a binding
+  whose metadata is still on its way is not shown as broken.
+
+- **The runtime no longer stalls on a page switch against a large PLC.**
+  Against 72,000 variables it could hang for up to 30 s.
+
+- **A struct-array binding at a fixed index could show the wrong element.**
+  On a page binding only some elements, `Motors[1]` read another element as
+  live. The binding picker now also writes and shows an element by position.
+
+- **A page could stop updating when several panels switched pages at once.**
+  It received no live values until the next page switch.
+
+- **Large pages no longer drop the TwinCAT connection.** Reads and
+  subscriptions are split to fit the server's 4 MiB request limit.
+
+- **Values arrive sooner after a PLC reconnects.** After a dropped
+  connection the HMI tries again within half a second instead of waiting out
+  **Reconnect (s)** (5 s by default) first, and waits longer, up to that
+  setting, while the PLC stays away: in a test the data was back within a
+  second of the PLC instead of up to 4.4 s. The open page is subscribed
+  first, before the background subscription is rebuilt.
+
+- **Values were missing after the HMI connected to a PLC.** A value the PLC
+  sent the moment it was subscribed could be dropped, and stayed missing
+  until it next changed: the first page after a start showed 1 of its 160
+  values in a test, values that changed during a short outage stayed stale
+  after the reconnect, and on a PLC that limits how many variables one
+  request may subscribe most of a large page stayed blank. The HMI is now
+  ready for each value before it asks the PLC to send it.
+
+- **An outage no longer leaves load behind on the PLC for hours.** Each
+  reconnect starts new subscriptions, and the ones the dropped connection
+  left behind kept their variables on the PLC for 8 minutes to several
+  hours. They now expire after about two minutes.
+
+- **A page subscribes only what it shows.** Opening a page in a page group
+  subscribed every page of the group around it: on one project a page
+  binding a few dozen variables put over 8,000 on the fast subscription. A
+  page now subscribes its own widgets, the header and footer of the groups it
+  sits in, and the header, footer, sidebars and global events every page
+  shares; the other pages of a group subscribe when they are shown. A page
+  group's own header and footer now show live values, which they never did.
+
+- **A sidebar or variable trigger reading a whole array got no value** while
+  the open page bound one element of that array at a fixed index.
+
+- **Fewer requests per page switch.** The server's sampling interval is read
+  once per connection, and an unchanged page context is not sent again.
+
+- **Browser memory stays bounded on long sessions.** A browser keeps the
+  values of its most recent pages only, so long sessions no longer slow down.
+
+- **A variable removed from a datasource could reappear on an open screen**
+  when a value for it was still on its way, and stay until the next page
+  switch. Values arriving just before a page switch could likewise outlive
+  the browser's last three pages.
+
+- **Large Repeaters stay smooth.** A Repeater redrew every copy whenever one
+  element of its array changed: with 1,000 copies, one change redrew 4,001
+  widgets, now 5. A widget now redraws only for its own values, not because
+  the widget around it did, and opening a dialog no longer redraws every
+  Repeater copy and input on the page beneath it.
+
+- **Recipe change indicators follow the live values.** A widget showing a
+  recipe's *Parameters changed*, *Parameter changed* or *Number of changed
+  parameters* updated only when something else redrew it, so an
+  unsaved-changes indicator could lag behind a parameter edit. A header,
+  sidebar or alarm popup showing one follows them too.
+
+- **A header or sidebar showing one element of a struct array updates live.**
+  Bound at a fixed index, it showed the element's first value and then stopped
+  following it.
+
+- **Alarm text reads one element of a struct array as a page does.** A `{n}`
+  placeholder bound to one element of a struct array looked it up in the whole
+  array instead of reading the element itself, as widgets and page and global
+  events do.
+
+- **A variable no longer goes without values after a busy PLC refused it.** A
+  variable the PLC refused or did not answer while moving between the page's
+  fast subscription and the background one was retried once and then dropped
+  until the next reconnect, and a page switch that timed out could leave it
+  with no subscription at all. It now goes back to the background and is
+  retried at the health checks until the PLC takes it, waiting twice as many
+  checks after each refusal, up to 16, so a PLC at its monitored-item limit is
+  not asked again every few seconds. A node the PLC does not know is not
+  retried.
+
+- **A PLC that stops publishing a subscription is reconnected cleanly.** The
+  OPC-UA library re-created such a subscription under new handles the HMI
+  never learned, so a later page switch left variables subscribed twice on the
+  PLC. The HMI now reconnects instead.
+
+- **Saving a datasource's settings no longer undoes variable edits.** Saving
+  settings and variables together could write the variable tree back as it was
+  before the edits, when the variables save finished first.
+
+- **An agent's variable edit and an editor save no longer undo each other.** On
+  a running project, saving a datasource in the editor while an agent added,
+  removed or changed one of its variables over MCP could write the tree back
+  without the agent's change, or the agent's write could undo the save. The
+  running project now applies the agent's edit itself, one save after the
+  other.
+
+- **A static variable write updates the struct around its array.** Writing a
+  member of an array element in a static datasource updated the element and
+  the array, but a struct holding that array kept showing the old value.
+
+- **Alarms and popups no longer redraw every widget.** An alarm change, a
+  widget publishing a value for others to read, an opened dialog, a recipe
+  change or new device information redrew every widget on the page: on a
+  page of 3,000 widgets an alarm change took about 0.8 s and a dialog about
+  0.9 s. Only the widgets that show such a value redraw now, in a few
+  milliseconds, and live values on a busy page take about half as long to
+  draw. A project's custom widgets still redraw on each of these, since
+  their code may read any of them.
+
+- **No red flash when a page's metadata arrives late.** A binding stays amber
+  until its page's metadata is complete, instead of turning red after 3 s.
+
+- **Saving a datasource no longer stalls live values.**
+
+- **Bursts of struct-array changes cost less.** Each touched element is
+  copied once per event-loop turn, not once per member: about 6× less backend
+  time for 8,000 members changing at once.
+
+- **Fast-changing struct arrays cost less server CPU.** On a page with a
+  250-slave EtherCAT diagnostics array taking 10,000 changes a second, the
+  server's CPU went from about 55% to about 32%.
+
+- **The first page after a start or a datasource save no longer pauses.**
+  Describing a large PLC's variables held the server up for up to half a
+  second; that now happens in the background.
+
+- **Nested arrays of structs keep their shape.** After one member of an
+  element changed, a struct bound whole that holds an array of structs from
+  a TwinCAT PLC, whose elements are named `stSetupPosition[1]` rather than
+  `[1]`, received that array as named entries instead of a list, and an
+  array of structs inside another array of structs lost all but the changed
+  element. Both stay lists now.
+
+- **Struct bindings deliver their nested arrays.** A struct bound whole
+  subscribed and read only the members outside the arrays it holds, so an
+  array inside it could stay missing: one TwinCAT device struct got 145 of
+  its 577 members. It now arrives whole, each array inside it a list in
+  element order, an array of arrays a list of lists. This raises the PLC
+  subscriptions on pages that bind such structs: on one project 9 of 113
+  pages subscribe more, all pages together 26% more variables (46,784
+  instead of 37,004).
+
+- **Re-browsing a large server is faster.** The changes list stays responsive
+  with tens of thousands of rows, and applying it no longer walks the tree.
+
+- **On Windows, a save or widget build could fail while a virus scanner held
+  the file.** The write now retries briefly.
 
 - **A translation key with `?` or `#` in it reached the instance cut off**, so
   deleting the key `Start?` deleted `Start`.

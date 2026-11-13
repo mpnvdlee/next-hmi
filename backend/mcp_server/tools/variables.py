@@ -9,7 +9,12 @@ from core.exceptions import (
     ConfigNotFoundError,
     ConfigValidationError,
 )
-from core.storage import active_datasources_dir, read_json, write_json
+from core.storage import (
+    active_datasources_dir,
+    current_scoped_project_id,
+    read_json,
+    write_json,
+)
 from core.validation import is_valid_datasource_name, validate_variable_write_fields
 from core.value_types import representative_opcua_type, to_simple_type
 from services.datasource_manager import datasource_manager
@@ -19,8 +24,48 @@ from .. import idempotency, locks
 from ..confirm import applied_response, dry_run_response
 from ..pagination import paginated_payload
 from ..server import expose_read_tool, get_agent_label, register_tool
-from ..write_helpers import emit_change
+from ..write_helpers import emit_change, loopback_client
 from ._common import merge_patch
+
+# The tools a running project's child runs in the workspace MCP's stead.
+FORWARDED_TOOLS = frozenset({"variables_add", "variables_delete", "variables_set_property"})
+_CHILD_ERRORS = {404: ConfigNotFoundError, 409: ConfigConflictError, 422: ConfigValidationError}
+# Waits for an editor save of the same datasource, then for the subscription change.
+_CHILD_TIMEOUT_SECONDS = 30.0
+
+
+async def _in_running_child(tool: str, **args: Any) -> dict[str, Any] | None:
+    """*tool*'s response from the running child of the project in scope, or
+    None when no child runs it: in this process, outside any project scope, or
+    for a project that is not running, whose files nothing else writes.
+
+    A running child saves the datasource from the editor, building on the tree
+    it holds in memory, under a lock this process cannot take: a file written
+    here meanwhile would be written back over. The child runs the tool itself,
+    under that lock (``api.internal_api.run_variable_tool``).
+    """
+    import httpx
+    from services.supervisor import supervisor
+
+    project_id = current_scoped_project_id()
+    port = supervisor.port_for(project_id) if project_id is not None else None
+    if port is None:
+        return None
+    try:
+        resp = await loopback_client().post(
+            f"http://127.0.0.1:{port}/api/internal/variables/{tool}",
+            json={"args": args, "agent_label": get_agent_label()},
+            timeout=_CHILD_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError as exc:
+        raise ConfigConflictError(f"Project '{project_id}' did not answer: {exc}") from exc
+    if resp.is_error:
+        try:
+            detail = resp.json().get("detail", resp.text)
+        except ValueError:
+            detail = resp.text
+        raise _CHILD_ERRORS.get(resp.status_code, ConfigConflictError)(str(detail))
+    return resp.json()
 
 
 def _ds_path(datasource: str):
@@ -241,6 +286,12 @@ async def variables_add(
     The variable is written in the same shape the UI editor produces:
     ``{ kind: "variable", display_name, data_type, enabled, writable, ... }``.
     """
+    forwarded = await _in_running_child(
+        "variables_add", datasource=datasource, name=name, data_type=data_type,
+        parent_path=parent_path, settings=settings, idempotency_key=idempotency_key,
+    )
+    if forwarded is not None:
+        return forwarded
     label = get_agent_label()
     if idempotency_key:
         cached = idempotency.get(label, idempotency_key)
@@ -307,6 +358,12 @@ async def variables_delete(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Delete a variable by tree ``path``. Two-step: dry-run unless ``confirm=true``."""
+    forwarded = await _in_running_child(
+        "variables_delete", datasource=datasource, path=path, confirm=confirm,
+        idempotency_key=idempotency_key,
+    )
+    if forwarded is not None:
+        return forwarded
     label = get_agent_label()
     if idempotency_key:
         cached = idempotency.get(label, idempotency_key)
@@ -370,6 +427,12 @@ async def variables_set_property(
     ``extensions`` object (preserved verbatim, including per-key deletion via
     ``{"extensions": {"key": null}}``). ``kind``/``display_name``/``data_type``
     and the server-derived ``present_on_server`` cannot be patched here."""
+    forwarded = await _in_running_child(
+        "variables_set_property", datasource=datasource, path=path, patch=patch,
+        idempotency_key=idempotency_key,
+    )
+    if forwarded is not None:
+        return forwarded
     label = get_agent_label()
     if idempotency_key:
         cached = idempotency.get(label, idempotency_key)

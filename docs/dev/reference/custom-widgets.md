@@ -192,6 +192,7 @@ The whitelist is whole-word matched against `frontend/src/shared/utils/nextHmiSd
 - Do not import React, hooks, or internal app helpers — use the SDK globals listed below.
 - Use `selfLayoutStyle(layout)` on the outermost wrapper so the editor's layout fields (Width/Height mode, Fill weight, min/max size, etc.) take effect.
 - Use `widgetColorStyle(color)` when a schema `color` field should override a default theme color.
+- Read every live value through a hook that subscribes to it — the [property resolvers](#property-resolvers), `useVariable`, `useStructVariable`, `useVariableMeta`, … A widget re-renders for its own reasons only: a value its properties bind, a `$time` or `$http` tick, a hook it calls, a context it reads. The renderer is memoised on the widget's node, so a re-render of the widget around it does not reach it: a value read without a subscription — a variable its properties do not bind, read through a non-hook getter — stays as it was until one of those comes.
 - Type declarations for the SDK live in `frontend/custom-widgets-sdk.d.ts`; copy or reference it from your project's `tsconfig` to get editor completion.
 
 Minimal example:
@@ -225,8 +226,8 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 - `useVariable(key)` — subscribe to a single composite-key scalar variable.
 - `useBindingValue(binding)` — same, but takes a `VariableBinding` (or `undefined`).
 - `useStructVariable(key)` — subscribe to a struct (returns `Record<string, unknown>`) or an array-of-struct (returns `unknown[]`).
-- `useVariableMeta(key)` — subscribe to `{ type, min?, max?, writable?, fieldRanges? }`. `type` is the canonical scalar/struct `VarType` with `array: boolean` and an optional fixed `length`; `min`/`max` apply to scalar numeric variables, `writable` says whether a scalar variable accepts writes, and `fieldRanges` carries per-field struct ranges. Returns `undefined` if the key isn't known.
-- `useEvalContext()` — returns the active `EvaluationContext` used to resolve `$var` / `$loc` / `$urlParam` / `$user` / `$userGroups` / `$device` / `$time` / `$pageIsActive` / `$random` / `$if` / `$compare` / `$not` / `$and` / `$or` / `$formula` / `$switch` / `$widgetProp` / `$componentProp` / `$overlay` / `$repeatItem` / `$stringExpr` / `$http` / `$alarmCount` / `$recipe` / `$page` / `$viewport` / `$result` property sources. The full source/type model is in [../architecture/value-types.md](../architecture/value-types.md).
+- `useVariableMeta(key)` — subscribe to `{ type, min?, max?, writable?, fieldRanges?, position? }`. `type` is the canonical scalar/struct `VarType` with `array: boolean` and an optional fixed `length`; `min`/`max` apply to scalar numeric variables, `writable` says whether a scalar variable accepts writes, `fieldRanges` carries per-field struct ranges, and `position` is a struct-array element's index in its array, from 0. Returns `undefined` if the key isn't known.
+- `useEvalContext()` — returns the active `EvaluationContext` used to resolve `$var` / `$loc` / `$urlParam` / `$user` / `$userGroups` / `$device` / `$time` / `$pageIsActive` / `$random` / `$if` / `$compare` / `$not` / `$and` / `$or` / `$formula` / `$switch` / `$widgetProp` / `$componentProp` / `$overlay` / `$repeatItem` / `$stringExpr` / `$http` / `$alarmCount` / `$recipe` / `$page` / `$viewport` / `$result` property sources. The full source/type model is in [../architecture/value-types.md](../architecture/value-types.md). In your widget it follows every store its resolvers read — alarm counts, widget exports, recipes, open dialogs, device info — so a value you read through it re-renders the widget when it changes, whether or not a property names it. A built-in widget follows only the stores its own properties read ([frontend.md](../architecture/frontend.md#property-types-and-sources)).
 - `bindingKey(binding)` — composes a `"datasource:path"` key from a `VariableBinding`.
 - `parseVarKey(key)` — splits `"datasource:path"` back into `{ datasource, path }`.
 - `useWriteVariable(properties, propKey, options?)` — returns `(value, opts?) => void`, the supported way to write a bound variable. See [Writing values](#writing-values).
@@ -349,7 +350,10 @@ decide *where* each node goes, or to render a node that is not its own child.
 - `renderWidget(node)` — renders one such node. Pass it a `WidgetConfig` from
   `childConfigs`, from a `widgets`-typed property, or from `useComponentSlot`.
   The node goes through the normal renderer, so it keeps its own visibility gate,
-  binding overlay and error boundary.
+  binding overlay and error boundary. That renderer is memoised on the node:
+  pass each one on as you received it. A node rebuilt on every render
+  re-renders its whole subtree every time, and one changed in place is not
+  re-rendered at all.
 - `useComponentSlot(slot)` → `WidgetConfig[]` — the widgets a *caller* placed in
   the named slot of the component instance being rendered. `[]` outside an
   instance, or for a slot nobody filled.
@@ -607,7 +611,7 @@ The binding picker matches the nested shape: it verifies that the selected struc
 
 #### Array-of-struct bindings
 
-When the target OPC-UA variable is an array of structs — represented as a folder containing indexed sub-folders `[0]`, `[1]`, `[2]`, … — use an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`):
+When the target OPC-UA variable is an array of structs — represented as an `is_array` folder of element sub-folders named `[0]`, `[1]`, … or, from TwinCAT, `aMotors[0]`, `aMotors[1]`, … ([data-formats](../architecture/data-formats.md#variable-tree-model)) — use an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`):
 
 ```ts
 motors: {
@@ -617,7 +621,7 @@ motors: {
 }
 ```
 
-The `requiredFields` describe the shape of each array element. The binding picker shows only folders whose children are all `[N]`-indexed sub-folders, and validates that the lowest-index element (`[0]`, or `[1]` for an array counting from 1) satisfies the required fields; the runtime and the editor's warnings judge the bound element, or that same lowest-index one when none is bound.
+The `requiredFields` describe the shape of each array element. The binding picker shows only array-of-struct folders, and validates that the lowest-index element (`[0]`, or `[1]` for an array counting from 1, whatever comes before the brackets) satisfies the required fields; the runtime and the editor's warnings judge the bound element, or that same lowest-index one when none is bound.
 
 At runtime, the backend returns a JSON array:
 
@@ -882,7 +886,7 @@ The value types and the full source model are specified in [../architecture/valu
 
 The picker, the runtime binding check and the editor's warnings all hold a bound struct to every one of these — name, type, access and nesting — against the same element of a struct array, so a struct the picker offers (without **Show all**) is one the page accepts. A disabled member, or one gone from the server, counts as missing.
 
-Set an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`) on the field itself to require an array-of-struct folder (children must be `[0]`, `[1]`, …). The `requiredFields` then describe the shape of each element. At runtime the value is a JSON array (`unknown[]`), accessed via `usePropStruct` or the explicit `useStructVariable(key)` for write-back.
+Set an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`) on the field itself to require an array-of-struct folder (elements `[0]`, `[1]`, … or `Name[0]`, `Name[1]`, …). The `requiredFields` then describe the shape of each element. At runtime the value is a JSON array (`unknown[]`), accessed via `usePropStruct` or the explicit `useStructVariable(key)` for write-back.
 
 ### `option-list` source types
 

@@ -331,8 +331,6 @@
   font-family: var(--cfg-font);
   font-size: var(--cfg-font-size-base);
   flex-shrink: 0;
-  max-height: 40vh;
-  overflow-y: auto;
 }
 
 .cfg-browse-diff__header {
@@ -341,10 +339,12 @@
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--cfg-border);
-  position: sticky;
-  top: 0;
-  background: var(--cfg-surface);
-  z-index: 1;
+}
+
+/* The virtualized list scrolls under a fixed header. */
+.cfg-browse-diff__body {
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 .cfg-browse-diff__title {
@@ -361,19 +361,14 @@
   gap: 0.4rem;
 }
 
-.cfg-browse-diff__group {
-  border-bottom: 1px solid var(--cfg-border);
-}
-
-.cfg-browse-diff__group:last-child {
-  border-bottom: none;
-}
-
 .cfg-browse-diff__group-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0.75rem;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0 0.75rem;
+  border-bottom: 1px solid var(--cfg-border);
   background: color-mix(in srgb, var(--cfg-surface-dark) 40%, var(--cfg-surface));
 }
 
@@ -408,22 +403,15 @@
   cursor: pointer;
 }
 
-.cfg-browse-diff__rows {
-  display: flex;
-  flex-direction: column;
-}
-
 .cfg-browse-diff__row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0.75rem 0.25rem 1.5rem;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0 0.75rem 0 1.5rem;
   cursor: pointer;
   border-bottom: 1px solid color-mix(in srgb, var(--cfg-border) 50%, transparent);
-}
-
-.cfg-browse-diff__row:last-child {
-  border-bottom: none;
 }
 
 .cfg-browse-diff__row:hover {
@@ -461,9 +449,11 @@
   font-size: 0.85em;
 }
 
+/* One line: every row has the same fixed height in the virtualized list. */
 .cfg-browse-diff__chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
   gap: 0.3rem;
 }
 

@@ -61,6 +61,15 @@ function liveValue(binding: unknown, values: Record<string, unknown>): unknown {
   return live;
 }
 
+/** The variable keys the parameters of these recipe types are bound to — what
+ *  the changed fields of `getField` read. */
+export function recipeParameterKeys(config: RecipeConfig, typeIds: readonly string[]): string[] {
+  return config.datasetTypes
+    .filter((t) => typeIds.includes(t.id))
+    .flatMap((t) => t.parameters.map((p) => bindingKey(getVarBinding(p.binding))))
+    .filter(Boolean);
+}
+
 function findType(config: RecipeConfig, typeId: string): RecipeDatasetType | undefined {
   return config.datasetTypes.find((t) => t.id === typeId);
 }
@@ -104,7 +113,8 @@ export const useRecipeStore = create<RecipeStore>((set, get) => ({
       return param ? changed(param) : false;
     }
     if (field === 'changedCount') return type.parameters.filter(changed).length;
-    return type.parameters.some(changed);
+    // Only the fields `analyzePropertyValue` follows the live values of read them.
+    return field === 'parametersChanged' && type.parameters.some(changed);
   },
 
   getList: (typeId) => {

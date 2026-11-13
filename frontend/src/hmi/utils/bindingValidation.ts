@@ -24,13 +24,12 @@ import {
   type VarType,
 } from '@shared/types/varType';
 import { acceptedValueTypes } from '@shared/utils/valueTypes';
-import { isLocalInputKey, useVariableStore } from '../store/variableStore';
+import { isLocalInputKey, readStoredValue, useVariableStore } from '../store/variableStore';
 import type { VarMeta } from '../store/variableStore';
 import { structElementKey, structShapeElementPath } from './repeatItemResolution';
 import { resolveComponentPropValue } from './componentPropResolution';
 import { takenBranch, type EvaluationContext } from './propertySourceEval';
 import { useDataSettling } from '../context/DataSettleContext';
-import { useEvalContext } from '../hooks/useEvalContext';
 import { useMemo } from 'react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -347,11 +346,13 @@ export function checkBindingSpec(
 
   if (index !== undefined && meta.type.kind === 'struct') {
     // The element arrives under its own key; the whole array's value does not stand in.
-    return structElementKey(s.varMeta, id, index) in s.values ? 'ok' : 'pending';
+    const key = structElementKey(s.varMeta, id, index);
+    return key !== undefined && key in s.values ? 'ok' : 'pending';
   }
-  if (!(id in s.values)) return 'pending';
+  // A member of a struct bound whole arrives inside the struct's record.
+  const value = readStoredValue(s.values, id);
+  if (value === undefined) return 'pending';
   if (index !== undefined && meta.type.kind === 'scalar') {
-    const value = s.values[id];
     if (!Array.isArray(value) || index >= value.length) return 'pending';
   }
   return 'ok';
@@ -362,6 +363,7 @@ export function checkBindingSpec(
 export function aggregateBindingStatus(
   bindingSpecs: BindingSpec[],
   s: BindingStoreSlice,
+  metaAuthoritative = true,
 ): BindingStatus {
   if (bindingSpecs.length === 0) return 'ok';
 
@@ -377,7 +379,7 @@ export function aggregateBindingStatus(
   let allPresent = true;
 
   for (const spec of bindingSpecs) {
-    const result = checkBindingSpec(spec, s, s.metadataReceived);
+    const result = checkBindingSpec(spec, s, s.metadataReceived && metaAuthoritative);
     if (result === 'invalid') return 'disabled';
     if (result === 'pending') allPresent = false;
   }
@@ -397,10 +399,12 @@ export function aggregateBindingStatus(
  * datasource's opcua flag, the global ws/snapshot flags). Any other update
  * returns the cached result without scanning at all.
  *
- * `onRecompute` is test instrumentation only.
+ * `metaAuthoritative` false: a key missing from the metadata is not yet known
+ * to be wrong (see `useBindingStatus`). `onRecompute` is test instrumentation only.
  */
 export function createBindingStatusSelector(
   bindingSpecs: BindingSpec[],
+  metaAuthoritative = true,
   onRecompute?: () => void,
 ): (s: BindingStoreSlice) => BindingStatus {
   if (bindingSpecs.length === 0) return () => 'ok';
@@ -408,14 +412,23 @@ export function createBindingStatusSelector(
   const depIds = Array.from(new Set(bindingSpecs.map((spec) => spec.id)));
   // An indexed struct binding reads its element's key, which the metadata
   // names — so that key is resolved per check, against the current metadata.
+  // A scalar array arrives whole and has no element key to watch.
   const indexed = bindingSpecs.filter((spec) => spec.index !== undefined);
-  const depValueIds = (varMeta: Record<string, VarMeta>): string[] => [
-    ...depIds,
-    ...indexed.map((spec) => structElementKey(varMeta, spec.id, spec.index!)),
-  ];
+  // This runs in every bound widget's selector on every store update: without
+  // an indexed spec there is nothing to resolve, so no array to build either.
+  const depValueIds =
+    indexed.length === 0
+      ? () => depIds
+      : (varMeta: Record<string, VarMeta>): string[] => [
+          ...depIds,
+          ...indexed.flatMap((spec) => structElementKey(varMeta, spec.id, spec.index!) ?? []),
+        ];
   const depDatasources = Array.from(new Set(depIds.map((id) => id.split(':')[0])));
-  // A struct's member checks read keys below it, which are not in `depIds`.
-  const readsMembers = bindingSpecs.some((spec) => spec.requiredFields?.length);
+  // A struct's member checks read keys below it, and an indexed spec's element
+  // is named by keys other than its own, so either is re-judged on any new
+  // metadata, not only its own entry's.
+  const readsOtherMeta =
+    indexed.length > 0 || bindingSpecs.some((spec) => spec.requiredFields?.length);
 
   let cache: {
     values: Record<string, unknown>;
@@ -431,8 +444,10 @@ export function createBindingStatusSelector(
       !cache ||
       s.metadataReceived !== cache.metadataReceived ||
       s.wsConnected !== cache.wsConnected ||
-      depValueIds(s.varMeta).some((id) => s.values[id] !== cache!.values[id]) ||
-      (readsMembers
+      depValueIds(s.varMeta).some(
+        (id) => readStoredValue(s.values, id) !== readStoredValue(cache!.values, id),
+      ) ||
+      (readsOtherMeta
         ? s.varMeta !== cache!.varMeta
         : depIds.some((id) => s.varMeta[id] !== cache!.varMeta[id])) ||
       depDatasources.some((ds) => s.opcuaConnected[ds] !== cache!.opcuaConnected[ds]);
@@ -440,7 +455,7 @@ export function createBindingStatusSelector(
     if (!relevantChange) return cache!.result;
 
     onRecompute?.();
-    const result = aggregateBindingStatus(bindingSpecs, s);
+    const result = aggregateBindingStatus(bindingSpecs, s, metaAuthoritative);
     cache = {
       values: s.values,
       varMeta: s.varMeta,
@@ -460,12 +475,19 @@ export function createBindingStatusSelector(
  * 'ok': a page reveals without waiting for its variables, so marking there would
  * flash a mark over the whole page for one OPC-UA read. The selector still runs,
  * so the answer is live the moment the window closes.
+ *
+ * A key missing from the metadata waits too, and longer: until this page's data
+ * has arrived, not until the grace runs out. Metadata is sent per context, so
+ * right after a navigation the store still holds the previous page's: every
+ * binding of the new page would read as unknown and flash the red cross until
+ * the new page's metadata landed. A binding the metadata does describe is still
+ * judged at once.
  */
 export function useBindingStatus(
   properties: Record<string, unknown> | undefined,
   schema: Record<string, BindingSchemaField>,
+  evalCtx: EvaluationContext,
 ): BindingStatus {
-  const evalCtx = useEvalContext();
   const taken = properties ? takenBranchReads(properties, schema, evalCtx) : undefined;
   const branchSig = taken ? takenBranchSignature(taken) : '';
   const bindingSpecs = useMemo(
@@ -475,9 +497,12 @@ export function useBindingStatus(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [properties, schema, branchSig],
   );
-  const selector = useMemo(() => createBindingStatusSelector(bindingSpecs), [bindingSpecs]);
+  const { settling, metaSettled } = useDataSettling();
+  const selector = useMemo(
+    () => createBindingStatusSelector(bindingSpecs, metaSettled),
+    [bindingSpecs, metaSettled],
+  );
   const status = useVariableStore(selector);
-  const settling = useDataSettling();
   // Only "no value yet" waits. A wrong binding is wrong whatever the datasource
   // is doing, and a reconnect reopens this window — holding 'disconnected' would
   // clear every overlay the instant the backend went down.

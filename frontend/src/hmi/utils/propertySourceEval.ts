@@ -81,7 +81,7 @@ export interface EvaluationContext {
   /**
    * Innermost input scope (component instance/page overlay) at the read site.
    * Drives `$componentProp` resolution: top-level references in component property
-   * bags are pre-resolved by `useResolvedProperties`; this is what catches
+   * bags are pre-resolved by `useScopedProperties`; this is what catches
    * references nested inside other sources and inside action payloads.
    */
   inputScopeProps?: Record<string, unknown>;
@@ -98,7 +98,7 @@ export interface EvaluationContext {
   /**
    * The surrounding Repeater copy, when there is one. Widget properties have
    * their repeat references substituted before they get here (see
-   * `useResolvedProperties`); this catches the rest — values read straight off
+   * `useScopedProperties`); this catches the rest — values read straight off
    * an eval context, like an action's payload.
    */
   resolveRepeatItem?: (payload: unknown) => unknown;

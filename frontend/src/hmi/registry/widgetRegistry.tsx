@@ -169,6 +169,10 @@ export const widgetRegistry: Record<string, RegistryEntry> = {};
  *  widgets register after boot, and a recompile re-registers. */
 const declaredHostTypes = new Set<string>();
 
+/** Types a project's own widget registered, a built-in's name included when
+ *  one shadows it. Mutable for the same reasons. */
+const projectWidgetTypes = new Set<string>();
+
 const BUILTIN_WIDGETS_MANIFEST = builtinWidgetsManifest as unknown as CustomWidgetManifestEntry[];
 
 // ── Built-in type set (used by editor to separate built-in from custom in menus) ───
@@ -228,6 +232,12 @@ export function isContainerHostType(type: string): boolean {
   return declaredHostTypes.has(type) || widgetSlots(type).length > 0;
 }
 
+/** A project's own widget rather than a built-in: its code may call any
+ *  eval-context resolver itself, so nothing says which stores it reads. */
+export function isProjectWidgetType(type: string): boolean {
+  return projectWidgetTypes.has(type);
+}
+
 // Shared so `widgetSlots` is allocation-free for the overwhelming majority of
 // types — it is called per widget per render and feeds hook dependency arrays,
 // where a fresh `[]` would defeat every memo downstream.
@@ -252,6 +262,19 @@ export function hasSlotSections(type: string): boolean {
  *  children. `slots` is set — possibly empty — on exactly those entries. */
 export function placesOwnChildren(type: string): boolean {
   return widgetRegistry[type]?.slots !== undefined;
+}
+
+/** True for a host that pins each child by id (a `child-positions` field, as
+ *  ImageContainer has): it reads its children's own properties from
+ *  `childConfigs` — `visible`, to drop a hidden child's marker, and a
+ *  Repeater's `placement`, to spread it over the image — where every other
+ *  host leaves them to the children's own renderers. */
+export function readsChildProperties(type: string): boolean {
+  const schema = widgetRegistry[type]?.schema;
+  return (
+    schema !== undefined &&
+    Object.values(schema).some((field) => primaryType(field.type) === 'child-positions')
+  );
 }
 
 // ── Custom component loader ─────────────────────────────────────────────────────
@@ -357,6 +380,8 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
 
   if (entry.hostsChildren) declaredHostTypes.add(entry.name);
   else declaredHostTypes.delete(entry.name);
+  if (entry.origin === 'builtin') projectWidgetTypes.delete(entry.name);
+  else projectWidgetTypes.add(entry.name);
   setFlowsChildren(entry.name, entry.flowsChildren === true);
   setRepeatsChildren(entry.name, entry.repeatsChildren);
 

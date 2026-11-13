@@ -1003,7 +1003,9 @@ async def _proxy_http_to_child(
             host="127.0.0.1",
             port=port,
             path="/" + path.replace("?", "%3F").replace("#", "%23"),
-            query=request.url.query.encode("utf-8"),
+            # Not request.url.query: Starlette builds request.url from the
+            # decoded path, so a ``%3F`` in it moves the split.
+            query=request.scope.get("query_string", b""),
         )
     except httpx.InvalidURL as exc:
         # A control character the gate let past (a NUL inside a segment, say)

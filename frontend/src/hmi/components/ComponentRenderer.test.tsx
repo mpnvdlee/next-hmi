@@ -1,6 +1,7 @@
 // Renders real built-in widgets (Label); bind the SDK and resolve their modules.
 import '../../../widgets/testSdk';
 import { render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import type { ComponentDefinition } from '@shared/types/componentTypes';
 import type { LayoutConfig, WidgetConfig } from '@shared/types/config';
@@ -358,10 +359,85 @@ describe('ComponentRenderer nested inputs', () => {
     expect(container.textContent).toBe('on');
     expect(root().style.width).toBe('200px');
   });
+
+  it('reads a member of a struct-array element passed in, with no red overlay', async () => {
+    const { useVariableStore } = await import('@hmi/store/variableStore');
+    const { elementMemberValues } = await import('@hmi/utils/repeatItemResolution');
+    const { widgetRegistry } = await import('@hmi/registry/widgetRegistry');
+    const { MetaProbe } = await import('./__fixtures__/probeWidgets');
+    widgetRegistry.MetaProbe = MetaProbe;
+    // What the server ships for `PLC:Motors` bound at 1 (a TwinCAT array
+    // counting from 1): element [2] under its own key, and the metadata below
+    // it. The client fills in the element's leaves as it arrives.
+    const S = { kind: 'struct' as const, name: 'ST_Motor', array: true, fields: ['sName'] };
+    const varMeta = {
+      'PLC:Motors': { type: S },
+      'PLC:Motors/Motors[2]': { type: { ...S, array: false }, position: 1 },
+      'PLC:Motors/Motors[2]/sName': {
+        type: { kind: 'scalar' as const, base: 'String' as const, array: false },
+      },
+      'PLC:Motors/Motors[2]/nSpeed': {
+        type: { kind: 'scalar' as const, base: 'Integer' as const, array: false },
+        max: 1500,
+        writable: true,
+      },
+    };
+    const shipped = { 'PLC:Motors/Motors[2]': { sName: 'Pump 2', nSpeed: 900 } };
+    useVariableStore.setState({
+      values: { ...shipped, ...elementMemberValues(shipped, varMeta) },
+      varMeta,
+      metadataReceived: true,
+      wsConnected: true,
+      opcuaConnected: {},
+    });
+    useComponentStore.setState({
+      components: [
+        {
+          id: 'cmp',
+          name: 'Motor',
+          componentProperties: {
+            device: {
+              type: 'struct',
+              label: 'Device',
+              mode: 'binding',
+              structSchema: [{ kind: 'variable', name: 'sName', type: 'string' }],
+            },
+          },
+          children: [
+            {
+              id: 'name',
+              type: 'Label',
+              name: 'Name',
+              properties: { text: { $componentProp: 'device/sName' } },
+            },
+            {
+              id: 'speed',
+              type: 'MetaProbe',
+              name: 'Speed',
+              properties: { variable: { $componentProp: 'device/nSpeed' } },
+            },
+          ],
+        } as unknown as ComponentDefinition,
+      ],
+      draftComponents: {},
+    });
+    const { container } = render(
+      <MemoryRouter>
+        <ComponentRenderer
+          _widgetId="cmp"
+          properties={{ device: { $var: { path: 'PLC:Motors', index: 1 } } }}
+        />
+      </MemoryRouter>,
+    );
+
+    // The member reads as its leaf: its value, and its own metadata by key.
+    await waitFor(() => expect(container.textContent).toBe('Pump 2900 ≤ 1500'));
+    expect(container.querySelector('.hmi-binding-overlay')).toBeNull();
+  });
 });
 
 describe('ComponentRenderer Value and Binding inputs', () => {
-  async function renderTile(properties: Record<string, unknown>) {
+  async function renderTile(properties: Record<string, unknown>, strict = false) {
     const { act } = await import('@testing-library/react');
     const { useVariableStore } = await import('@hmi/store/variableStore');
     const { sendWsMessage } = await import('@hmi/hooks/useWebSocket');
@@ -387,11 +463,12 @@ describe('ComponentRenderer Value and Binding inputs', () => {
       ],
       draftComponents: {},
     });
-    const view = render(
+    const tile = (
       <MemoryRouter>
         <ComponentRenderer _widgetId="cmp" properties={properties} />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
+    const view = render(strict ? <StrictMode>{tile}</StrictMode> : tile);
     const set = (values: Record<string, unknown>) =>
       act(async () => {
         useVariableStore.setState((s) => ({ values: { ...s.values, ...values } }));
@@ -420,8 +497,20 @@ describe('ComponentRenderer Value and Binding inputs', () => {
     expect(t.container.textContent).toBe('Mineon');
     expect(useVariableStore.getState().values['PLC:Name']).toBe('Fan');
 
-    t.unmount();
+    // The slots go a microtask after the unmount, with every other frame's.
+    await t.act(async () => t.unmount());
     expect(t.localKey()).toBeUndefined();
+  });
+
+  // StrictMode replays the effects of a fresh mount: the cleanup queues the
+  // frame's slots to go, and the replayed seeding has to keep them.
+  it('keeps a Value through the effect replay of StrictMode', async () => {
+    const { useVariableStore } = await import('@hmi/store/variableStore');
+    useVariableStore.setState({ values: { 'PLC:Name': 'Pump' } });
+    const t = await renderTile({ name: { $var: { path: 'PLC:Name' } }, state: 'x' }, true);
+    await t.act(async () => {});
+    expect(t.container.textContent).toBe('Pumpx');
+    expect(t.localKey()).toBeDefined();
   });
 
   it('waits for a variable that has not arrived before reading a Value', async () => {

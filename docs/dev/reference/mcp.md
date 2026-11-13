@@ -185,7 +185,13 @@ port). The child re-reads the affected files, re-applies any datasource
 subscription delta, and fires the **WS `config_changed`** broadcast to every
 connected browser tab: an open editor re-reads the change, the live view shows
 it after a browser reload. If no child is running for that project there is
-nothing to notify — the files are simply current for the next start. Shape:
+nothing to notify — the files are simply current for the next start.
+
+A variable write to a running project is the exception: the manager hands the
+whole tool call to the child (`POST /api/internal/variables/{tool}`), which runs
+it under the lock its editor saves of the datasource take, and broadcasts
+itself. Written from the manager, an editor save landing meanwhile could write
+the variable tree back as it was. Shape:
 
 ```json
 {

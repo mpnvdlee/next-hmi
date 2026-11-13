@@ -27,30 +27,45 @@
  */
 
 import './WidgetRenderer.css';
-import { Component, useContext, useState } from 'react';
+import { Component, memo, useContext, useMemo, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactNode, ErrorInfo } from 'react';
 import type { WidgetConfig, LayoutConfig } from '@shared/types/config';
 import { useConfigStore } from '@shared/store/configStore';
-import { widgetRegistry, isContainerHostType, placesOwnChildren } from '../registry/widgetRegistry';
+import { useComponentStore } from '@shared/store/componentStore';
+import {
+  widgetRegistry,
+  isContainerHostType,
+  isProjectWidgetType,
+  placesOwnChildren,
+  readsChildProperties,
+} from '../registry/widgetRegistry';
 import { useHmiStore } from '../store/hmiStore';
 import { useHmiScope } from '../context/HmiScopeContext';
 import { executeWidgetActions } from '../utils/widgetActions';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { useRepeatScope } from '../context/RepeatScopeContext';
+import { useInputScope } from '../context/InputScopeContext';
+import {
+  ALL_STORES,
+  storesReadBy,
+  useEvalContext,
+  WidgetStoresContext,
+} from '../hooks/useEvalContext';
 import { useBindingStatus } from '../utils/bindingValidation';
-import { useResolvedProperties } from '../hooks/useResolvedProperties';
+import { useBoundIndexes, useScopedProperties } from '../hooks/useResolvedProperties';
 import { useLiveKeys, useLiveScalars } from '../hooks/useLiveScalars';
 import { useTimeTick } from '../hooks/useTimeTick';
 import { useHttpTick } from '../hooks/useHttpTick';
 import { usesTime } from '../utils/usesTime';
 import { usesHttp } from '../utils/usesHttp';
 import {
+  getPropBoolean,
   layoutHasPropertySource,
   useResolvedLayout,
-  usePropBoolean,
   selfFlexChildStyle,
 } from './layoutUtils';
+import { resolveComponentPropValue } from '../utils/componentPropResolution';
 
 // ── Per-component error boundary ──────────────────────────────────────────────
 
@@ -145,23 +160,61 @@ function wrapperStyle(layout?: LayoutConfig): CSSProperties {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
+function WidgetRendererImpl({ node }: { node: WidgetConfig }) {
   const isPreview = useContext(PreviewContext);
   const fromDefinition = useContext(DefinitionScopeContext);
   const ghost = useRepeatScope()?.ghost === true;
+  // A component instance's registry entry is rewritten when a definition
+  // changes (AppInner's listener, run inside the same setState), and the memo
+  // below would otherwise keep judging the instance against the old schema.
+  useComponentStore((s) => (node.type.startsWith('$component:') ? s.components : null));
   const entry = widgetRegistry[node.type];
 
   // Resolve translation references in properties ({ "$loc": "key" }).
-  const resolvedProperties = useResolvedProperties(node.properties);
+  const scopedProperties = useScopedProperties(node.properties);
 
-  const isVisible = usePropBoolean(resolvedProperties, 'visible', true);
-  const isInteractable = usePropBoolean(resolvedProperties, 'interactable', true);
+  // The stores this widget's eval context follows (`useEvalContext`): the
+  // sources of everything it evaluates, so an alarm update or a published
+  // export re-renders only the widgets that read one. The layout counts as
+  // `useResolvedLayout` evaluates it, each `$componentProp` swapped for its
+  // input. A host that reads its children's properties (`readsChildProperties`)
+  // evaluates their raw ones too, where a `$componentProp` reads any input of
+  // the scope at run time; every other host leaves its children to their own
+  // renderers, so their stores stay theirs. A project's widget follows every
+  // store: the SDK hands its code the resolvers.
+  const childConfigs = isContainerHostType(node.type) ? node.children : undefined;
+  const readChildren = childConfigs && readsChildProperties(node.type) ? childConfigs : undefined;
+  const inputScopeProps = useInputScope()?.properties;
+  const scopedLayout = useMemo(
+    () => resolveComponentPropValue(node.layout, inputScopeProps) as LayoutConfig | undefined,
+    [node.layout, inputScopeProps],
+  );
+  const stores = isProjectWidgetType(node.type)
+    ? ALL_STORES
+    : storesReadBy(
+        scopedProperties,
+        scopedLayout,
+        // Each child's own object, not a new array, so its analysis is cached.
+        ...(readChildren?.map((child) => child.properties) ?? []),
+        readChildren && inputScopeProps,
+      );
+  // Built once and shared by every read below; each build is a dozen store
+  // subscriptions, most of what a widget render used to cost.
+  const evalCtx = useEvalContext(stores);
+  // Properties and layout alike: each bound index resolved, each member of a
+  // struct-array element bound to its own leaf.
+  const resolvedProperties = useBoundIndexes(scopedProperties, evalCtx);
+  const resolvedLayout = useBoundIndexes(scopedLayout, evalCtx);
+
+  // A `$var` here re-renders this widget through `useLiveScalars` below.
+  const isVisible = getPropBoolean(resolvedProperties, 'visible', true, evalCtx);
+  const isInteractable = getPropBoolean(resolvedProperties, 'interactable', true, evalCtx);
 
   // Status is read from the *resolved* properties: a widget inside a component
   // definition binds through `$componentProp`, which only becomes the real
   // `$var` here. Reading the raw node instead left every such widget — most of
   // a component-built page — with no bindings to check and so never marked.
-  const bindingStatus = useBindingStatus(resolvedProperties, entry?.schema ?? {});
+  const bindingStatus = useBindingStatus(resolvedProperties, entry?.schema ?? {}, evalCtx);
 
   // Granular live-value subscription: re-render this widget only when a `$var`
   // it actually references ticks. `resolvedProperties` already has any parent
@@ -244,7 +297,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
         name={node.name}
         properties={resolvedProperties}
         layout={layout}
-        childConfigs={isContainerHostType(node.type) ? node.children : undefined}
+        childConfigs={childConfigs}
       >
         {children}
       </Comp>
@@ -305,17 +358,24 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   // Only nodes with expression-bound layout subscribe to live values (via the
   // child boundary); static-layout nodes render directly without that cost.
   const inner = layoutHasPropertySource(node.layout) ? (
-    <ResolvedLayoutContent layout={node.layout} render={buildContent} />
+    <ResolvedLayoutContent layout={resolvedLayout} render={buildContent} />
   ) : (
     buildContent(node.layout)
   );
 
   return (
     <WidgetErrorBoundary id={node.id} type={node.type} resetProps={node.properties}>
-      {inner}
+      <WidgetStoresContext.Provider value={stores}>{inner}</WidgetStoresContext.Provider>
     </WidgetErrorBoundary>
   );
 }
+
+// Memoised on `node`: a parent that re-renders — its own `$var` ticked, a
+// Repeater rebuilt its copies for one changed element — hands its children the
+// same nodes, and each child already re-renders on its own variables, ticks and
+// contexts. Without it one tick re-rendered the whole subtree below it.
+const WidgetRenderer = memo(WidgetRendererImpl);
+export default WidgetRenderer;
 
 /**
  * Boundary component mounted only for nodes whose layout contains expressions.

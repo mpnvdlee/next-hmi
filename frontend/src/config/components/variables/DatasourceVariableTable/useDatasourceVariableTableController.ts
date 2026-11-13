@@ -16,7 +16,7 @@ import { useLiveValues } from './useLiveValues';
 
 interface Params {
   datasource: DatasourceConfig | null;
-  onVariablesChange: (variables: TreeNode[]) => void;
+  onVariablesChange: (dsName: string, variables: TreeNode[]) => void;
 }
 
 export function useDatasourceVariableTableController({ datasource, onVariablesChange }: Params) {

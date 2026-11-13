@@ -171,6 +171,26 @@ describe('useWriteVariable', () => {
     expect(frames()[0]).toMatchObject({ path: 'Motor/Speed[2]', value: 9 });
   });
 
+  it('writes a member of a struct-array element to its own leaf', () => {
+    // A component writing `device/fSpeed` of an instance passing `Motors` at 0.
+    const S = { kind: 'struct' as const, name: 'Motor', array: true, fields: ['fSpeed'] };
+    useVariableStore.setState({
+      varMeta: {
+        'PLC:Motors': { type: S },
+        'PLC:Motors/Motors[1]': { type: { ...S, array: false }, position: 0 },
+        'PLC:Motors/Motors[1]/fSpeed': {
+          type: { kind: 'scalar', base: 'Integer', array: false },
+          writable: true,
+        },
+      },
+    });
+
+    writer({ variable: { $var: { path: 'PLC:Motors/Motors[1]/fSpeed' } } })('9');
+
+    // Coerced against the leaf's own metadata.
+    expect(frames()[0]).toMatchObject({ path: 'Motors/Motors[1]/fSpeed', value: 9 });
+  });
+
   it('toasts the backend rejection correlated by requestId', () => {
     writer(bound)(1);
 

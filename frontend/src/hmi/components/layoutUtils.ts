@@ -13,8 +13,7 @@ import { evaluatePropertyValue, type EvaluationContext } from '../utils/property
 import { extractVarKeys } from '../utils/extractVarKeys';
 import { resolveComponentPropValue, withDeclaredDefaults } from '../utils/componentPropResolution';
 import { componentDefinition } from '@shared/store/componentStore';
-import { useEvalContext } from '../hooks/useEvalContext';
-import { useInputScope } from '../context/InputScopeContext';
+import { storesReadBy, useEvalContext } from '../hooks/useEvalContext';
 import { useLiveScalars, useLiveKeys } from '../hooks/useLiveScalars';
 import { getViewportSnapshot } from '../hooks/useViewport';
 import { useBindingValue, useVariableMeta } from '../hooks/useVariable';
@@ -374,20 +373,15 @@ export function layoutHasPropertySource(layout?: LayoutConfig): boolean {
 }
 
 /**
- * Resolve any sourced layout values to plain values, subscribing to
- * the eval context so `$var`-bound layout fields update live. Plain values pass
- * through untouched. Call only when `layoutHasPropertySource(layout)` is true so
- * static-layout nodes don't subscribe to variable updates.
+ * Resolve any sourced values of a layout — its `$componentProp`s, bound
+ * indexes and struct-array members already swapped, as WidgetRenderer does
+ * for properties — to plain values, subscribing to the eval context so `$var`-bound layout fields update
+ * live. Plain values pass through untouched. Call only when
+ * `layoutHasPropertySource(layout)` is true so static-layout nodes don't
+ * subscribe to variable updates.
  */
-export function useResolvedLayout(raw?: LayoutConfig): LayoutConfig | undefined {
+export function useResolvedLayout(layout?: LayoutConfig): LayoutConfig | undefined {
   const evalCtx = useEvalContext();
-  const inputScope = useInputScope();
-  // Same up-front `$componentProp` swap as widget properties, so a forwarded
-  // `$var` in a layout field is subscribed below.
-  const layout = useMemo(
-    () => resolveComponentPropValue(raw, inputScope?.properties) as LayoutConfig | undefined,
-    [raw, inputScope],
-  );
   // `evalCtx` is stable across both variable and viewport ticks by design, so
   // neither reaches the memo on its own. `$var` folds in through the signature
   // of the layout's own keys; `$viewport` — what a responsive `direction` or
@@ -564,7 +558,8 @@ export function getPropBindingOrStatic(value: unknown): {
 export function usePropVar(properties: Record<string, unknown> | undefined, key: string): unknown {
   const { binding, staticValue } = getPropBindingOrStatic(properties?.[key]);
   const liveValue = useBindingValue(binding);
-  const evalCtx = useEvalContext();
+  // Only the stores this one value reads.
+  const evalCtx = useEvalContext(storesReadBy(staticValue));
   if (binding) return liveValue;
   // Evaluate property sources ($time, $user, $loc, etc.) for the static path
   const resolved = evaluatePropertyValue(staticValue, evalCtx);

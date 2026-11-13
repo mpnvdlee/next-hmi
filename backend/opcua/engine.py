@@ -9,6 +9,7 @@ DatasourceManager using composite keys.
 import asyncio
 import contextlib
 import logging
+from collections.abc import Awaitable
 from typing import Any
 
 from asyncua import Client, ua
@@ -16,14 +17,14 @@ from asyncua.common.node import Node
 from asyncua.common.subscription import DataChangeEvent, StatusChangeEvent
 from core import telemetry
 from core.number_utils import get_config_float
-from core.value_types import is_array_shape, to_simple_type
-from models.datasource import build_var_key, is_subscribable
+from core.value_types import _place, is_array_shape, to_simple_type
+from models.datasource import build_var_key, is_subscribable, parse_var_key
 
 from .browse import SERVER_OBJECT_NODE_ID, AddressSpaceBrowser, BrowseProgressSink
 from .compat import apply_asyncua_watchdog_log_patch
 from .discovery import _short_probe_error
 from .limits import OperationLimits, read_operation_limits
-from .routing import _collect_struct_leaf_paths, _struct_field_routes
+from .routing import _composite_leaf_steps, _struct_field_routes
 from .security import (
     ServerCertificate,
     ServerCertificateNotTrusted,
@@ -38,8 +39,45 @@ logger = logging.getLogger(__name__)
 # Background CreateMonitoredItems batch cap. Larger batches save round trips
 # but hold the transition lock (and the server) longer per request.
 BG_SUBSCRIBE_CHUNK = 1000
+# Wait before reconnecting after a drop or a failed connect, doubled each time
+# up to reconnect_interval_s: most outages are a PLC restart or a network
+# blip, over in a second or two.
+RECONNECT_FIRST_RETRY_S = 0.5
 # Datachange notifications handled between event-loop yields.
 CONSUME_YIELD_EVERY = 500
+# The codes that mean "no deadband filter here"; any other refusal is about
+# the item itself (an unknown node, say) and creating it without one would
+# fail the same way.
+_FILTER_REFUSED = frozenset({
+    ua.StatusCodes.BadFilterNotAllowed,
+    ua.StatusCodes.BadMonitoredItemFilterUnsupported,
+    ua.StatusCodes.BadMonitoredItemFilterInvalid,
+    ua.StatusCodes.BadDeadbandFilterInvalid,
+})
+
+# Refusals of the node itself, which no retry cures. Any other refused
+# background create — a full server, a timed-out or refused request — the
+# health check retries.
+_NODE_REFUSALS = frozenset({
+    ua.StatusCodes.BadNodeIdUnknown,
+    ua.StatusCodes.BadNodeIdInvalid,
+    ua.StatusCodes.BadAttributeIdInvalid,
+    ua.StatusCodes.BadNotReadable,
+    ua.StatusCodes.BadUserAccessDenied,
+})
+
+
+def _forget_items(sub: Any, handles: list[Any]) -> None:
+    """Drop *handles* from asyncua's own item map, as its ``unsubscribe`` does
+    after a clean answer: a first result of BadMonitoredItemIdInvalid raises
+    before that step, and the chunk's items stayed there until the
+    subscription went."""
+    items = getattr(sub, "_monitored_items", None)
+    if not items:
+        return
+    gone = set(handles)
+    for key in [key for key, item in items.items() if item.server_handle in gone]:
+        del items[key]
 
 
 def _is_numeric_scalar(var_entry: dict | None) -> bool:
@@ -77,11 +115,11 @@ class _DsSubHandler:
                     priority=self._engine._is_priority_path(path),
                 )
             elif node_id in self._engine._node_to_field:
-                path, field_name, leaf_path = self._engine._node_to_field[node_id]
+                path, steps, leaf_path = self._engine._node_to_field[node_id]
                 dm.update_struct_field(
                     ds_name,
                     path,
-                    field_name,
+                    steps,
                     normalize_value(val),
                     leaf_path=leaf_path,
                     # Priority handles are tracked by their concrete monitored
@@ -100,9 +138,7 @@ class _DsSubHandler:
                 self._engine.datasource_name,
                 sc,
             )
-            # Tracked (not pure fire-and-forget) so disconnect() can cancel it
-            # instead of leaving it to run against a torn-down engine.
-            self._engine._status_close_task = asyncio.create_task(self._engine._close_client())
+            self._engine._schedule_close()
 
 
 class DatasourceOpcuaEngine:
@@ -114,14 +150,16 @@ class DatasourceOpcuaEngine:
         self._connected = False
         self._error: str | None = None
         self._reconnect_task: asyncio.Task | None = None
+        # Set when the client closes, to wake the reconnect loop.
+        self._dropped = asyncio.Event()
         self._shutdown = False
         # In-flight close, so a status-change-triggered close and the
         # reconnect loop's own close coalesce into one execution instead of
         # racing.
         self._close_task: asyncio.Task | None = None
-        # The fire-and-forget task status_change_notification schedules —
-        # tracked so disconnect() can cancel it instead of leaving it to run
-        # against a torn-down engine after shutdown.
+        # The close a callback schedules (`_schedule_close`) — tracked so
+        # disconnect() can cancel it instead of leaving it to run against a
+        # torn-down engine after shutdown.
         self._status_close_task: asyncio.Task | None = None
         self._config: dict = {}
         # What a secured endpoint presented on the last check, kept through a
@@ -149,12 +187,21 @@ class DatasourceOpcuaEngine:
         self._deadband_refused = False
         # Maps for routing datachange callbacks (keyed by NodeId object, not string)
         self._node_to_path: dict = {}       # NodeId → path
-        self._node_to_field: dict = {}      # NodeId → (folder_path, field_name, leaf_path)
+        self._node_to_field: dict = {}      # NodeId → (folder_path, steps, leaf_path)
         # Reverse map: path → set[NodeId] for O(1) cleanup in remove_subscription_by_path
         self._path_to_node_ids: dict[str, set] = {}
         # Subscription handles per path
         self._bg_path_handles: dict[str, list] = {}
         self._priority_path_handles: dict[str, list] = {}
+        # Paths a transition left on neither subscription because their
+        # background create was refused or timed out, by node id: the health
+        # check retries them, as no recompute selects a demoted one again.
+        self._bg_retry: dict[str, str] = {}
+        # Health checks to let pass before the next retry, and how many the
+        # last refusal set: 1, 2, 4 … 16. A server full of monitored items
+        # refuses every retry, each one requests under the transition lock.
+        self._bg_retry_wait = 0
+        self._bg_retry_backoff = 0
         # Serialises page-context recomputes (which can arrive concurrently from
         # different WebSocket clients) with dynamic add/remove transitions.
         self._subscription_transition_lock = asyncio.Lock()
@@ -248,25 +295,56 @@ class DatasourceOpcuaEngine:
         """CreateMonitoredItems for *items* (``(path, node)``) on *sub*: one
         handle, or the refusing StatusCode, per item, in order.
 
+        One request per `monitored_item_chunks` slice: a server refuses a
+        whole request past its MaxMonitoredItemsPerCall, and TwinCAT drops
+        the connection past its message size.
+
+        Each item is routed through the entry's `_field_routes` before its
+        request goes out and unrouted again if refused. A server
+        publishes an item's first value as soon as it creates it, so that
+        notification can be handled before the response: unrouted, it was
+        dropped — every value of the first page after a connect. A timed-out
+        item keeps its route: the server has often created it all the same.
+
         Numeric scalars carry an absolute deadband (``deadband_abs``), so a
         value jittering below it is never published — the cheapest
         notification is the one the server does not send. Other types take no
-        filter (a server subtracts to apply one). All items go in one request;
-        an item the server refuses with the filter is created again without
-        it, and from then on this connection asks for no filter at all.
+        filter (a server subtracts to apply one). An item the server refuses
+        for the filter is created again without it, and from then on this
+        connection asks for no filter at all.
         """
+        routes = self._field_routes(ds_entry) if ds_entry is not None else {}
+        handles: list[Any] = []
+        for span in self._operation_limits.monitored_item_chunks([node.nodeid for _, node in items]):
+            chunk = items[span]
+            self._route_items(chunk, routes)
+            created = await self._create_chunk(sub, chunk, ds_entry, sampling_interval)
+            self._unroute_items([
+                item for item, handle in zip(chunk, created, strict=False)
+                if isinstance(handle, ua.StatusCode) and handle.value != ua.StatusCodes.BadTimeout
+            ])
+            handles.extend(created)
+        return handles
+
+    async def _create_chunk(
+        self, sub: Any, items: list[tuple[str, Any]], ds_entry: Any, sampling_interval: float,
+    ) -> list[Any]:
+        """One CreateMonitoredItems request for *items*; see _create_items."""
         nodes = [node for _, node in items]
         deadband = self._deadband_abs()
-        if deadband <= 0 or ds_entry is None or self._deadband_refused:
-            return await sub.subscribe_data_change(nodes, sampling_interval=sampling_interval)
+        filtered = (
+            [] if deadband <= 0 or ds_entry is None or self._deadband_refused
+            else [_is_numeric_scalar(ds_entry.registry.get(path)) for path, _ in items]
+        )
+        if not any(filtered):
+            return await self._chunk_results(
+                sub.subscribe_data_change(nodes, sampling_interval=sampling_interval), len(nodes),
+            )
         data_filter = ua.DataChangeFilter(
             Trigger=ua.DataChangeTrigger.StatusValue,
             DeadbandType=ua.DeadbandType.Absolute,
             DeadbandValue=deadband,
         )
-        filtered = [_is_numeric_scalar(ds_entry.registry.get(path)) for path, _ in items]
-        if not any(filtered):
-            return await sub.subscribe_data_change(nodes, sampling_interval=sampling_interval)
         requests = [
             sub._make_monitored_item_request(
                 node, ua.AttributeIds.Value, data_filter if numeric else None, 0,
@@ -274,33 +352,166 @@ class DatasourceOpcuaEngine:
             )
             for node, numeric in zip(nodes, filtered, strict=True)
         ]
-        handles = list(await sub.create_monitored_items(requests))
-        refused = [i for i, h in enumerate(handles) if filtered[i] and isinstance(h, ua.StatusCode)]
+        handles = await self._chunk_results(sub.create_monitored_items(requests), len(requests))
+        refused = [
+            i for i, h in enumerate(handles)
+            if filtered[i] and isinstance(h, ua.StatusCode) and h.value in _FILTER_REFUSED
+        ]
         if refused:
             logger.info(
                 "%s refuses the deadband filter (%s); creating items without it from now on",
-                self.datasource_name, handles[refused[0]],
+                self.datasource_name, handles[refused[0]].name,
             )
             self._deadband_refused = True
-            retried = await sub.subscribe_data_change(
-                [nodes[i] for i in refused], sampling_interval=sampling_interval,
+            retried = await self._chunk_results(
+                sub.subscribe_data_change([nodes[i] for i in refused], sampling_interval=sampling_interval),
+                len(refused),
             )
             for i, handle in zip(refused, retried, strict=False):
                 handles[i] = handle
         return handles
 
-    def _register_node_route(
-        self, path: str, node_id: Any, field_routes: dict[str, tuple[str, str]],
+    async def _chunk_results(self, request: Awaitable[list[Any]], count: int) -> list[Any]:
+        """The results of one CreateMonitoredItems *request* for *count* items.
+
+        A request the server refuses or does not answer in time gives each
+        item that error instead of raising: the items earlier chunks created
+        keep their handles, and a caller's per-item handling neither loses
+        nor re-creates any of them. A lost session (ConnectionError) and
+        anything unexpected still raise.
+        """
+        try:
+            return list(await request)
+        except ua.UaStatusCodeError as exc:
+            code = exc.code
+        except TimeoutError:
+            code = ua.StatusCodes.BadTimeout
+        status = ua.StatusCode(code)
+        logger.warning(
+            "CreateMonitoredItems failed for %s (%d items): %s", self.datasource_name, count, status.name,
+        )
+        return [status] * count
+
+    async def _delete_items(self, sub: Any, handles: list[Any]) -> set[Any]:
+        """DeleteMonitoredItems for *handles*, `monitored_items_budget()` per
+        request, every request tried; returns the handles that may still be
+        live (empty: all deleted). Raises like _chunk_results.
+
+        asyncua checks only the first result of a request, so a
+        BadMonitoredItemIdInvalid from it means that item was gone already
+        and the server processed the rest: the whole request counts as done.
+        A request that fails is sent once more — a timed-out one has usually
+        been carried out, and the second answer says so unambiguously.
+        """
+        failed: set[Any] = set()
+        budget = self._operation_limits.monitored_items_budget()
+        for i in range(0, len(handles), budget):
+            chunk = handles[i : i + budget]
+            error: Exception | None = None
+            for _attempt in range(2):
+                try:
+                    await sub.unsubscribe(chunk)
+                except ua.UaStatusCodeError as exc:
+                    error = exc
+                    if exc.code == ua.StatusCodes.BadMonitoredItemIdInvalid:
+                        error = None
+                        _forget_items(sub, chunk)
+                except TimeoutError as exc:
+                    error = exc
+                else:
+                    error = None
+                if error is None:
+                    break
+            if error is not None:
+                logger.warning(
+                    "DeleteMonitoredItems failed for %s (%d items): %r — they stay where they "
+                    "are until the next priority change retries them",
+                    self.datasource_name, len(chunk), error,
+                )
+                failed.update(chunk)
+        return failed
+
+    async def _delete_tracked(self, sub: Any, tracked: dict[str, list], paths: list[str]) -> set[str]:
+        """Delete the items *tracked* holds for *paths* from *sub*; returns the
+        paths whose items are all gone, and stops tracking those. One whose
+        delete failed stays tracked, retried by the next recompute, so a node
+        is never live on both subscriptions."""
+        handles = [h for path in paths for h in tracked.get(path, [])]
+        failed = await self._delete_items(sub, handles) if sub is not None else set()
+        cleared = {path for path in paths if failed.isdisjoint(tracked.get(path, ()))}
+        for path in cleared:
+            tracked.pop(path, None)
+        return cleared
+
+    def _log_rejected(self, action: str, rejected: list[tuple[str, ua.StatusCode]]) -> None:
+        """One warning for the items one call could not create, however many
+        — a failed chunk is up to a thousand of them — and each at debug."""
+        if not rejected:
+            return
+        shown = ", ".join(f"{path} ({code.name})" for path, code in rejected[:5])
+        more = f" and {len(rejected) - 5} more" if len(rejected) > 5 else ""
+        logger.warning("%s rejected for %s: %s%s", action, self.datasource_name, shown, more)
+        for path, code in rejected:
+            logger.debug("%s rejected for %s/%s: %s", action, self.datasource_name, path, code.name)
+
+    def _record_handles(
+        self, target: dict[str, list[Any]], items: list[tuple[str, Any]], handles: list[Any], action: str,
+    ) -> list[tuple[str, ua.StatusCode]]:
+        """Track each created handle in *target* under its path; log and
+        return ``(path, StatusCode)`` for the items the server refused."""
+        rejected: list[tuple[str, ua.StatusCode]] = []
+        for (path, _node), handle in zip(items, handles, strict=False):
+            if isinstance(handle, ua.StatusCode):
+                rejected.append((path, handle))
+            else:
+                target[path] = [handle]
+        self._log_rejected(action, rejected)
+        return rejected
+
+    @staticmethod
+    def _field_routes(ds_entry: Any) -> dict[str, tuple[str, tuple[str | int, ...]]]:
+        """``_struct_field_routes`` of *ds_entry*, built once per entry and
+        kept on it (``derived``): a walk of every leaf (70,000 on a large PLC)
+        that only a config edit — which replaces the entry — changes, repeated
+        on every page switch otherwise."""
+        routes = ds_entry.derived.get("field_routes")
+        if routes is None:
+            routes = ds_entry.derived["field_routes"] = _struct_field_routes(ds_entry)
+        return routes
+
+    def _route_items(
+        self, items: list[tuple[str, Any]], field_routes: dict[str, tuple[str, tuple[str | int, ...]]],
     ) -> None:
-        """Route *node_id*'s datachange notifications to the struct-field O(1)
-        patch path (_node_to_field) when *path* is a struct/array-of-struct
-        leaf, else the plain per-path scalar path (_node_to_path)."""
-        route = field_routes.get(path)
-        if route is not None:
-            folder_path, field_name = route
-            self._node_to_field[node_id] = (folder_path, field_name, path)
-        else:
-            self._node_to_path[node_id] = path
+        """Route each ``(path, node)``'s datachange notifications to the
+        struct-field O(1) patch path (_node_to_field) when *path* is a
+        struct/array-of-struct leaf, else the plain per-path scalar path
+        (_node_to_path)."""
+        for path, node in items:
+            nid = node.nodeid
+            route = field_routes.get(path)
+            if route is not None:
+                self._node_to_field[nid] = (*route, path)
+            else:
+                self._node_to_path[nid] = path
+            self._path_to_node_ids.setdefault(path, set()).add(nid)
+
+    def _unroute_items(self, items: list[tuple[str, Any]]) -> None:
+        """Undo _route_items for ``(path, node)`` items that have no monitored
+        item, leaving a node another path routes alone."""
+        for path, node in items:
+            if path in self._bg_path_handles or path in self._priority_path_handles:
+                continue
+            nid = node.nodeid
+            if self._node_to_path.get(nid) == path:
+                del self._node_to_path[nid]
+            field_route = self._node_to_field.get(nid)
+            if field_route is not None and field_route[2] == path:
+                del self._node_to_field[nid]
+            nids = self._path_to_node_ids.get(path)
+            if nids is not None:
+                nids.discard(nid)
+                if not nids:
+                    del self._path_to_node_ids[path]
 
     @staticmethod
     def _expand_priority_paths(paths: set[str], ds_entry: Any) -> set[str]:
@@ -310,30 +521,27 @@ class DatasourceOpcuaEngine:
         and demote symmetric: a struct folder that expands to ten monitored
         leaves is later demoted through those same ten keys instead of being
         skipped because the folder itself is not in ``registry``.
+
+        A folder's leaves are walked once per entry and kept on it
+        (``derived``): every recompute, any client's table scroll included,
+        re-walked every bound folder otherwise — 13 ms for 70,000 leaves.
         """
+        leaves_of = ds_entry.derived.setdefault("folder_leaves", {})
         expanded: set[str] = set()
         for path in paths:
             if path in ds_entry.registry:
                 expanded.add(path)
                 continue
-            folder_entry = ds_entry.folder_registry.get(path)
-            if folder_entry is None:
-                continue
-            element_paths = folder_entry.get("_element_paths", [])
-            sources = (
-                [
-                    ds_entry.folder_registry[element_path]
-                    for element_path in element_paths
-                    if element_path in ds_entry.folder_registry
-                ]
-                if element_paths
-                else [folder_entry]
-            )
-            for source in sources:
-                for _field_path, child_path in _collect_struct_leaf_paths(
-                    source, ds_entry.folder_registry,
-                ):
-                    expanded.add(child_path)
+            leaves = leaves_of.get(path)
+            if leaves is None:
+                folder_entry = ds_entry.folder_registry.get(path)
+                if folder_entry is None:
+                    continue
+                leaves = leaves_of[path] = tuple(
+                    child_path
+                    for _steps, child_path in _composite_leaf_steps(folder_entry, ds_entry.folder_registry)
+                )
+            expanded.update(leaves)
         return expanded
 
     def _record_priority_revised_sampling(self, samples_ms: list[float]) -> None:
@@ -376,12 +584,20 @@ class DatasourceOpcuaEngine:
             "priority_sampling_interval_revised_min_ms": self._priority_revised_sampling_min_ms,
             "priority_sampling_interval_revised_max_ms": self._priority_revised_sampling_max_ms,
             "priority_ws_batch_ms": self._requested_priority_ws_batch_ms,
+            "bg_queue_depth": self._queue_depth(self._background_sub),
+            "priority_queue_depth": self._queue_depth(self._priority_sub),
         }
 
+    @staticmethod
+    def _queue_depth(sub: Any) -> int | None:
+        """Notifications *sub* has received and _consume_subscription not yet
+        handled — unbounded, so a growing number means the consumer is falling
+        behind. asyncua has no public accessor; None when unavailable."""
+        queue = getattr(sub, "_event_queue", None)
+        return queue.qsize() if isinstance(queue, asyncio.Queue) else None
+
     async def _subscribe_priority_nodes_with_revised_sampling(
-        self,
-        items: list[tuple[str, Any]],
-        ds_entry: Any,
+        self, items: list[tuple[str, Any]], ds_entry: Any,
     ) -> tuple[list[Any], list[float]]:
         """Subscribe ``(path, node)`` items on the priority subscription and
         return handles + revised sampling."""
@@ -389,16 +605,16 @@ class DatasourceOpcuaEngine:
         if sub is None:
             return [], []
 
-        handles = await self._create_items(
-            sub, items, ds_entry, self._requested_priority_sampling_interval_ms,
-        )
+        handles = await self._create_items(sub, items, ds_entry, self._requested_priority_sampling_interval_ms)
 
         # The revised sampling interval is diagnostics only, and a server
-        # revises every item of one request the same way — so sample it from
-        # the first item instead of spending one ModifyMonitoredItems round
-        # trip per variable, which made a page open cost O(N) requests.
+        # revises every item the same way — so sample one item once per
+        # connection instead of spending a ModifyMonitoredItems round trip on
+        # every page switch (or per variable, which made a page open O(N)).
         revised_samples: list[float] = []
-        first = next((h for h in handles if not isinstance(h, ua.StatusCode)), None)
+        first = None
+        if not self._priority_revised_sampling_count:
+            first = next((h for h in handles if not isinstance(h, ua.StatusCode)), None)
         if first is not None:
             try:
                 result = await sub.modify_monitored_item(
@@ -455,6 +671,15 @@ class DatasourceOpcuaEngine:
         finally:
             self._close_task = None
 
+    def _schedule_close(self) -> bool:
+        """Close the client from a callback that cannot wait for it; True if
+        this call started the close. One at a time: a close still pending
+        covers a second request, and disconnect() cancels the one it tracks."""
+        if self._status_close_task is None or self._status_close_task.done():
+            self._status_close_task = asyncio.create_task(self._close_client())
+            return True
+        return False
+
     async def _close_client_impl(self) -> None:
         await self._teardown_subscriptions()
         client = self._client
@@ -468,6 +693,7 @@ class DatasourceOpcuaEngine:
                 logger.warning("OPC-UA disconnect failed for %s: %s", self.datasource_name, exc)
         was_connected = self._connected
         self._connected = False
+        self._dropped.set()
         if was_connected and self._status_callback is not None:
             await self._status_callback(self.datasource_name, False)
 
@@ -476,7 +702,12 @@ class DatasourceOpcuaEngine:
         # intervals — a blank/non-numeric value must not kill the reconnect
         # task, and 0/negative must not spin the loop without backoff.
         interval = get_config_float(self._config, "reconnect_interval_s", 5.0, minimum=1.0, maximum=300.0)
+        # Reset only by a connection that lasts an interval, so a server that
+        # keeps dropping us is not reconnected (and resubscribed) twice a second.
+        retry_s = RECONNECT_FIRST_RETRY_S
         while not self._shutdown:
+            # Cleared before connecting, so a drop at any later point ends the wait below.
+            self._dropped.clear()
             if not self._connected:
                 try:
                     await self._do_connect()
@@ -485,22 +716,51 @@ class DatasourceOpcuaEngine:
                     logger.warning(
                         "OPC-UA connect failed for %s: %s", self.datasource_name, exc
                     )
-                    await asyncio.sleep(interval)
+                    await asyncio.sleep(retry_s)
+                    retry_s = min(retry_s * 2, interval)
                     continue
-            await asyncio.sleep(interval)
-            if self._connected and not self._shutdown:
-                client = self._client
-                if client is None:
-                    await self._close_client()
-                    continue
-                try:
-                    await client.get_namespace_array()
-                except Exception as exc:
-                    logger.warning(
-                        "OPC-UA connection lost for %s — retrying (%s)",
-                        self.datasource_name, _short_probe_error(exc),
-                    )
-                    await self._close_client()
+            # The health check's period, cut short by a drop.
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._dropped.wait(), interval)
+            if self._shutdown:
+                return
+            if self._connected:
+                retry_s = RECONNECT_FIRST_RETRY_S
+                await self._check_health()
+            else:
+                await asyncio.sleep(retry_s)
+                retry_s = min(retry_s * 2, interval)
+
+    async def _check_health(self) -> None:
+        """Close the client when the connection can no longer be trusted — the
+        reconnect loop then connects afresh — and otherwise retry the
+        background items a create refused."""
+        client = self._client
+        if client is None:
+            await self._close_client()
+            return
+        try:
+            await client.get_namespace_array()
+        except Exception as exc:
+            logger.warning(
+                "OPC-UA connection lost for %s — retrying (%s)",
+                self.datasource_name, _short_probe_error(exc),
+            )
+            await self._close_client()
+            return
+        await self._retry_bg()
+
+    async def _reconnect_instead_of_recreating(self) -> None:
+        """Stands in for each subscription's ``recreate()``.
+
+        asyncua's stale-subscription watchdog re-creates a subscription the
+        server stopped publishing, giving every item a new server handle the
+        engine never hears of: a delete of a tracked handle then misses while
+        the item lives on. Only a reconnect re-subscribes consistently. The
+        watchdog asks again every half second until the close stops it.
+        """
+        if self._schedule_close():
+            logger.warning("A subscription of %s went stale — reconnecting", self.datasource_name)
 
     async def _do_connect(self) -> None:
         url = self._config.get("server_url", "opc.tcp://localhost:4840")
@@ -538,27 +798,6 @@ class DatasourceOpcuaEngine:
             await self._status_callback(self.datasource_name, True)
         try:
             await self._setup_subscriptions()
-            # Re-apply priority paths that were requested before the OPC-UA connection
-            # was ready.  set_priority_paths() is a no-op when not connected, so those
-            # requests were silently dropped.  Apply them now.  Prefer the full
-            # recompute (page-driven + alarm triggers + historized variables) so a
-            # reconnect doesn't drop alarm/historian subscriptions until the next
-            # browser navigation; fall back to the page-driven keys we can derive
-            # locally when no recompute callback is wired (e.g. in tests).
-            if self._priority_recompute_callback is not None:
-                await self._priority_recompute_callback()
-            else:
-                dm = self._datasource_manager
-                if dm is not None:
-                    priority_paths: set[str] = set()
-                    for key in dm.get_priority_keys():
-                        sep = key.find(":")
-                        if sep > 0 and key[:sep] == self.datasource_name:
-                            path = key[sep + 1:]
-                            if path:
-                                priority_paths.add(path)
-                    if priority_paths:
-                        await self.set_priority_paths(priority_paths)
         except Exception:
             # Subscription setup failed after a successful TCP connect. Reset
             # state so the reconnect loop's `if not self._connected` check
@@ -640,77 +879,166 @@ class DatasourceOpcuaEngine:
         """
         params = ua.CreateSubscriptionParameters()
         params.RequestedPublishingInterval = interval_ms
-        params.RequestedLifetimeCount = 10000
         # Keep-alive: send a heartbeat after ~30 s of silence
         params.RequestedMaxKeepAliveCount = max(3, int(30_000 / max(interval_ms, 1)))
+        # A reconnect never resumes a subscription, so one left behind by a
+        # dropped connection holds its items on the server until its lifetime
+        # runs out: four keep-alives (two minutes up to a 10 s interval), past
+        # the spec's minimum of three.
+        params.RequestedLifetimeCount = 4 * params.RequestedMaxKeepAliveCount
         params.MaxNotificationsPerPublish = 0  # 0 = unlimited
         params.PublishingEnabled = True
         params.Priority = priority
         return params
 
+    async def _create_subscription(self, interval_ms: float, priority: int) -> Any:
+        """A subscription with _make_sub_params' counts, even when the server
+        revises the publishing interval.
+
+        asyncua answers a revised interval with a ModifySubscription asking
+        a keep-alive of 75% of the session timeout (27,000 at 100 ms), and
+        the spec then has the server raise the lifetime to three of those:
+        hours for a subscription a dropped connection leaves behind. So the
+        counts are asked for again, for the revised interval.
+        """
+        # handler=None → iterator mode, drained by _consume_subscription;
+        # queue_maxsize=0 is unbounded, so the initial burst is never dropped.
+        sub = await self._client.create_subscription(
+            self._make_sub_params(interval_ms, priority), None, queue_maxsize=0,
+        )
+        sub.recreate = self._reconnect_instead_of_recreating
+        revised_ms = sub.parameters.RequestedPublishingInterval  # asyncua copies a revision here
+        if revised_ms != interval_ms:
+            params = self._make_sub_params(revised_ms, priority)
+            await sub.update(ua.ModifySubscriptionParameters(
+                SubscriptionId=sub.subscription_id,
+                RequestedPublishingInterval=revised_ms,
+                RequestedLifetimeCount=params.RequestedLifetimeCount,
+                RequestedMaxKeepAliveCount=params.RequestedMaxKeepAliveCount,
+                MaxNotificationsPerPublish=params.MaxNotificationsPerPublish,
+                Priority=priority,
+            ))
+        return sub
+
     async def _setup_subscriptions(self) -> None:
+        """Create both subscriptions, re-apply the priority set, then
+        subscribe the background set — in that order, so the page open in a
+        browser has its values before the whole tree is subscribed, which
+        takes tens of seconds on a large PLC."""
         async with self._subscription_transition_lock:
             pending = await self._setup_subscriptions_locked()
+        await self._reapply_priority_paths()
         if not pending:
             return
-        ds_entry, field_routes, enabled_items = pending
-        # Subscribe the background set chunk by chunk, taking the lock per
-        # chunk: a page context change (set_priority_paths) then waits for one
-        # request instead of the whole tree — tens of seconds for 100k nodes.
-        chunk_size = min(self._operation_limits.monitored_items_budget(), BG_SUBSCRIBE_CHUNK)
-        for i in range(0, len(enabled_items), chunk_size):
-            async with self._subscription_transition_lock:
-                if self._background_sub is None or self._client is None:
-                    return  # torn down while we were subscribing
-                # A path promoted to the priority subscription in the meantime
-                # must not land on the background one as well.
-                chunk = [
-                    item for item in enabled_items[i : i + chunk_size]
-                    if item[0] not in self._priority_path_handles
-                ]
-                await self._subscribe_bg_chunk(chunk, i // chunk_size, ds_entry, field_routes)
+        ds_entry, enabled_items = pending
+        if not await self._subscribe_bg(enabled_items, ds_entry):
+            return
+        # A request that timed out or was refused whole answered each of its
+        # items with it: those are tried once more now, and what is refused
+        # again waits for the health check.
+        await self._retry_bg()
         logger.info(
-            "Background subscription complete for %s: %d paths",
-            self.datasource_name, len(self._bg_path_handles),
+            "Background subscription complete for %s: %d paths, %d left for the health check",
+            self.datasource_name, len(self._bg_path_handles), len(self._bg_retry),
         )
 
+    async def _subscribe_bg(self, items: list[tuple[str, Any, str]], ds_entry: Any) -> bool:
+        """Put ``(path, node, node_id)`` *items* on the background subscription
+        chunk by chunk, taking the lock per chunk: a page context change
+        (set_priority_paths) then waits for one request instead of the whole
+        tree — tens of seconds for 100k nodes. False when the subscriptions
+        were torn down meanwhile."""
+        chunk_size = min(self._operation_limits.monitored_items_budget(), BG_SUBSCRIBE_CHUNK)
+        for i in range(0, len(items), chunk_size):
+            async with self._subscription_transition_lock:
+                if self._background_sub is None or self._client is None:
+                    return False
+                await self._subscribe_bg_chunk(self._bg_wanted(items[i : i + chunk_size]), ds_entry)
+        return True
+
+    def _bg_wanted(self, items: list[tuple[str, Any, str]]) -> list[tuple[str, Any]]:
+        """The ``(path, node, node_id)`` *items* still to put on the
+        background, judged when they are sent, as ``(path, node)``.
+
+        A path promoted in the meantime must not land on the background as
+        well, and one promoted and demoted again is already back on it:
+        subscribing it twice orphans a handle. A config save swaps the
+        datasource entry, and datasource_sync handles a path it disabled or
+        pointed at another node: an older snapshot must not bring it back.
+        """
+        current = self._datasource_manager.get(self.datasource_name)
+        keep = []
+        for path, node, node_id in items:
+            if path in self._priority_path_handles or path in self._bg_path_handles:
+                continue
+            entry = current.registry.get(path) if current is not None else None
+            if entry and is_subscribable(entry) and entry.get("node_id") == node_id:
+                keep.append((path, node))
+        return keep
+
+    async def _retry_bg(self) -> None:
+        """Retry the paths a background create refused (`_bg_retry`); what is
+        refused again waits twice as many health checks as last time, up to 16."""
+        ds_entry = self._datasource_manager.get(self.datasource_name)
+        if not self._bg_retry or ds_entry is None or self._client is None:
+            return
+        if self._bg_retry_wait:
+            self._bg_retry_wait -= 1
+            return
+        pending, self._bg_retry = self._bg_retry, {}
+        items = [(path, self._client.get_node(node_id), node_id) for path, node_id in pending.items()]
+        try:
+            await self._subscribe_bg(items, ds_entry)
+        except Exception as exc:  # never the reconnect loop's end; a reconnect resubscribes them
+            logger.warning("Background retry failed for %s: %s", self.datasource_name, exc)
+        self._bg_retry_backoff = min(self._bg_retry_backoff * 2 or 1, 16) if self._bg_retry else 0
+        self._bg_retry_wait = self._bg_retry_backoff
+
+    async def _reapply_priority_paths(self) -> None:
+        """Re-apply priority paths that were requested before the OPC-UA
+        connection was ready: set_priority_paths() is a no-op when not
+        connected, so those requests were silently dropped.
+
+        Prefers the full recompute (page-driven + alarm triggers + historized
+        variables) so a reconnect doesn't drop alarm/historian subscriptions
+        until the next browser navigation; falls back to the page-driven keys
+        derivable locally when no recompute callback is wired (e.g. in tests).
+        """
+        if self._priority_recompute_callback is not None:
+            await self._priority_recompute_callback()
+            return
+        dm = self._datasource_manager
+        if dm is None:
+            return
+        priority_paths = {
+            path for ds, path in map(parse_var_key, dm.get_priority_keys())
+            if ds == self.datasource_name and path
+        }
+        if priority_paths:
+            await self.set_priority_paths(priority_paths)
+
     async def _subscribe_bg_chunk(
-        self, chunk: list[tuple[str, Any]], chunk_index: int, ds_entry: Any, field_routes: dict,
+        self, chunk: list[tuple[str, Any]], ds_entry: Any, action: str = "Subscribe",
     ) -> None:
-        """One CreateMonitoredItems request for *chunk* on the background subscription."""
+        """Subscribe ``(path, node)`` *chunk* on the background subscription —
+        the one way an item gets there. What it refuses goes to `_bg_retry`
+        for the health check, unless the node itself is wrong. A timed-out
+        item too, though the server has often created it all the same: the
+        untracked duplicate that can leave until the next reconnect is the
+        price over a variable with no monitored item."""
         if not chunk:
             return
-        try:
-            # sampling_interval=-1 → server samples at the publishing interval,
-            # not the asyncua default of 50 ms.  For 500 variables at 1000 ms
-            # this saves the server ~20x unnecessary sampling work.
-            handles = await self._create_items(self._background_sub, chunk, ds_entry, -1)
-            for (path, node), handle in zip(chunk, handles, strict=False):
-                # handle may be ua.StatusCode when the server refuses a node
-                if isinstance(handle, ua.StatusCode):
-                    logger.warning(
-                        "Subscribe rejected for %s/%s: %s",
-                        self.datasource_name, path, handle,
-                    )
-                    continue
-                self._bg_path_handles[path] = [handle]
-                nid = node.nodeid
-                self._register_node_route(path, nid, field_routes)
-                self._path_to_node_ids.setdefault(path, set()).add(nid)
-        except Exception as exc:
-            if not self._connected:
-                return  # the session is gone; the reconnect resubscribes everything
-            logger.warning(
-                "Batch subscribe failed for %s (chunk %d): %s — falling back to per-path",
-                self.datasource_name, chunk_index, exc,
-            )
-            for path, _node in chunk:
-                var_entry = ds_entry.registry.get(path, {})
-                await self._subscribe_path(path, var_entry, ds_entry, field_routes)
+        # sampling_interval=-1 → server samples at the publishing interval,
+        # not the asyncua default of 50 ms.  For 500 variables at 1000 ms
+        # this saves the server ~20x unnecessary sampling work.
+        handles = await self._create_items(self._background_sub, chunk, ds_entry, -1)
+        for path, code in self._record_handles(self._bg_path_handles, chunk, handles, action):
+            if code.value not in _NODE_REFUSALS:
+                self._bg_retry[path] = ds_entry.registry[path]["node_id"]
 
-    async def _setup_subscriptions_locked(self) -> tuple[Any, dict, list[tuple[str, Any]]] | None:
+    async def _setup_subscriptions_locked(self) -> tuple[Any, list[tuple[str, Any, str]]] | None:
         """Create both subscriptions and return what the background one still
-        has to subscribe, as ``(ds_entry, field_routes, [(path, node), …])``."""
+        has to subscribe, as ``(ds_entry, [(path, node, node_id), …])``."""
         dm = self._datasource_manager
         if dm is None or self._client is None:
             return None
@@ -728,21 +1056,15 @@ class DatasourceOpcuaEngine:
         self._priority_revised_sampling_sum_ms = 0.0
         self._priority_revised_sampling_min_ms = None
         self._priority_revised_sampling_max_ms = None
-        # handler=None → iterator mode, drained by _consume_subscription;
-        # queue_maxsize=0 is unbounded, so the initial burst is never dropped.
         if not disable_bg:
-            self._background_sub = await self._client.create_subscription(
-                self._make_sub_params(bg_interval, priority=0), None, queue_maxsize=0,
-            )
+            self._background_sub = await self._create_subscription(bg_interval, priority=0)
             self._revised_bg_publish_interval_ms = float(
                 self._background_sub.parameters.RequestedPublishingInterval,
             )
             self._sub_consumer_tasks.append(
                 asyncio.create_task(self._consume_subscription(self._background_sub))
             )
-        self._priority_sub = await self._client.create_subscription(
-            self._make_sub_params(priority_interval, priority=200), None, queue_maxsize=0,
-        )
+        self._priority_sub = await self._create_subscription(priority_interval, priority=200)
         self._revised_priority_publish_interval_ms = float(
             self._priority_sub.parameters.RequestedPublishingInterval,
         )
@@ -774,18 +1096,17 @@ class DatasourceOpcuaEngine:
         if disable_bg:
             return None
 
-        field_routes = _struct_field_routes(ds_entry)
-        # Collect all enabled (path, node) pairs; _setup_subscriptions sends one
+        # Collect all enabled items; _setup_subscriptions sends one
         # CreateMonitoredItems request per chunk instead of one per variable.
-        enabled_items: list[tuple[str, Any]] = []
+        enabled_items: list[tuple[str, Any, str]] = []
         for path, var_entry in ds_entry.registry.items():
             if not is_subscribable(var_entry):
                 continue
             node_id = var_entry.get("node_id", "")
             if not node_id:
                 continue
-            enabled_items.append((path, self._client.get_node(node_id)))
-        return ds_entry, field_routes, enabled_items
+            enabled_items.append((path, self._client.get_node(node_id), node_id))
+        return ds_entry, enabled_items
 
     async def _consume_subscription(self, sub: Any) -> None:
         """Drain one subscription's event queue into the datachange handler.
@@ -810,39 +1131,6 @@ class DatasourceOpcuaEngine:
         except Exception:
             logger.exception("Subscription consumer failed for %s", self.datasource_name)
 
-    async def _subscribe_path(
-        self,
-        path: str,
-        var_entry: dict,
-        ds_entry: Any,
-        field_routes: dict[str, tuple[str, str]] | None = None,
-    ) -> None:
-        """Subscribe a single variable path to the background subscription (fallback/dynamic)."""
-        if path in self._bg_path_handles:
-            # Already tracked (e.g. a reconnect's full resync racing an
-            # independent enable-variable call) — reuse it instead of
-            # creating a duplicate monitored item and leaking the existing
-            # handle, which would double-deliver every datachange.
-            return
-        try:
-            node_id = var_entry.get("node_id", "")
-            if not node_id:
-                return
-            node = self._client.get_node(node_id)
-            handles = await self._create_items(self._background_sub, [(path, node)], ds_entry, -1)
-            valid = [h for h in handles if not isinstance(h, ua.StatusCode)]
-            if not valid:
-                return
-            self._bg_path_handles[path] = valid
-            nid = node.nodeid
-            routes = field_routes if field_routes is not None else _struct_field_routes(ds_entry)
-            self._register_node_route(path, nid, routes)
-            self._path_to_node_ids.setdefault(path, set()).add(nid)
-        except Exception as exc:
-            logger.warning(
-                "Failed to subscribe %s/%s: %s", self.datasource_name, path, exc,
-            )
-
     async def _teardown_subscriptions(self) -> None:
         async with self._subscription_transition_lock:
             await self._teardown_subscriptions_locked()
@@ -864,6 +1152,8 @@ class DatasourceOpcuaEngine:
         self._bg_path_handles.clear()
         self._priority_path_handles.clear()
         self._current_priority_paths.clear()
+        self._bg_retry.clear()
+        self._bg_retry_wait = self._bg_retry_backoff = 0
 
     # ── Write ─────────────────────────────────────────────────────────────────
 
@@ -898,10 +1188,11 @@ class DatasourceOpcuaEngine:
         if not self._connected or self._client is None:
             raise RuntimeError(f"Not connected: {self.datasource_name}")
         node = self._client.get_node(node_id)
-        if variant_type is not None:
-            await node.write_value(ua.Variant(value, variant_type))
-            return
-        await node.write_value(value)
+        variant = ua.Variant(value, variant_type) if variant_type is not None else ua.Variant(value)
+        # A bare DataValue: asyncua stamps anything else with a SourceTimestamp,
+        # and TwinCAT and S7 servers refuse a timestamped write outright
+        # (BadWriteNotSupported) — every write failed.
+        await node.write_value(ua.DataValue(variant))
 
     async def read_current_values(self, paths: set[str], *, raw: bool = False) -> dict[str, Any]:
         """Bulk-read current values for requested paths and folder structs.
@@ -909,6 +1200,17 @@ class DatasourceOpcuaEngine:
         Values come back in their cache form (``normalize_value``); *raw* keeps
         the asyncua values instead, for a caller that writes them back to the
         server — a patched array element write.
+
+        A folder's leaves are also seeded into the cache under their own keys,
+        where it holds none yet: a composite something reads but nothing has
+        cached is built whole from the leaf caches, and every leaf not cached
+        by then would drop out of it. One already cached is left as it is. A
+        leaf notification that comes in while the read is in flight is newer
+        than the read, so the value read takes it instead, a variable read
+        under its own path and a folder's leaf alike: the caller seeds the
+        cache with what it returns, and a composite, patched in place from
+        then on, would keep the read's older value until that leaf changes
+        again.
         """
         if not paths or not self._connected or self._client is None:
             return {}
@@ -919,101 +1221,66 @@ class DatasourceOpcuaEngine:
         if ds_entry is None:
             return {}
 
-        requests: list[tuple[str, str, str | None, Node]] = []
+        # (bound key, leaf path, the leaf's place in the bound path's value,
+        # node): a variable is its own value; a folder's leaves fill its
+        # composite, every array nested in it a list in position order.
+        requests: list[tuple[str, str, tuple[str | int, ...], Node]] = []
         for path in sorted(paths):
+            key = build_var_key(self.datasource_name, path)
             folder_entry = ds_entry.folder_registry.get(path)
-            if folder_entry is not None:
-                if folder_entry.get("_is_array"):
-                    # Array-of-struct: collect leaves from every element subfolder.
-                    # Each element is tracked as ("array_elem", array_folder_path,
-                    # elem_index, elem_path, field_name, node).
-                    for elem_idx, elem_path in enumerate(folder_entry.get("_element_paths", [])):
-                        elem_entry = ds_entry.folder_registry.get(elem_path)
-                        if elem_entry is None:
-                            continue
-                        for field_name, child_path in _collect_struct_leaf_paths(
-                            elem_entry, ds_entry.folder_registry,
-                        ):
-                            child_entry = ds_entry.registry.get(child_path)
-                            if not child_entry or not is_subscribable(child_entry):
-                                continue
-                            node_id = child_entry.get("node_id", "")
-                            if not node_id:
-                                continue
-                            requests.append(
-                                ("array_elem", path, f"{elem_idx}:{field_name}", self._client.get_node(node_id))
-                            )
-                else:
-                    for field_path, child_path in _collect_struct_leaf_paths(folder_entry, ds_entry.folder_registry):
-                        child_entry = ds_entry.registry.get(child_path)
-                        if not child_entry or not is_subscribable(child_entry):
-                            continue
-                        node_id = child_entry.get("node_id", "")
-                        if not node_id:
-                            continue
-                        requests.append(("struct", path, field_path, self._client.get_node(node_id)))
-                continue
-
-            entry = ds_entry.registry.get(path)
-            if not entry or not is_subscribable(entry):
-                continue
-            node_id = entry.get("node_id", "")
-            if not node_id:
-                continue
-            requests.append(("scalar", path, None, self._client.get_node(node_id)))
+            leaves = (
+                _composite_leaf_steps(folder_entry, ds_entry.folder_registry)
+                if folder_entry is not None
+                else [((), path)]
+            )
+            for steps, leaf_path in leaves:
+                entry = ds_entry.registry.get(leaf_path)
+                if not entry or not is_subscribable(entry):
+                    continue
+                node_id = entry.get("node_id", "")
+                if not node_id:
+                    continue
+                requests.append((key, leaf_path, steps, self._client.get_node(node_id)))
 
         if not requests:
             return {}
 
-        # One Read operation per node, chunked to MaxNodesPerRead: a server that
-        # enforces it fails the whole request, so an over-limit page context
-        # would leave every variable on the page without a value.
-        nodes_to_read = [node for _, _, _, node in requests]
-        read_budget = self._operation_limits.read_ops_budget()
+        # One Read operation per node, chunked to MaxNodesPerRead and the
+        # server's message size: a server fails the whole over-limit request,
+        # so an over-limit page context would leave every variable on the page
+        # without a value.
+        nodes_to_read = [node for *_, node in requests]
         values: list[Any] = []
-        for start in range(0, len(nodes_to_read), read_budget):
-            values.extend(
-                await self._client.read_values(nodes_to_read[start : start + read_budget])
-            )
+        newer: dict[str, Any] = {}
+        if not raw:
+            dm.register_value_listener(newer.__setitem__)
+        try:
+            for span in self._operation_limits.read_chunks([n.nodeid for n in nodes_to_read]):
+                values.extend(await self._client.read_values(nodes_to_read[span]))
+        finally:
+            dm.unregister_value_listener(newer.__setitem__)
         result: dict[str, Any] = {}
-        for (kind, path, field_name, _node), value in zip(requests, values, strict=False):
+        leaf_values: dict[str, Any] = {}
+        # A struct's leaves come one after another (_composite_leaf_steps): each
+        # goes into the container the one before it went into, rather than a
+        # walk from the root — 59 ms of loop for a 70,000-leaf folder.
+        last_parent: tuple[str, tuple[str | int, ...]] | None = None
+        parent: dict | list = result
+        for (key, leaf_path, steps, _node), value in zip(requests, values, strict=False):
             coerced = value if raw else normalize_value(value)
-            key = build_var_key(self.datasource_name, path)
-            if kind == "struct" and field_name is not None:
-                fields = result.get(key)
-                if not isinstance(fields, dict):
-                    fields = {}
-                    result[key] = fields
-                # field_name may be a '/'-separated path for nested structs
-                # (e.g. "stSignalRaw/bVisible"); build the nested dict accordingly.
-                parts = field_name.split("/")
-                d: dict = fields
-                for part in parts[:-1]:
-                    if not isinstance(d.get(part), dict):
-                        d[part] = {}
-                    d = d[part]
-                d[parts[-1]] = coerced
-                continue
-            if kind == "array_elem" and field_name is not None:
-                # field_name is encoded as "elem_idx:field_name"
-                sep = field_name.index(":")
-                elem_idx = int(field_name[:sep])
-                actual_field = field_name[sep + 1:]
-                arr = result.get(key)
-                if not isinstance(arr, list):
-                    arr = []
-                    result[key] = arr
-                while len(arr) <= elem_idx:
-                    arr.append({})
-                parts = actual_field.split("/")
-                target = arr[elem_idx]
-                for part in parts[:-1]:
-                    if not isinstance(target.get(part), dict):
-                        target[part] = {}
-                    target = target[part]
-                target[parts[-1]] = coerced
-                continue
-            result[key] = coerced
+            if not raw:
+                leaf_key = build_var_key(self.datasource_name, leaf_path)
+                coerced = newer.get(leaf_key, coerced)
+                if steps:
+                    leaf_values[leaf_key] = coerced
+            here = (key, steps[:-1])
+            if here == last_parent and isinstance(parent, dict):
+                parent[steps[-1]] = coerced
+            else:
+                parent = _place(result, (key, *steps), coerced)
+                last_parent = here
+        if leaf_values:
+            dm.seed_cached_values(leaf_values, overwrite=False)
 
         # Indexed struct[] bindings read a concrete element key. Include those
         # keys in bulk reads/prefetches, not only in later subscription updates,
@@ -1038,13 +1305,28 @@ class DatasourceOpcuaEngine:
     async def add_subscription_by_path(
         self, path: str, ds_entry: Any,
     ) -> None:
+        """Subscribe one variable a config save enabled or re-pointed on the
+        background subscription."""
         async with self._subscription_transition_lock:
             if not self._connected or self._background_sub is None:
                 return
-            var_entry = ds_entry.registry.get(path)
-            if not var_entry:
+            if path in self._bg_path_handles:
+                # Already tracked (e.g. a reconnect's full resync racing an
+                # independent enable-variable call) — reuse it instead of
+                # creating a duplicate monitored item and leaking the existing
+                # handle, which would double-deliver every datachange.
                 return
-            await self._subscribe_path(path, var_entry, ds_entry)
+            node_id = (ds_entry.registry.get(path) or {}).get("node_id", "")
+            if not node_id:
+                return
+            try:
+                await self._subscribe_bg_chunk([(path, self._client.get_node(node_id))], ds_entry)
+            except ConnectionError:
+                return  # the session is gone: the reconnect subscribes it
+            except Exception as exc:
+                logger.warning(
+                    "Failed to subscribe %s/%s: %s", self.datasource_name, path, exc,
+                )
 
     async def remove_subscription_by_path(self, ds_name: str, path: str) -> bool:
         """Remove every monitored item for *path* without losing failed handles.
@@ -1094,14 +1376,19 @@ class DatasourceOpcuaEngine:
     async def set_priority_paths(self, paths: set[str]) -> None:
         """Serialise priority transitions for this datasource."""
         async with self._subscription_transition_lock:
-            await self._set_priority_paths_locked(paths)
+            # A lost session ends the transition where it is — one request per
+            # path would only fail thousands of times more; the reconnect
+            # resubscribes everything.
+            with contextlib.suppress(ConnectionError):
+                await self._set_priority_paths_locked(paths)
 
     async def _set_priority_paths_locked(self, paths: set[str]) -> None:
         """Promote paths to priority subscription, demote the rest.
 
         Uses bulk OPC-UA calls (one DeleteMonitoredItems + one CreateMonitoredItems
-        per direction) instead of one call per variable, so a page switch with
-        N active variables costs 4 round-trips regardless of N.
+        per direction, split only by the server's OperationLimits) instead of one
+        call per variable, so a page switch with N active variables costs 4
+        round-trips for any N one request can carry.
         """
         if not self._connected or self._priority_sub is None:
             return
@@ -1114,7 +1401,6 @@ class DatasourceOpcuaEngine:
 
         self._requested_priority_paths = set(paths)
         desired_leaf_paths = self._expand_priority_paths(paths, ds_entry)
-        field_routes = _struct_field_routes(ds_entry)
 
         # Handle tracking is the authoritative actual state. Failed operations
         # therefore remain a delta and are retried by the next recompute.
@@ -1139,76 +1425,40 @@ class DatasourceOpcuaEngine:
             promote_items.append((path, self._client.get_node(node_id)))
 
         if promote_items:
-            # 1. Bulk-unsubscribe from background (one DeleteMonitoredItems call)
-            bg_handles_to_remove: list[Any] = []
-            for path, _ in promote_items:
-                bg_handles_to_remove.extend(self._bg_path_handles.get(path, []))
-            bg_unsubscribe_ok = True
-            if bg_handles_to_remove and self._background_sub is not None:
-                try:
-                    await self._background_sub.unsubscribe(bg_handles_to_remove)
-                    for path, _ in promote_items:
-                        self._bg_path_handles.pop(path, None)
-                except Exception as exc:
-                    logger.warning("Bulk bg-unsubscribe failed for %s: %s", self.datasource_name, exc)
-                    bg_unsubscribe_ok = False
+            # 1. Bulk-unsubscribe from background
+            unsubscribed = await self._delete_tracked(
+                self._background_sub, self._bg_path_handles, [path for path, _ in promote_items],
+            )
+            cleared = [item for item in promote_items if item[0] in unsubscribed]
 
-            # 2. Bulk-subscribe to priority (one CreateMonitoredItems call) —
-            # only once the background side is actually cleared, so a node is
-            # never live on both subscriptions at once. On failure the
-            # nodes simply stay on the background sub (no data loss) instead
-            # of also landing on the priority sub.
-            if bg_unsubscribe_ok:
-                try:
-                    handles, revised_samples = await self._subscribe_priority_nodes_with_revised_sampling(
-                        promote_items, ds_entry,
-                    )
-                    self._record_priority_revised_sampling(revised_samples)
-                    for (path, node), handle in zip(promote_items, handles, strict=False):
-                        if isinstance(handle, ua.StatusCode):
-                            logger.warning("Promote rejected for %s/%s: %s", self.datasource_name, path, handle)
-                            continue
-                        self._priority_path_handles[path] = [handle]
-                        # Always register NodeId routing here — when disable_background_sync=True
-                        # _setup_subscriptions never populates _node_to_path/_node_to_field, so
-                        # without this the datachange_notification callback silently drops every
-                        # priority-sub value.
-                        nid = node.nodeid
-                        self._register_node_route(path, nid, field_routes)
-                        self._path_to_node_ids.setdefault(path, set()).add(nid)
-                except Exception as exc:
-                    if not self._connected:
-                        return  # a lost session: one request per path would only fail 1000 times more
-                    logger.warning("Bulk promote failed for %s: %s — retrying per-path", self.datasource_name, exc)
-                    for path, node in promote_items:
-                        try:
-                            handles, revised_samples = await self._subscribe_priority_nodes_with_revised_sampling(
-                                [(path, node)], ds_entry,
-                            )
-                            self._record_priority_revised_sampling(revised_samples)
-                            handles_list = [x for x in handles if isinstance(x, int)]
-                            if not handles_list:
-                                continue
-                            self._priority_path_handles[path] = handles_list
-                            nid = node.nodeid
-                            self._register_node_route(path, nid, field_routes)
-                            self._path_to_node_ids.setdefault(path, set()).add(nid)
-                        except Exception as e2:
-                            logger.warning("Per-path promote failed %s/%s: %s", self.datasource_name, path, e2)
-            else:
-                logger.warning(
-                    "Skipping priority promote for %s (bg-unsubscribe failed) — nodes stay on background sub",
-                    self.datasource_name,
+            # 2. Bulk-subscribe to priority — only the paths whose background
+            # item is gone, so a node is never live on both subscriptions at
+            # once. The rest simply stay on the background sub (no data loss)
+            # and the next recompute retries them.
+            rejected: list[tuple[str, ua.StatusCode]] = []
+            if cleared:
+                # Routed here too: with disable_background_sync=True nothing
+                # else routes a priority-sub value.
+                handles, revised_samples = await self._subscribe_priority_nodes_with_revised_sampling(
+                    cleared, ds_entry,
                 )
+                self._record_priority_revised_sampling(revised_samples)
+                rejected = self._record_handles(self._priority_path_handles, cleared, handles, "Promote")
 
-            # A successful bg-unsubscribe followed by rejected/failed priority
-            # creation must not leave an enabled variable with no monitored item.
-            for path, _node in promote_items:
-                if path in self._priority_path_handles or path in self._bg_path_handles:
-                    continue
-                entry = ds_entry.registry.get(path)
-                if entry is not None and is_subscribable(entry) and self._background_sub is not None:
-                    await self._subscribe_path(path, entry, ds_entry, field_routes)
+            # A successful bg-unsubscribe followed by a refused or timed-out
+            # priority creation must not leave an enabled variable with no
+            # monitored item: the user may have moved on before the next
+            # recompute, which then never selects it again. Those paths go
+            # back to the background in bulk — a refused request refuses every
+            # item of its chunk, up to a thousand, too many for one request
+            # each under the lock. A timed-out one may live on the priority
+            # subscription all the same, untracked: the price, as for any
+            # timed-out create, over a variable with no values.
+            if self._background_sub is not None:
+                rejected_paths = {path for path, _ in rejected}
+                await self._subscribe_bg_chunk(
+                    [item for item in cleared if item[0] in rejected_paths], ds_entry, "Promote-fallback",
+                )
 
         # ── Batch demote: priority → bg ───────────────────────────────────────
         demote_items: list[tuple[str, Any]] = []   # (path, node) — only enabled vars
@@ -1225,67 +1475,28 @@ class DatasourceOpcuaEngine:
             demote_paths_no_bg.append(path)
 
         if demote_items or demote_paths_no_bg:
-            # 1. Bulk-unsubscribe from priority. Don't discard tracking until
-            # the RPC actually succeeds — on failure the items stay
-            # tracked as priority (retryable/cleanable later) and step 2 is
-            # skipped so a node is never live on both subscriptions at once.
-            demote_paths_all = [p for p, _ in demote_items] + list(demote_paths_no_bg)
-            prio_handles_to_remove: list[Any] = []
-            for path in demote_paths_all:
-                prio_handles_to_remove.extend(self._priority_path_handles.get(path, []))
-            prio_unsubscribe_ok = True
-            if prio_handles_to_remove:
-                try:
-                    await self._priority_sub.unsubscribe(prio_handles_to_remove)
-                    for path in demote_paths_all:
-                        self._priority_path_handles.pop(path, None)
-                except Exception as exc:
-                    logger.warning("Bulk prio-unsubscribe failed for %s: %s", self.datasource_name, exc)
-                    prio_unsubscribe_ok = False
+            # 1. Bulk-unsubscribe from priority. One whose delete failed stays
+            # priority and skips step 2.
+            cleared_paths = await self._delete_tracked(
+                self._priority_sub, self._priority_path_handles,
+                [p for p, _ in demote_items] + demote_paths_no_bg,
+            )
+            demote_items = [(path, node) for path, node in demote_items if path in cleared_paths]
 
             # 2. Bulk-resubscribe to background — only after the priority
-            # side was actually cleared.
-            if demote_items and prio_unsubscribe_ok:
-                try:
-                    handles = await self._create_items(self._background_sub, demote_items, ds_entry, -1)
-                    for (path, _), handle in zip(demote_items, handles, strict=False):
-                        if isinstance(handle, ua.StatusCode):
-                            logger.warning("Demote-resub rejected for %s/%s: %s", self.datasource_name, path, handle)
-                            continue
-                        self._bg_path_handles[path] = [handle]
-                except Exception as exc:
-                    if not self._connected:
-                        return
-                    logger.warning("Bulk demote failed for %s: %s — retrying per-path", self.datasource_name, exc)
-                    for path, node in demote_items:
-                        try:
-                            h = await self._create_items(self._background_sub, [(path, node)], ds_entry, -1)
-                            self._bg_path_handles[path] = [x for x in h if isinstance(x, int)]
-                        except Exception as e2:
-                            logger.warning("Per-path demote failed %s/%s: %s", self.datasource_name, path, e2)
-            elif demote_items:
-                logger.warning(
-                    "Skipping background resubscribe for %s (priority-unsubscribe failed) — "
-                    "nodes stay on priority sub",
-                    self.datasource_name,
-                )
-
-            if prio_unsubscribe_ok:
-                for path, _node in demote_items:
-                    if path in self._bg_path_handles:
-                        continue
-                    entry = ds_entry.registry.get(path)
-                    if entry is not None and self._background_sub is not None:
-                        await self._subscribe_path(path, entry, ds_entry, field_routes)
+            # side was actually cleared. No recompute selects a demoted path
+            # again, so what the background refuses waits for the health
+            # check — not now: the subscription that just refused the request
+            # would refuse it again.
+            await self._subscribe_bg_chunk(demote_items, ds_entry, "Demote-resub")
 
             # Disabled/dropped paths must remove stale routing so callback map
             # stays consistent — only once their priority unsubscribe actually
             # succeeded (otherwise the subscription is still live).
-            if prio_unsubscribe_ok:
-                for path in demote_paths_no_bg:
-                    for nid in self._path_to_node_ids.pop(path, set()):
-                        self._node_to_path.pop(nid, None)
-                        self._node_to_field.pop(nid, None)
+            for path in cleared_paths.intersection(demote_paths_no_bg):
+                for nid in self._path_to_node_ids.pop(path, set()):
+                    self._node_to_path.pop(nid, None)
+                    self._node_to_field.pop(nid, None)
 
         # Actual state, deliberately distinct from `_requested_priority_paths`.
         self._current_priority_paths = set(self._priority_path_handles)

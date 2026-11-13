@@ -87,11 +87,12 @@ describe('usesBranch', () => {
 
 describe('extractLiveKeys', () => {
   const structMeta = { type: { kind: 'struct', name: 'Motor', array: true, fields: ['Speed'] } };
+  // An array counting from 1; each element folder names its position from 0.
   const varMeta = {
     'PLC:Motors': structMeta,
-    'PLC:Motors/Line[1]': structMeta,
+    'PLC:Motors/Line[1]': { ...structMeta, position: 0 },
     'PLC:Motors/Line[1]/Speed': { type: { kind: 'scalar', base: 'Float', array: false } },
-    'PLC:Motors/Line[2]': structMeta,
+    'PLC:Motors/Line[2]': { ...structMeta, position: 1 },
     'PLC:Motors/Line[2]/Speed': { type: { kind: 'scalar', base: 'Float', array: false } },
   };
 
@@ -112,5 +113,30 @@ describe('extractLiveKeys', () => {
     expect(extractLiveKeys(indexed, varMeta)).toBe(extractLiveKeys(indexed, varMeta));
     // A scalar array has no element keys to add.
     expect(extractLiveKeys({ a: v('PLC:Zones', 3) }, varMeta)).toEqual(['PLC:Zones']);
+  });
+
+  it('adds the element at the position a page metadata names, whatever its rank there', () => {
+    const partial = {
+      'PLC:Motors': structMeta,
+      'PLC:Motors/Line[6]': { ...structMeta, position: 5 },
+    };
+    expect(extractLiveKeys({ a: v('PLC:Motors', 5) }, partial)).toEqual([
+      'PLC:Motors',
+      'PLC:Motors/Line[6]',
+    ]);
+  });
+
+  it('keeps the very key list across new metadata naming the same element', () => {
+    const indexed = { a: v('PLC:Motors', 1) };
+    const first = extractLiveKeys(indexed, { ...varMeta });
+    expect(first).toEqual(['PLC:Motors', 'PLC:Motors/Line[2]']);
+    expect(extractLiveKeys(indexed, { ...varMeta })).toBe(first);
+  });
+
+  it('keeps the very key list of a scalar array bound at an index across new metadata', () => {
+    const props = { a: v('PLC:Zones', 3) };
+    const zones = { type: { kind: 'scalar', base: 'Integer', array: true } };
+    expect(extractLiveKeys(props, { 'PLC:Zones': zones })).toBe(extractVarKeys(props));
+    expect(extractLiveKeys(props, { 'PLC:Zones': zones })).toBe(extractVarKeys(props));
   });
 });

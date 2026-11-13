@@ -772,6 +772,11 @@ Settings worth a note:
   `password` only once one is pinned. **Trust certificate** in the editor writes
   `certs/<name>-server.der` and sets it here
   ([REST](../reference/rest-api.md#server-certificate))
+- `reconnect_interval_s` (**Reconnect (s)**, 1–300, default `5`) is the
+  period of the connection health check and the longest wait between
+  reconnect attempts: after a drop the first one comes 0.5 s later, and the
+  wait doubles up to this value while the server stays away
+  ([engine](backend.md#main-modules))
 - an `opcua-test-server`'s `settings` hold `port` (default `4855`),
   `endpoint_path`, `security_policies` (`"<Policy>/<Mode>"` entries) and
   `reachable_from_network`: absent or `false` binds `127.0.0.1` only, `true`
@@ -823,9 +828,10 @@ Notes:
 - `min`/`max` are optional and only meaningful on numeric variables — configured from the datasource variable table (scalars and struct fields alike). Surfaced through `variable_metadata()` (top-level `min`/`max` for scalars, `fieldRanges: { field_name: { min?, max? } }` for structs) and exposed to custom widgets via the `useVariableMeta` SDK hook (see [../reference/custom-widgets.md](../reference/custom-widgets.md)).
 - `sim_min`/`sim_max` are optional and read only by the bundled test server (`opcua-test-server`). With **both** set and `sim_min < sim_max`, the simulated wave for that node oscillates inside that band (booleans flip around its midpoint, integers round) instead of the index-derived default range; a missing, inverted or non-numeric bound falls back to the default wave, so a hand-edited file cannot break the simulation loop
 - folders with direct variable children become struct-style aggregate values in the live cache
-- folders can be nested: a struct folder may contain child folders that are themselves structs (struct-in-struct) or indexed sub-folders `[0]`, `[1]`, … (array-of-struct)
+- folders can be nested: a struct folder may contain child folders that are themselves structs (struct-in-struct) or arrays of structs. An array of structs is a folder with `is_array: true` whose children are its element folders, named `[0]`, `[1]`, … or, as TwinCAT browses them, `aSlaves[0]`, `aSlaves[1]`, …; the flag makes the array, and the `[N]` a name ends in only orders the elements
 - nested struct folders produce nested objects in the live cache (e.g. `{ bVisible: true, limits: { fMin: 0, fMax: 100 } }`)
-- array-of-struct folders produce JSON arrays of objects (e.g. `[{ bEnabled: true, fSpeed: 50 }, ...]`)
+- array-of-struct folders produce JSON arrays of objects (e.g. `[{ bEnabled: true, fSpeed: 50 }, ...]`), elements in index order; one nested in a struct is a list inside the struct's value (`{ mode: 7, aAxes: [{ fPos: 0 }, ...] }`), and an array whose elements are themselves arrays is a list of lists
+- an array-of-struct element folder's index in its array is not stored here: it reaches the client as `position` in `var_metadata` ([websocket.md](websocket.md#handshake))
 - the backend resolves nested structures recursively without a fixed depth limit
 - datasource config keeps the **real OPC-UA `data_type`** (e.g. `Float`, `Int16`) and explicit `is_array` flag; a positive optional `array_length` records a fixed size, while an absent/non-positive length means dynamic size. These feed the sim server and write path. The HMI never sees these raw types — they are collapsed to **simple types** at the two HMI boundaries (`variable_metadata` / `GET /api/datasources/{name}/variables`). The full OPC-UA→simple collapse table, the static-datasource reverse synthesis, and how each tree node (scalar / array / struct / struct-array / folder) maps to a `$var` binding are documented in [value-types.md](value-types.md) (`backend/core/value_types.py`).
 - a variable with `is_array: true` is array-typed; widget fields restrict to arrays by listing array `type`s (e.g. `'string[]'`)

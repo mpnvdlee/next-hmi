@@ -115,6 +115,40 @@ describe('onVariableChanged', () => {
   });
 });
 
+describe('onVariableChanged on an element of a struct array', () => {
+  // `M:Motors` at 1 of an array counting from 1: the server ships element
+  // `[2]` under its own key, not the whole array.
+  const S = { kind: 'struct' as const, name: 'Motor', array: true, fields: ['Run'] };
+  beforeEach(() => {
+    useVariableStore.setState({
+      varMeta: {
+        'M:Motors': { type: S },
+        'M:Motors/[2]': { type: { ...S, array: false }, position: 1 },
+      },
+    });
+    useConfigStore.setState({
+      globalEvents: {
+        onVariableChanged: [
+          {
+            variable: { $var: { path: 'M:Motors', index: 1 } },
+            actions: [{ type: 'showToast', message: 'moved', severity: 'info', discard: 'auto' }],
+          },
+        ],
+      },
+    });
+  });
+  afterEach(() => useVariableStore.setState({ varMeta: {} }));
+
+  it('reads the element under its own key', () => {
+    renderHook(() => useGlobalEvents('runtime'), { wrapper });
+    act(() => useVariableStore.setState({ values: { 'M:Motors/[2]': { Run: false } } }));
+    expect(toasts()).toEqual(['moved']);
+
+    act(() => useVariableStore.setState({ values: { 'M:Motors/[2]': { Run: true } } }));
+    expect(toasts()).toEqual(['moved', 'moved']);
+  });
+});
+
 describe('onUserLoggedIn / onUserLoggedOut', () => {
   const toast = (message: string) => [
     { type: 'showToast' as const, message, severity: 'info' as const, discard: 'auto' as const },

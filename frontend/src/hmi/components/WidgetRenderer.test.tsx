@@ -1,14 +1,27 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useHmiStore } from '@hmi/store/hmiStore';
-import type { ShellConfig } from '@shared/types/config';
+import type { HmiWidgetProps, ShellConfig, WidgetConfig } from '@shared/types/config';
 import { useVariableStore } from '@hmi/store/variableStore';
+import { useRecipeStore } from '@hmi/store/recipeStore';
+import { useAlarmStore } from '@hmi/store/alarmStore';
+import { useComponentPropStore } from '@hmi/store/widgetPropStore';
+import { useDeviceInfoStore } from '@hmi/store/deviceInfoStore';
+import { useConfigStore } from '@shared/store/configStore';
+import { useComponentStore } from '@shared/store/componentStore';
+import type { ComponentDefinition } from '@shared/types/componentTypes';
+import { componentPropertyToSchemaField } from '@shared/types/componentProperty';
 import WidgetRenderer from './WidgetRenderer';
 import { InputScopeContext } from '../context/InputScopeContext';
+import { registerCustomWidget, widgetRegistry } from '../registry/widgetRegistry';
+import { useEvalContext } from '../hooks/useEvalContext';
+import { evaluatePropertyValue } from '../utils/propertySourceEval';
+import { CountingProbe, GateProbe, renderCounts } from './__fixtures__/probeWidgets';
 
 vi.mock('../registry/widgetRegistry', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../registry/widgetRegistry')>();
-  const { GateProbe, LabeledProbe, ThrowingWidget } = await import('./__fixtures__/probeWidgets');
+  const { CountingProbe, GateProbe, LabeledProbe, ThrowingWidget } =
+    await import('./__fixtures__/probeWidgets');
   return {
     ...actual,
     widgetRegistry: {
@@ -17,12 +30,43 @@ vi.mock('../registry/widgetRegistry', async (importOriginal) => {
       // built-in widgets: lazy modules jsdom cannot fetch, and whose test shim
       // can't be imported at module scope without loading the real registry
       // and defeating this very mock (see setShell below).
+      CountingProbe,
       GateProbe,
       LabeledProbe,
       ThrowingWidget,
     },
   };
 });
+
+// Shows its `value` evaluated through its own `useEvalContext()`, as a widget
+// reads its properties, and its resolved layout width; counts its renders.
+// Registered here, not in the mock: the eval context's imports reach the
+// registry that mock stands in for.
+function EvalProbe({ id = '', properties, layout }: HmiWidgetProps) {
+  renderCounts.set(id, (renderCounts.get(id) ?? 0) + 1);
+  const value = evaluatePropertyValue(properties?.value, useEvalContext());
+  return (
+    <output data-testid={id} data-width={String(layout?.width)}>
+      {String(value)}
+    </output>
+  );
+}
+widgetRegistry.EvalProbe = {
+  name: 'Eval Probe',
+  category: 'Test',
+  component: EvalProbe,
+  schema: {},
+};
+
+// Stand-ins under the real host types, whose manifest rows still decide how
+// the renderer treats their children: a Container only renders them, an
+// ImageContainer also reads each one's `visible` with its own eval context.
+function ChildReaderProbe({ id = '', childConfigs }: HmiWidgetProps) {
+  const visible = evaluatePropertyValue(childConfigs?.[0]?.properties?.visible, useEvalContext());
+  return <output data-testid={id}>{String(visible)}</output>;
+}
+widgetRegistry.Container = CountingProbe;
+widgetRegistry.ImageContainer = { ...GateProbe, component: ChildReaderProbe };
 
 function renderNode(node: Parameters<typeof WidgetRenderer>[0]['node']) {
   return render(
@@ -50,6 +94,377 @@ describe('WidgetRenderer', () => {
     const wrapper = document.querySelector('[data-widget-id="pump-start"]');
     expect(wrapper?.getAttribute('data-widget-type')).toBe('GateProbe');
     expect(wrapper?.querySelector('.hmi-gate-probe')).not.toBeNull();
+  });
+
+  // A parent re-renders its children whenever it re-renders itself — its own
+  // `$var` ticked, or a Repeater rebuilt its copies for one changed element.
+  it('re-renders only the widget whose own data changed, not its unchanged siblings', async () => {
+    useVariableStore.setState({ values: { 'PLC:Row': 1, 'PLC:A': 1, 'PLC:B': 1 } });
+    const probe = (id: string, children?: WidgetConfig[]): WidgetConfig => ({
+      id,
+      type: 'CountingProbe',
+      name: id,
+      properties: { value: { $var: { path: `PLC:${id}` } } },
+      children,
+    });
+    renderNode(probe('Row', [probe('A'), probe('B')]));
+    const rendersAfter = async (values: Record<string, unknown>) => {
+      renderCounts.clear();
+      await act(async () => useVariableStore.getState().applyBatch(values));
+      return Object.fromEntries(renderCounts);
+    };
+
+    expect(await rendersAfter({ 'PLC:Row': 2 })).toEqual({ Row: 1 });
+    expect(await rendersAfter({ 'PLC:A': 2 })).toEqual({ A: 1 });
+  });
+
+  // The changed fields compare the loaded dataset with the parameters' live
+  // values, which the `$recipe` source does not name.
+  it('re-renders a widget reading whether recipe parameters changed when one is edited', async () => {
+    useRecipeStore.getState().setSnapshot(
+      {
+        version: 1,
+        datasetTypes: [
+          {
+            id: 'coffee',
+            name: 'Coffee',
+            parameters: [
+              {
+                id: 'dose',
+                label: 'Dose',
+                binding: { $var: { path: 'PLC:Dose' } },
+                dataType: 'integer',
+              },
+            ],
+            datasets: [
+              {
+                id: 'espresso',
+                name: 'Espresso',
+                description: '',
+                values: { dose: 18 },
+                updatedAt: '',
+                updatedBy: '',
+                loadedAt: '',
+              },
+            ],
+          },
+        ],
+      },
+      { coffee: { datasetId: 'espresso', loadedAt: '' } },
+      null,
+    );
+    useVariableStore.setState({ values: { 'PLC:Row': 1, 'PLC:Dose': 18 } });
+    renderNode({
+      id: 'row',
+      type: 'CountingProbe',
+      name: 'Row',
+      properties: { value: { $var: { path: 'PLC:Row' } } },
+      children: [
+        {
+          id: 'unsaved',
+          type: 'GateProbe',
+          name: 'Unsaved',
+          properties: { visible: { $recipe: { type: 'coffee', field: 'parametersChanged' } } },
+        },
+      ],
+    });
+    expect(document.querySelector('.hmi-gate-probe')).toBeNull();
+
+    await act(async () => useVariableStore.getState().applyBatch({ 'PLC:Dose': 20 }));
+    expect(document.querySelector('.hmi-gate-probe')).not.toBeNull();
+  });
+
+  // Each store a source reads through the eval context: a change to it reaches
+  // the widget reading the source, through its own `useEvalContext()`, and
+  // re-renders no other.
+  describe('store-backed sources', () => {
+    const UNACKED = { $alarmCount: { filter: 'unacked' } };
+    const raiseAlarms = () =>
+      useAlarmStore.getState().setAlarmState([], {
+        total: 3,
+        unacked: 3,
+        error_count: 3,
+        warning_count: 0,
+        info_count: 0,
+      });
+
+    beforeEach(() => {
+      useAlarmStore.setState({
+        summary: { total: 0, unacked: 0, error_count: 0, warning_count: 0, info_count: 0 },
+      });
+      useComponentPropStore.setState({ props: {} });
+      useRecipeStore.setState({ config: { version: 1, datasetTypes: [] }, loaded: {} });
+      useHmiStore.setState({ openPageOverlays: [] });
+      useDeviceInfoStore.setState({ info: null });
+      useConfigStore
+        .getState()
+        .setValueMaps([{ id: 'm', type: 'Integer', cases: [{ when: 1, then: UNACKED }] }]);
+      useVariableStore.setState({ values: { 'PLC:A': 1 } });
+    });
+
+    it.each([
+      ['$alarmCount', UNACKED, raiseAlarms, '3'],
+      [
+        '$widgetProp',
+        { $widgetProp: { componentId: 'grid', property: 'row' } },
+        () => useComponentPropStore.getState().setComponentProp('grid', 'row', 7),
+        '7',
+      ],
+      [
+        '$recipe',
+        { $recipe: { type: 'coffee', field: 'loaded' } },
+        () =>
+          useRecipeStore
+            .getState()
+            .setSnapshot(
+              { version: 1, datasetTypes: [] },
+              { coffee: { datasetId: 'espresso', loadedAt: '' } },
+              null,
+            ),
+        'true',
+      ],
+      [
+        '$overlay',
+        { $overlay: { page: 'device', param: 'device' } },
+        () =>
+          useHmiStore.getState().openPageOverlay({
+            pageId: 'device',
+            componentProperties: { device: 3 },
+            size: 'auto',
+            placement: 'center',
+          }),
+        '3',
+      ],
+      [
+        '$device',
+        { $device: { field: 'hostname' } },
+        () =>
+          useDeviceInfoStore.setState({
+            info: { hostname: 'hmi-1', ipAddress: null, macAddress: null },
+          }),
+        'hmi-1',
+      ],
+      [
+        'a source nested in a condition',
+        {
+          $if: { condition: { $compare: { left: UNACKED, operator: '>', right: 0 } }, true: 'on' },
+        },
+        raiseAlarms,
+        'on',
+      ],
+      ['a value map case', { $map: { id: 'm', value: 1 } }, raiseAlarms, '3'],
+    ])('follows %s and re-renders no other widget', async (_, value, change, shown) => {
+      render(
+        <MemoryRouter>
+          <WidgetRenderer
+            node={{ id: 'reader', type: 'EvalProbe', name: 'R', properties: { value } }}
+          />
+          <WidgetRenderer
+            node={{
+              id: 'other',
+              type: 'EvalProbe',
+              name: 'O',
+              properties: { value: { $var: { path: 'PLC:A' } } },
+            }}
+          />
+        </MemoryRouter>,
+      );
+      renderCounts.clear();
+      await act(async () => change());
+      expect(screen.getByTestId('reader').textContent).toBe(shown);
+      expect([...renderCounts.keys()]).toEqual(['reader']);
+    });
+
+    // A host's children evaluate under their own renderers: following their
+    // stores re-rendered every container above an alarm count on each update.
+    it('leaves a store a child reads to the child, not the container around it', async () => {
+      renderNode({
+        id: 'box',
+        type: 'Container',
+        name: 'Box',
+        properties: {},
+        children: [{ id: 'count', type: 'EvalProbe', name: 'C', properties: { value: UNACKED } }],
+      });
+      renderCounts.clear();
+      await act(async () => raiseAlarms());
+      expect(screen.getByTestId('count').textContent).toBe('3');
+      expect([...renderCounts.keys()]).toEqual(['count']);
+    });
+
+    it("follows a store a child's property reads for a host that reads it", async () => {
+      renderNode({
+        id: 'image',
+        type: 'ImageContainer',
+        name: 'Image',
+        properties: {},
+        children: [
+          {
+            id: 'lamp',
+            type: 'GateProbe',
+            name: 'L',
+            properties: { visible: { $compare: { left: UNACKED, operator: '>', right: 0 } } },
+          },
+        ],
+      });
+      expect(screen.getByTestId('image').textContent).toBe('false');
+      await act(async () => raiseAlarms());
+      expect(screen.getByTestId('image').textContent).toBe('true');
+    });
+
+    // The host reads the child's raw `$componentProp`, which resolves the input
+    // only at run time: nothing in the child names the store.
+    it('follows a store a read child property reaches through a component input', async () => {
+      render(
+        <MemoryRouter>
+          <InputScopeContext.Provider
+            value={{
+              properties: { show: { $compare: { left: UNACKED, operator: '>', right: 0 } } },
+            }}
+          >
+            <WidgetRenderer
+              node={{
+                id: 'image',
+                type: 'ImageContainer',
+                name: 'Image',
+                properties: {},
+                children: [
+                  {
+                    id: 'lamp',
+                    type: 'GateProbe',
+                    name: 'L',
+                    properties: { visible: { $componentProp: 'show' } },
+                  },
+                ],
+              }}
+            />
+          </InputScopeContext.Provider>
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId('image').textContent).toBe('false');
+      await act(async () => raiseAlarms());
+      expect(screen.getByTestId('image').textContent).toBe('true');
+    });
+
+    it('follows a source an input passes into a component', async () => {
+      render(
+        <MemoryRouter>
+          <InputScopeContext.Provider value={{ properties: { count: UNACKED } }}>
+            <WidgetRenderer
+              node={{
+                id: 'inner',
+                type: 'EvalProbe',
+                name: 'I',
+                properties: { value: { $componentProp: 'count' } },
+              }}
+            />
+          </InputScopeContext.Provider>
+        </MemoryRouter>,
+      );
+      await act(async () => raiseAlarms());
+      expect(screen.getByTestId('inner').textContent).toBe('3');
+    });
+
+    // The SDK hands a project widget `resolveAlarmCount` and the rest, so its
+    // code may read a store no property of it names.
+    it('follows every store for a project widget', async () => {
+      function ResolverProbe({ id = '' }: HmiWidgetProps) {
+        const unacked = useEvalContext().resolveAlarmCount?.('unacked');
+        return <output data-testid={id}>{String(unacked)}</output>;
+      }
+      registerCustomWidget({
+        key: 'ResolverProbe',
+        name: 'ResolverProbe',
+        group: null,
+        hasStyle: false,
+      });
+      widgetRegistry.ResolverProbe = {
+        name: 'Resolver Probe',
+        category: 'Test',
+        component: ResolverProbe,
+        schema: {},
+      };
+      render(
+        <MemoryRouter>
+          <WidgetRenderer
+            node={{ id: 'custom', type: 'ResolverProbe', name: 'C', properties: {} }}
+          />
+        </MemoryRouter>,
+      );
+      await act(async () => raiseAlarms());
+      expect(screen.getByTestId('custom').textContent).toBe('3');
+    });
+
+    it('follows a source an input passes into a layout field', async () => {
+      render(
+        <MemoryRouter>
+          <InputScopeContext.Provider
+            value={{
+              properties: { w: { $widgetProp: { componentId: 'slider', property: 'value' } } },
+            }}
+          >
+            <WidgetRenderer
+              node={{
+                id: 'sized',
+                type: 'EvalProbe',
+                name: 'S',
+                properties: {},
+                layout: { width: { $componentProp: 'w' } } as never,
+              }}
+            />
+          </InputScopeContext.Provider>
+        </MemoryRouter>,
+      );
+      await act(async () =>
+        useComponentPropStore.getState().setComponentProp('slider', 'value', 120),
+      );
+      expect(screen.getByTestId('sized').dataset.width).toBe('120');
+    });
+
+    it('follows the leaf a layout field binds through a bound index into a struct array', async () => {
+      // `PLC:Motors/fWidth` at the index `PLC:Sel` holds is the member's own
+      // leaf: the layout must subscribe to that, as a property would.
+      const struct = {
+        kind: 'struct' as const,
+        name: 'ST_Motor',
+        array: false,
+        fields: ['fWidth'],
+      };
+      const float = { type: { kind: 'scalar' as const, base: 'Float' as const, array: false } };
+      useVariableStore.setState({
+        varMeta: {
+          'PLC:Motors': { type: { ...struct, array: true } },
+          'PLC:Motors/Motors[1]': { type: struct, position: 0 },
+          'PLC:Motors/Motors[1]/fWidth': float,
+          'PLC:Motors/Motors[2]': { type: struct, position: 1 },
+          'PLC:Motors/Motors[2]/fWidth': float,
+          'PLC:Sel': float,
+        },
+        values: { 'PLC:Sel': 1, 'PLC:Motors/Motors[2]/fWidth': 150 },
+      });
+      render(
+        <MemoryRouter>
+          <WidgetRenderer
+            node={{
+              id: 'sized',
+              type: 'EvalProbe',
+              name: 'S',
+              properties: {},
+              layout: {
+                width: {
+                  $var: { path: 'PLC:Motors/fWidth', index: { $var: { path: 'PLC:Sel' } } },
+                },
+              } as never,
+            }}
+          />
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId('sized').dataset.width).toBe('150');
+
+      await act(async () =>
+        useVariableStore.getState().applyBatch({ 'PLC:Motors/Motors[2]/fWidth': 200 }),
+      );
+      expect(screen.getByTestId('sized').dataset.width).toBe('200');
+    });
   });
 
   describe('visibility gate', () => {
@@ -245,6 +660,54 @@ describe('WidgetRenderer', () => {
       });
 
       expect(container.querySelector('.hmi-binding-overlay')).toBeNull();
+    });
+
+    // The editor preview keeps its nodes while a definition is edited: only the
+    // registry entry, rewritten from a component-store listener, changes.
+    it('re-judges a component instance when its definition changes, its node unchanged', async () => {
+      useVariableStore.setState({
+        values: { 'PLC:Name': 'Pump 1' },
+        varMeta: { 'PLC:Name': { type: { kind: 'scalar', base: 'String', array: false } } },
+        metadataReceived: true,
+        snapshotReceived: true,
+        wsConnected: true,
+        opcuaConnected: {},
+      });
+      const pump = (type: string): ComponentDefinition => ({
+        id: 'pump',
+        name: 'Pump',
+        componentProperties: { label: { type, label: 'Label', mode: 'binding' } },
+        children: [],
+      });
+      // What AppInner's listener does through `registerComponents`, against the
+      // registry this suite mocks.
+      const unsubscribe = useComponentStore.subscribe(({ components }) => {
+        for (const c of components) {
+          widgetRegistry[`$component:${c.id}`] = {
+            ...GateProbe,
+            schema: { label: componentPropertyToSchemaField(c.componentProperties.label) },
+          };
+        }
+      });
+      act(() => useComponentStore.setState({ components: [pump('integer')] }));
+      const node: WidgetConfig = {
+        id: 'pump-1',
+        type: '$component:pump',
+        name: 'Pump 1',
+        properties: { label: { $var: { path: 'PLC:Name' } } },
+      };
+
+      try {
+        const { container } = renderNode(node);
+        expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
+
+        await act(async () => useComponentStore.setState({ components: [pump('string')] }));
+        expect(container.querySelector('.hmi-binding-overlay')).toBeNull();
+      } finally {
+        unsubscribe();
+        delete widgetRegistry['$component:pump'];
+        useComponentStore.setState({ components: [] });
+      }
     });
   });
 

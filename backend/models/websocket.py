@@ -24,6 +24,8 @@ class SetContextMessage(TypedDict, total=False):
     currentPageIds: list[str]
     # Explicit composite keys the client wants to prioritise
     priorityKeys: list[str]
+    # Numbers this context; echoed on its var_metadata and context_ready
+    contextId: int
 
 
 class WriteFieldMessage(TypedDict, total=False):

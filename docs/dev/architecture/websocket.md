@@ -81,7 +81,8 @@ On accept, the backend sends, in order:
    `set_context`, for the keys that context resolved to plus their ancestor
    folders (the array an element sits in) and descendants (a struct's members,
    an array's elements). Each frame is an authoritative *replacement*
-   snapshot — the client drops values for keys outside it — and a datasource
+   snapshot — the client keeps the values of the last three frames' keys, so
+   a revisited page shows its last values, and drops the rest — and a datasource
    edit re-sends every client its own. Metadata for 100k variables is 13 MB;
    a page's is kilobytes. The frame's shape:
 
@@ -114,6 +115,10 @@ On accept, the backend sends, in order:
    array's are those of its lowest-index element. `type` is the
    canonical `VarType` (`frontend/src/shared/types/varType.ts`). `min`/`max`
    appear on a scalar with a configured range, `fieldRanges` on a struct.
+   `position` is on every element folder of a struct array: its 0-based index
+   in that array whatever the PLC's lower bound (`[1]` of an `ARRAY[1..10]` is
+   position 0); a frame may hold only the elements a page binds, so the client
+   finds a bound index's element by its `position`.
    `writable` is on every scalar: the variable's own `writable` flag (an
    OPC-UA node's access level as browsed, the authored flag on a static or
    test-server variable), `false` when unset. The runtime binding check reads
@@ -137,7 +142,7 @@ leaving a half-initialised socket registered.
 | Type | Shape | When |
 |---|---|---|
 | `var_snapshot` | `{ type, values, bootId }` | Once on connect (empty `values`). `bootId` names the backend process; a client that sees it change on a reconnect knows the backend restarted, and the runtime (and an editor with nothing unsaved) reloads then. |
-| `var_metadata` | `{ type, meta }` | After each `set_context` (before that context's values) and after a datasource edit: the shape metadata of the context's keys, their ancestors and descendants. Authoritative replacement. |
+| `var_metadata` | `{ type, meta, contextId? }` | After each `set_context` (before that context's values) and after a datasource edit: the shape metadata of the context's keys, their ancestors and descendants. Authoritative replacement. A frame answering a `set_context` echoes its `contextId`; a datasource edit's carries none. A context that resolves to the keys the last one did gets no frame. |
 | `var_update` | `{ type, values: { [compositeKey]: value } }` — see [Value forms](#value-forms) | Value changes. Batched in a 50 ms window; the per-datasource priority window is `settings.priority_ws_batch_ms`, clamped to `[0, 1000]`, default 10 ms. |
 | `var_removed` | `{ type, ids: [compositeKey, ...] }` | Variables no longer available. |
 | `opcua_status` | `{ type, datasource, connected }` | Per-datasource connection-state change. |
@@ -158,7 +163,7 @@ leaving a half-initialised socket registered.
 | `restarting` | `{ type, reason }` | Right before the backend SIGTERMs itself for `POST /api/system/restart`. Clients disconnect and poll `/api/system/info` for the new process. |
 | `widget_updated` | `{ type, key, name, ts, schema_ok }` | A custom widget recompiled or was deleted; `key` is its normalized path relative to `custom-widgets/`. An editor tab reloads, or shows its banner when it has unsaved edits (`ConfigUpdatedBanner`); the editor's preview iframe reloads itself either way (`PreviewView`, fed over `postMessage`, holds nothing to lose); the live view ignores it and shows the new build after a browser reload. |
 | `config_changed` | see [config_changed](#config_changed) | After every write that changes project content — REST, MCP or API v1. |
-| `context_ready` | `{ type, currentPageIds: [string, ...] }` | Reply to `set_context`: every variable requested for `currentPageIds` has been sent, from cache and/or a fresh OPC-UA read. The id list is echoed verbatim, so an overlay — whose resolved page id is in that list — settles on this ack rather than on the grace timer. The client does **not** hold the page for it — a page renders as soon as its config and widget modules are in memory — it uses the ack to decide when a binding that still has no value is genuinely without data, and only then marks it (amber "no data" overlay). A page whose ack never arrives falls back to a 3 s grace. The client should ignore any `context_ready` whose page-set doesn't match its most recently sent `set_context` (a superseded navigation's background prefetch can still land late, and opening an overlay resends the context with its page appended). |
+| `context_ready` | `{ type, currentPageIds: [string, ...], contextId? }` | Reply to `set_context`: every variable requested for `currentPageIds` has been sent, from cache and/or a fresh OPC-UA read. The id list is echoed verbatim, so an overlay — whose resolved page id is in that list — settles on this ack rather than on the grace timer. The client does **not** hold the page for it — a page renders as soon as its config and widget modules are in memory — it uses the ack to decide when a binding that still has no value is genuinely without data, and only then marks it (amber "no data" overlay). A page whose ack never arrives falls back to a 3 s grace. The `set_context`'s `contextId` is echoed: the client ignores any `context_ready` that does not answer its most recently sent context — a superseded navigation's background prefetch can still land late, naming the very pages a return to them sends again. |
 
 > Auto-login (`request_identity`) never carries a `requestId` in its
 > `user_identity`, so the client dispatcher does not confuse it with a `login`
@@ -204,9 +209,14 @@ integer digits keeps them too — and writes it back as a string.
   {
     "type": "set_context",
     "currentPageIds": ["home", "motor-detail"],
-    "priorityKeys": ["MyPLC:Motor1"]
+    "priorityKeys": ["MyPLC:Motor1"],
+    "contextId": 12
   }
   ```
+
+  - `contextId` numbers the context; the server echoes it on the context's
+    `var_metadata` and `context_ready`. An integer, or absent: then neither
+    reply carries one.
 
   - `currentPageIds` is the only page-context key read. A frame sending
     anything else in its place carries no page context, and its bindings are
@@ -222,6 +232,22 @@ integer digits keeps them too — and writes it back as a string.
     latest union instead of replaying every intermediate page. An array
     folder bound only at literal indexes is promoted, read and shipped as
     those element folders; the client reads an element under its own key.
+    No leaf below an element is shipped unless a binding names it, so the
+    client reads a member of an element out of the element: a component's
+    `device/sName` of an input bound to an element, and a Repeater copy's
+    member. The key a component's sub-path makes of one, the array's path
+    plus the member (`PLC:Motors/sName`), reaches the server as a priority
+    key that names no variable, and is dropped (below).
+  - A page id resolves to what that page shows: its own widgets, at any depth
+    of either root, plus the header and footer band of every page group
+    around it. The pages beside it are not resolved; each is when it is
+    shown. A context with any `currentPageIds` also takes the shell's header,
+    footer and both sidebars and the global events (`onHmiLoaded`,
+    `onVariableChanged`). The server resolves these itself although the
+    client sends them as `priorityKeys` too: a key the server resolved counts
+    as bound the way the server saw it, so an array a page binds at a literal
+    index, read whole by a sidebar or a variable trigger, would otherwise be
+    promoted as that one element.
   - `var_update` frames are per client: a client receives the keys its last
     `set_context` resolved to, the elements of any struct array it binds
     whole, and every recipe parameter — nothing else.
@@ -232,8 +258,11 @@ integer digits keeps them too — and writes it back as a string.
   - Before anything is stored, every key — explicit or resolved from a page —
     that names no enabled variable or folder of a loaded datasource is
     dropped, so a connection holds at most the keys it can be answered for.
-    A page bound to a variable added later gets its fast subscription on its
-    next `set_context`.
+    The kept keys are not re-resolved when a datasource changes: a client
+    sends its context again on each `config_changed` for a `datasource` or
+    its `variables`, so a key naming a variable that edit enabled or added is
+    answered and subscribed from then on — and for a `page`, whose save
+    changes what its page ids resolve to.
   - The fast-subscription set is the union of every connection's keys, kept
     as a count per key. A `set_context` (or a disconnect) that adds no key to
     the union and removes none costs only that connection's own keys and
@@ -254,11 +283,15 @@ integer digits keeps them too — and writes it back as a string.
     `invalidate_runtime_pages_config_cache`); an id that no page or group
     carries costs nothing.
 
-  Current producers: `HmiView` (active page + open overlays), `PreviewView`
-  (preview page/overlay context), `DatasourceVariableTable` (explicit
-  `priorityKeys` for visible rows after scroll settle), `RecipeTable` (explicit
-  `priorityKeys` for a recipe type's bound parameters while its Live column is
-  on).
+  Current producers: `HmiView` (active page + open overlays, `priorityKeys`
+  from the in-memory component tree), `PreviewView` (preview page/overlay
+  context, likewise), `DatasourceVariableTable` (`priorityKeys` for visible
+  rows after scroll settle), `RecipeTable` (`priorityKeys` for a recipe type's
+  bound parameters while its Live column is on), `VariableBindingPicker`
+  (`priorityKeys` for dynamic arrays, whose live length its `[#]` rows
+  follow, while it is open). The client merges them into one `set_context`
+  per socket and does not resend an identical one, except on a reconnect or
+  a datasource or page `config_changed` (above).
 
 - `write_field` — write a value to a variable.
 

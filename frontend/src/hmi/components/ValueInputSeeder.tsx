@@ -6,6 +6,22 @@ import { useEvalContext } from '../hooks/useEvalContext';
 import { useLiveScalars } from '../hooks/useLiveScalars';
 import type { ValueInputSeed } from '../hooks/useValueInputs';
 
+/** Slots of frames that have unmounted, removed together a microtask later: a
+ *  page switch unmounts dozens of instances, and each store write copies the
+ *  value maps and runs every subscriber. Nothing reads a gone frame's slots. */
+const dropping = new Set<string>();
+
+function dropSlots(keys: string[]): void {
+  if (dropping.size === 0 && keys.length > 0) {
+    queueMicrotask(() => {
+      const gone = [...dropping];
+      dropping.clear();
+      useVariableStore.getState().removeVars(gone);
+    });
+  }
+  for (const key of keys) dropping.add(key);
+}
+
 /**
  * Reads each slot once, when it first appears, in the surrounding context —
  * the instance's page, or the dialog the opener's values were passed into. A
@@ -52,6 +68,8 @@ export default function ValueInputSeeder({
       updates[key] = evaluatePropertyValue(seed.source, evalCtx) ?? null;
       seeded.current.set(seed.slot, signatures[i]);
     });
+    // StrictMode remounts a frame right after its cleanup queued its slots.
+    for (const slot of live) dropping.delete(localInputKey(frame, slot));
     const gone = [...written.current].filter((slot) => !live.has(slot));
     for (const slot of gone) {
       seeded.current.delete(slot);
@@ -68,7 +86,7 @@ export default function ValueInputSeeder({
     const read = seeded.current;
     const slots = written.current;
     return () => {
-      useVariableStore.getState().removeVars([...slots].map((slot) => localInputKey(frame, slot)));
+      dropSlots([...slots].map((slot) => localInputKey(frame, slot)));
       read.clear();
       slots.clear();
     };
