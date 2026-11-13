@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useVariableStore } from '../store/variableStore';
+import { readStoredValue, useVariableStore } from '../store/variableStore';
 import { buildVarKey } from '@shared/types/datasource';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { resolveUserField, useHmiStore, type UserAccount } from '../store/hmiStore';
@@ -83,7 +83,7 @@ function tabField(field: 'groupIndex' | 'groupLastIndex', tabs: PageGroupChild[]
  *  from granular `useLiveScalars` subscriptions instead (see WidgetRenderer),
  *  so only widgets that read a changed variable re-render. */
 export function readStoredVariable(datasource: string, path: string): ResolvedValue {
-  const value = useVariableStore.getState().values[buildVarKey(datasource, path)];
+  const value = readStoredValue(useVariableStore.getState().values, buildVarKey(datasource, path));
   return (value !== undefined ? value : null) as ResolvedValue;
 }
 

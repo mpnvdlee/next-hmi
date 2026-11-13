@@ -36,6 +36,30 @@ export function isLocalInputKey(key: string): boolean {
   return key.startsWith(LOCAL_INPUT_PREFIX);
 }
 
+/**
+ * The value stored for `key`: its own, else picked out of its nearest stored
+ * ancestor. A struct bound whole arrives as one record, not under each
+ * member's key, so a dialog handed that struct (`device`) and reading
+ * `device/Hmi/stActualPosition/fValue` finds the member inside the record.
+ * `undefined` when neither has arrived.
+ */
+export function readStoredValue(values: Record<string, unknown>, key: string): unknown {
+  const own = values[key];
+  if (own !== undefined) return own;
+  const root = key.indexOf(':');
+  for (let slash = key.lastIndexOf('/'); slash > root; slash = key.lastIndexOf('/', slash - 1)) {
+    const ancestor = values[key.slice(0, slash)];
+    if (ancestor === undefined) continue;
+    let node: unknown = ancestor;
+    for (const step of key.slice(slash + 1).split('/')) {
+      if (!isRecord(node)) return undefined;
+      node = node[step];
+    }
+    return node;
+  }
+  return undefined;
+}
+
 /** `next` with the local input slots of `prev` carried over. */
 function keepLocalInputs(
   prev: Record<string, unknown>,

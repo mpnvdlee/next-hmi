@@ -1,4 +1,32 @@
-import { localInputKey, useVariableStore, type VarMeta } from './variableStore';
+import { localInputKey, readStoredValue, useVariableStore, type VarMeta } from './variableStore';
+
+describe('readStoredValue', () => {
+  const motor = 'PLC:Motors/M1/sstDev';
+  const values = {
+    [motor]: { Hmi: { stActualPosition: { fValue: 12.5 }, bVisible: false } },
+    'PLC:Speed': 3,
+  };
+
+  it('reads a key with a value of its own as it is', () => {
+    expect(readStoredValue(values, 'PLC:Speed')).toBe(3);
+  });
+
+  it('reads a member of a struct bound whole out of the struct', () => {
+    expect(readStoredValue(values, `${motor}/Hmi/stActualPosition/fValue`)).toBe(12.5);
+    expect(readStoredValue(values, `${motor}/Hmi/bVisible`)).toBe(false);
+  });
+
+  it('prefers a member key of its own over the struct', () => {
+    const both = { ...values, [`${motor}/Hmi/bVisible`]: true };
+    expect(readStoredValue(both, `${motor}/Hmi/bVisible`)).toBe(true);
+  });
+
+  it('reads nothing for a member the struct lacks, or with no ancestor stored', () => {
+    expect(readStoredValue(values, `${motor}/Hmi/stNope/fValue`)).toBeUndefined();
+    expect(readStoredValue(values, 'PLC:Other/x')).toBeUndefined();
+    expect(readStoredValue(values, 'PLC:Speed/x')).toBeUndefined();
+  });
+});
 
 const INTEGER: VarMeta = { type: { kind: 'scalar', base: 'Integer', array: false } };
 

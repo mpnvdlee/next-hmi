@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react';
-import { useVariableStore } from '../store/variableStore';
+import { readStoredValue, useVariableStore } from '../store/variableStore';
 import { recipeParameterKeys, useRecipeStore } from '../store/recipeStore';
 import { analyzePropertyValue } from '../utils/analyzePropertyValue';
 import { extractLiveKeys } from '../utils/extractVarKeys';
@@ -33,7 +33,7 @@ export function useLiveScalars(keys: readonly string[]): string {
     // first so transitions JSON.stringify would flatten to the same text —
     // undefined↔null, and NaN↔Infinity↔-Infinity (all `null` under stringify) —
     // still change the signature and trigger the re-render.
-    return JSON.stringify(keys.map((key) => sigToken(values[key])));
+    return JSON.stringify(keys.map((key) => sigToken(readStoredValue(values, key))));
   };
   // A caller with no keys can never see a change, so it registers no listener —
   // this runs on every widget, and a leaf that reads no `$var` would otherwise

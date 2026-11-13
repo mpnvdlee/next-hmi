@@ -24,7 +24,7 @@ import {
   type VarType,
 } from '@shared/types/varType';
 import { acceptedValueTypes } from '@shared/utils/valueTypes';
-import { isLocalInputKey, useVariableStore } from '../store/variableStore';
+import { isLocalInputKey, readStoredValue, useVariableStore } from '../store/variableStore';
 import type { VarMeta } from '../store/variableStore';
 import { structElementKey, structShapeElementPath } from './repeatItemResolution';
 import { resolveComponentPropValue } from './componentPropResolution';
@@ -349,9 +349,10 @@ export function checkBindingSpec(
     const key = structElementKey(s.varMeta, id, index);
     return key !== undefined && key in s.values ? 'ok' : 'pending';
   }
-  if (!(id in s.values)) return 'pending';
+  // A member of a struct bound whole arrives inside the struct's record.
+  const value = readStoredValue(s.values, id);
+  if (value === undefined) return 'pending';
   if (index !== undefined && meta.type.kind === 'scalar') {
-    const value = s.values[id];
     if (!Array.isArray(value) || index >= value.length) return 'pending';
   }
   return 'ok';
@@ -443,7 +444,9 @@ export function createBindingStatusSelector(
       !cache ||
       s.metadataReceived !== cache.metadataReceived ||
       s.wsConnected !== cache.wsConnected ||
-      depValueIds(s.varMeta).some((id) => s.values[id] !== cache!.values[id]) ||
+      depValueIds(s.varMeta).some(
+        (id) => readStoredValue(s.values, id) !== readStoredValue(cache!.values, id),
+      ) ||
       (readsOtherMeta
         ? s.varMeta !== cache!.varMeta
         : depIds.some((id) => s.varMeta[id] !== cache!.varMeta[id])) ||

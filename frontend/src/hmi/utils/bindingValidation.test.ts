@@ -340,6 +340,33 @@ describe('checkBindingSpec — base types and struct members', () => {
   });
 });
 
+describe('checkBindingSpec — a member of a struct bound whole', () => {
+  // A dialog handed `device` = `PLC:M1/sstDev` reads `device/Hmi/fPos`; only the
+  // struct is subscribed, so the member arrives inside its record.
+  const float = meta({ kind: 'scalar', base: 'Float', array: false });
+  const leaf = 'PLC:M1/sstDev/Hmi/fPos';
+  const spec: BindingSpec = { id: leaf, accept: [] };
+
+  it('is ok once the struct holding it has arrived', () => {
+    const s = slice({
+      values: { 'PLC:M1/sstDev': { Hmi: { fPos: 0 } } },
+      varMeta: { [leaf]: float },
+    });
+    expect(checkBindingSpec(spec, s, true)).toBe('ok');
+  });
+
+  it('is pending while neither it nor the struct has', () => {
+    expect(checkBindingSpec(spec, slice({ varMeta: { [leaf]: float } }), true)).toBe('pending');
+  });
+
+  it('is re-judged when only the struct holding it changes', () => {
+    const selector = createBindingStatusSelector([spec]);
+    const before = slice({ values: {}, varMeta: { [leaf]: float } });
+    expect(selector(before)).toBe('nodata');
+    expect(selector({ ...before, values: { 'PLC:M1/sstDev': { Hmi: { fPos: 1 } } } })).toBe('ok');
+  });
+});
+
 describe('checkBindingSpec — a member of a struct-array element', () => {
   // `$componentProp: "device/sName"` on an instance passing `PLC:Motors` at 1,
   // a TwinCAT array counting from 1, binds the member's leaf. The server ships

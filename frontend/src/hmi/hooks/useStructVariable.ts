@@ -1,4 +1,4 @@
-import { useVariableStore } from '../store/variableStore';
+import { readStoredValue, useVariableStore } from '../store/variableStore';
 
 /**
  * Subscribe to a struct variable's field map.
@@ -19,6 +19,8 @@ const EMPTY: Record<string, unknown> = {};
 
 export function useStructVariable(id: string): Record<string, unknown> | unknown[] {
   return useVariableStore(
-    (state) => (state.values[id] as Record<string, unknown> | unknown[] | undefined) ?? EMPTY,
+    (state) =>
+      (readStoredValue(state.values, id) as Record<string, unknown> | unknown[] | undefined) ??
+      EMPTY,
   );
 }

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { useVariableStore, type VarMeta } from '../store/variableStore';
+import { readStoredValue, useVariableStore, type VarMeta } from '../store/variableStore';
 import { type VariableBinding, bindingIndex, bindingKey } from '@shared/types/config';
 import { readBit } from '@shared/utils/valueTypes';
 import { readArrayElement } from '../utils/repeatItemResolution';
@@ -13,7 +13,7 @@ import { noSubscribe } from './useLiveScalars';
  *   const speed = useVariable('MyPLC:Motor1/Speed'); // e.g. 1452.3
  */
 export function useVariable(id: string): unknown {
-  return useVariableStore((state) => state.values[id]);
+  return useVariableStore((state) => readStoredValue(state.values, id));
 }
 
 /**
@@ -41,7 +41,7 @@ export function useBindingValue(binding: VariableBinding | undefined): unknown {
   // alone, and a scalar-array element re-renders only when that element changes.
   const getElement = (): unknown => {
     const { values, varMeta } = useVariableStore.getState();
-    if (index === undefined) return id ? values[id] : undefined;
+    if (index === undefined) return id ? readStoredValue(values, id) : undefined;
     const type = id ? varMeta[id]?.type : undefined;
     if (!type?.array || !Number.isInteger(index) || index < 0) return null;
     if (type.kind === 'struct') return readArrayElement(values, varMeta, id, index);
