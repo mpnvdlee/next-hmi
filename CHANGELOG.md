@@ -267,6 +267,10 @@ only, and the Docker image runs as uid 10001.
 - **Re-browsing a large server is faster.** The changes list stays responsive
   with tens of thousands of rows, and applying it no longer walks the tree.
 
+- **The Linux download starts on Ubuntu 24.04 again.** The 1.1.0 and 1.2.0
+  binaries needed glibc 2.42, newer than Ubuntu 24.04 or Debian 12 have. It now
+  needs 2.38: Ubuntu 24.04, Debian 13, Fedora 39 or newer.
+
 - **On Windows, a save or widget build could fail while a virus scanner held the file.**
   The write now retries briefly.
 

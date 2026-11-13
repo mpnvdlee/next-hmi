@@ -653,6 +653,7 @@ Existing volumes retain their current project credentials unchanged.
    - macOS: double-click `nexthmi.command`.
    - Windows: double-click `nexthmi.exe`.
    - Linux (x64): run `./nexthmi` from a terminal in the unzipped folder.
+     It needs glibc 2.38 or later: Ubuntu 24.04, Debian 13, Fedora 39 or newer.
 
 A terminal window opens, prints the banner, and stays in the foreground.
 
