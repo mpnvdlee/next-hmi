@@ -62,6 +62,17 @@ The set of running projects is remembered, so a restart brings the same ones bac
 
 A project saved by an older build — or by one that predates the file-format stamp — has to be upgraded before it opens, so **Start** asks first instead of starting right away. Confirming zips the whole project into its `.backups/` folder before changing anything, and a one-time notice on the Projects page names what changed and where that backup landed. Declining leaves the project untouched. A project saved by a *newer* build shows **Requires update** in place of Start, naming the version it needs — update the application to that version or later. The file format only changes in a release whose major or minor number moves, so a patch update (1.0.1 → 1.0.2) never makes a project unopenable elsewhere.
 
+Which release writes which format, and which releases open a project it saved:
+
+| Release | Project format | A project it saved opens in |
+|---|---|---|
+| 1.0.0, 1.0.1 | 9 | 1.0.0 or later |
+| 1.1.0 | 11 | 1.1.0 or later |
+| 1.2.0 | 12 | 1.2.0 or later |
+| 1.3.0 | 12 | 1.2.0 or later |
+
+A project's format is in its `config.json`: `project.formatVersion`, with `project.minAppVersion`, the oldest release that opens it.
+
 ## How to create a project
 
 Three ways in, all from the dashboard toolbar. Each adds a row to the runtime-home manifest — the files live wherever you point them.

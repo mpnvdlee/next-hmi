@@ -366,7 +366,10 @@ jobs:
   # ── Portable Linux x64 build + smoke test ──
 
   linux-x64-portable:
-    runs-on: ubuntu-latest
+    # Pinned: the binary needs the glibc of the image it is built on, and
+    # built on ubuntu-latest (26.04) it needed 2.42, too new for Ubuntu 24.04
+    # or Debian 12.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

@@ -9,7 +9,18 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
-## [Unreleased]
+## [1.3.0] - 2026-11-13
+
+Keeps pace with large OPC-UA servers and shuts out what should not reach the
+device. Pages open fast against tens of thousands of variables, values return
+within a second of a reconnect, struct arrays are read by position with their
+members, and the browser redraws only what changed. A Dropdown can write a
+variable and `$compare` gains **contains**. Projects stay at file format 12, so
+a project saved by 1.3.0 still opens in 1.2.0. Read **Changed** before you
+update: a username sign-in over a secured OPC-UA endpoint waits until you trust
+the server's certificate, a site that shows NEXT HMI in a frame must be listed,
+a custom widget bundles files from `custom-widgets/` and `external-libraries/`
+only, and the Docker image runs as uid 10001.
 
 ### Added
 
@@ -31,6 +42,10 @@ heading.
   true for an empty right side. Compare a list row's **Visible** against a
   String Input's value and the list narrows with every keystroke, without a
   custom widget.
+
+- **Which release opens which project.** The guide's Projects page lists each
+  release's project file format and the oldest release that opens a project it
+  saved.
 
 ### Fixed
 
@@ -252,14 +267,17 @@ heading.
 - **Re-browsing a large server is faster.** The changes list stays responsive
   with tens of thousands of rows, and applying it no longer walks the tree.
 
-- **On Windows, a save or widget build could fail while a virus scanner held
-  the file.** The write now retries briefly.
+- **The Linux download starts on Ubuntu 24.04 again.** The 1.1.0 and 1.2.0
+  binaries needed glibc 2.42, newer than Ubuntu 24.04 or Debian 12 have. It now
+  needs 2.38: Ubuntu 24.04, Debian 13, Fedora 39 or newer.
+
+- **On Windows, a save or widget build could fail while a virus scanner held the file.**
+  The write now retries briefly.
 
 - **A translation key with `?` or `#` in it reached the instance cut off**, so
   deleting the key `Start?` deleted `Start`.
 
-- **Starting a project from a source checkout used a different runtime home
-  than the manager.**
+- **Starting a project from a source checkout used a different runtime home than the manager.**
 
 ### Changed
 
@@ -296,9 +314,9 @@ heading.
   confirmation that you trust its source; the dialog lists what it found.
   Import-map keys must be bare module names.
 
-- **Custom widgets bundle files from `custom-widgets/` and
-  `external-libraries/` only.** A widget that imports a file anywhere else
-  fails to build, and the error names the file.
+- **Custom widgets bundle files from `custom-widgets/` and `external-libraries/` only.**
+  A widget that imports a file anywhere else fails to build, and the error names
+  the file.
 
 - **Writes to a disabled variable are refused.** A variable that is not enabled
   in its datasource can no longer be written or read from a screen, and the
@@ -365,25 +383,20 @@ heading.
 ### Security
 
 - **A disabled OPC-UA variable could be written and read from the network.**
-- **A text variable bound to an icon could run script on the dashboard's
-  address.** Custom icons are now drawn as a mask, never inserted as markup,
-  and their paths are checked after the address is resolved.
-- **A project's widget build could read files elsewhere on the device and
-  publish them.**
-- **An MCP write token could store a script in an asset, and a crafted SVG
-  could freeze the manager.**
-- **Pairing could send the other device's admin password to an impostor on
-  the network.**
+- **A text variable bound to an icon could run script on the dashboard's address.**
+  Custom icons are now drawn as a mask, never inserted as markup, and their
+  paths are checked after the address is resolved.
+- **A project's widget build could read files elsewhere on the device and publish them.**
+- **An MCP write token could store a script in an asset, and a crafted SVG could freeze the manager.**
+- **Pairing could send the other device's admin password to an impostor on the network.**
 - **A website could claim a new install through DNS rebinding.**
-- **A website could frame the runtime screens and trick a click into a
-  write.** Files opened directly from a project's `assets` and
-  `custom-widgets` folders also run no script.
-- **The OPC-UA test server accepted an administrator with any password from
-  the network.**
+- **A website could frame the runtime screens and trick a click into a write.**
+  Files opened directly from a project's `assets` and `custom-widgets` folders
+  also run no script.
+- **The OPC-UA test server accepted an administrator with any password from the network.**
 - **The OPC-UA client trusted any server certificate**, so a machine in the
   middle could collect the PLC credentials.
-- **Large request bodies, WebSocket messages and historian queries could
-  exhaust the device's memory or stall it.**
+- **Large request bodies, WebSocket messages and historian queries could exhaust the device's memory or stall it.**
 - **An MCP read token could read datasource passwords**, including a password
   written into a server address.
 - **The `mcp` package moves to 2.2 or later** for four published advisories.
@@ -399,21 +412,18 @@ heading.
   take its port before it started and receive the screens' traffic. An
   instance now answers only the manager that started it, which proves itself
   with a secret given at each start.
-- **A `.` or `..` segment in an editor path reached the instance's internal
-  reload hook.** The proxy now refuses such paths, encoded forms included.
+- **A `.` or `..` segment in an editor path reached the instance's internal reload hook.**
+  The proxy now refuses such paths, encoded forms included.
 - **A paired device could fill the disk or memory with its replies**, its
   pairing never expired, and it could read or cancel another device's
   transfer and see paths on this device.
-- **A flood of mDNS announcements could grow the manager's memory without
-  limit.**
-- **Project ids that differ only in case shared folders on Windows and
-  macOS**, so a pushed `LINE3` could overwrite the widgets `line3` serves.
-- **On Windows, a theme id could read, write or delete `*.json` files outside
-  the project.**
-- **Reusing an MCP idempotency key on another project or token skipped the
-  write.**
-- **Another local user could freeze an instance through its translation lock
-  in the shared temp directory.** Locks now live in `<runtime_home>/.locks/`.
+- **A flood of mDNS announcements could grow the manager's memory without limit.**
+- **Project ids that differ only in case shared folders on Windows and macOS**,
+  so a pushed `LINE3` could overwrite the widgets `line3` serves.
+- **On Windows, a theme id could read, write or delete `*.json` files outside the project.**
+- **Reusing an MCP idempotency key on another project or token skipped the write.**
+- **Another local user could freeze an instance through its translation lock in the shared temp directory.**
+  Locks now live in `<runtime_home>/.locks/`.
 - **A client could keep the PLC resubscribing and the live view busy**, and
   `/api/device/info` lookups for addresses without reverse DNS could stall
   sign-ins and alarm acknowledgements.
@@ -1993,6 +2003,7 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
+[1.3.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.3.0
 [1.2.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.2.0
 [1.1.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.1.0
 [1.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.1
