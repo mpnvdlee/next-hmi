@@ -9,7 +9,7 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
-## [Unreleased]
+## [1.3.0] - 2026-11-13
 
 Keeps pace with large OPC-UA servers and shuts out what should not reach the
 device. Pages open fast against tens of thousands of variables, values return
@@ -2003,6 +2003,7 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
+[1.3.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.3.0
 [1.2.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.2.0
 [1.1.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.1.0
 [1.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.1
