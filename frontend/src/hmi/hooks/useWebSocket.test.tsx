@@ -7,6 +7,8 @@ import { useTranslationStore } from '@shared/store/translationStore';
 import { identityRequest, loadSessionToken } from '../utils/runtimeSession';
 import {
   clearContextProducer,
+  holdValueFrames,
+  releaseValueFrames,
   setBackendRestartHandler,
   setContextProducer,
   useWebSocket,
@@ -415,6 +417,46 @@ describe('useWebSocket', () => {
       meta('PLC:D');
       await nextFrame();
       expect(values()).not.toHaveProperty('PLC:A');
+    });
+
+    // A value landing mid-build made React build a navigated page twice; the
+    // navigation holds them until the page has committed.
+    describe('while a navigated page is built', () => {
+      afterEach(() => releaseValueFrames());
+
+      it('holds value frames back and applies them at once on release', async () => {
+        render(<Probe />);
+        const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+        act(() => live.open());
+
+        holdValueFrames(1000);
+        live.receive({ type: 'var_metadata', meta: { 'PLC:A': { type: { kind: 'scalar' } } } });
+        live.receive({ type: 'var_update', values: { 'PLC:A': 1 } });
+        await nextFrame();
+        expect(values()).not.toHaveProperty('PLC:A');
+        expect(useVariableStore.getState().varMeta).not.toHaveProperty('PLC:A');
+
+        act(() => releaseValueFrames());
+        // Before the next animation frame: the page paints with them.
+        expect(values()).toHaveProperty('PLC:A', 1);
+        expect(useVariableStore.getState().varMeta).toHaveProperty('PLC:A');
+      });
+
+      it('lets the frames through once the hold runs out', async () => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+          render(<Probe />);
+          const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+          act(() => live.open());
+
+          holdValueFrames(300);
+          live.receive({ type: 'var_update', values: { 'PLC:A': 1 } });
+          act(() => vi.advanceTimersByTime(300));
+          expect(values()).toHaveProperty('PLC:A', 1);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
     });
 
     describe('a struct-array element', () => {

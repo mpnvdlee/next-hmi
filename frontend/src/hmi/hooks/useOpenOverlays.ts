@@ -36,25 +36,33 @@ export function useResolvedPageOverlays(): ResolvedPageOverlay[] {
   const dialogs = useConfigStore((s) => s.dialogs);
   const openPageOverlayEntries = useHmiStore((s) => s.openPageOverlays);
   return useMemo(
-    () =>
-      openPageOverlayEntries.flatMap((entry) => {
-        const shownId = entry.activePageId ?? entry.pageId;
-        const root = findPageRoot({ pages, dialogs }, shownId);
-        if (!root) return [];
-        const rootNodes = root === 'pages' ? pages : dialogs;
-        const node = findPageNodeById(rootNodes, shownId);
-        if (!node) return [];
-        return [
-          {
-            entry,
-            node,
-            page: resolvePageContext(rootNodes, shownId).page,
-            root,
-            rootNodes,
-            target: findPageNodeById(rootNodes, entry.pageId) ?? node,
-          },
-        ];
-      }),
+    () => resolvePageOverlays(openPageOverlayEntries, pages, dialogs),
     [openPageOverlayEntries, pages, dialogs],
   );
+}
+
+/** `useResolvedPageOverlays` outside a render, from the stores as they are now. */
+export function resolvePageOverlays(
+  entries: PageOverlayEntry[],
+  pages: PageNode[],
+  dialogs: PageNode[],
+): ResolvedPageOverlay[] {
+  return entries.flatMap((entry) => {
+    const shownId = entry.activePageId ?? entry.pageId;
+    const root = findPageRoot({ pages, dialogs }, shownId);
+    if (!root) return [];
+    const rootNodes = root === 'pages' ? pages : dialogs;
+    const node = findPageNodeById(rootNodes, shownId);
+    if (!node) return [];
+    return [
+      {
+        entry,
+        node,
+        page: resolvePageContext(rootNodes, shownId).page,
+        root,
+        rootNodes,
+        target: findPageNodeById(rootNodes, entry.pageId) ?? node,
+      },
+    ];
+  });
 }

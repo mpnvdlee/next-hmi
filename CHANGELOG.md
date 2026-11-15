@@ -29,6 +29,12 @@ heading.
 
 ### Fixed
 
+- **A page opens with the values the server already holds.** A page asked for
+  its values only once it had been built and drawn, so with background sync
+  on a widget whose Visible reads a hidden tag still showed for a frame or
+  two. The request now goes out at the click, and the answer is applied as
+  the page is drawn, so its first frame shows them.
+
 - **A dialog follows the Data Grid row it was opened for.** On Select handed
   Repeat item to an Open Dialog as a copy of the row, so a details dialog read
   the picked EtherCAT slave once and never updated, and a Binding input got
