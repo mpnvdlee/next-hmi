@@ -77,7 +77,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from mcp_server.server import mount_workspace_mcp, run_session_manager_once
 from mcp_server.write_helpers import drain_inflight_broadcasts
-from services import frontend_serve, project_resume
+from services import frontend_serve
 from services.supervisor import ChildAuth, supervisor
 from services.theme_manager import THEME_ID
 from starlette.background import BackgroundTask
@@ -196,9 +196,8 @@ async def lifespan(app: FastAPI):
     # The workspace MCP transport runs for the life of the manager; its session
     # manager must be entered inside the lifespan.
     async with run_session_manager_once():
-        # Bring the device back as it was: migrate a legacy single-live install
-        # into the running set / seed the first project on a fresh install,
-        # then resume everything recorded as running.
+        # Bring the device back as it was: resume everything recorded as
+        # running. A fresh install starts with an empty project list.
         renamed = migrate_invalid_project_ids()
         if renamed:
             logger.warning(
@@ -213,7 +212,6 @@ async def lifespan(app: FastAPI):
                 unpinned,
             )
         reconcile_transfer_journals()
-        project_resume.prepare_running_set()
         await asyncio.to_thread(supervisor.resume_all)
         try:
             # With TLS on, the launcher moves the app to the HTTPS port and

@@ -163,7 +163,6 @@ def home(monkeypatch, tmp_path: Path) -> Path:
 def manager_module(monkeypatch, home: Path):
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     return manager
@@ -298,8 +297,8 @@ def test_data_responses_carry_no_framing_policy(client: TestClient, child) -> No
 # ── the real instance behind the real manager ────────────────────────────────
 
 # Runs in a subprocess: both app modules read NEXTHMI_FRONTEND_DIST at import,
-# and importing ``main`` bootstraps a project and grafts its singletons onto
-# the module table for every later test.
+# and importing ``main`` grafts its singletons onto the module table for every
+# later test.
 _PROBE = '''
 import asyncio
 import json
@@ -376,6 +375,11 @@ def served(tmp_path_factory) -> dict:
     )
     home = tmp_path / "runtime-home"
     home.mkdir()
+    # A project of its own: unpinned, importing ``main`` bootstraps the default
+    # project, in a checkout the developer's project-testbench/, and the probe
+    # wrote its script-bearing files there.
+    project = tmp_path / "project"
+    project.mkdir()
     script = tmp_path / "probe.py"
     script.write_text(_PROBE, encoding="utf-8")
     out = tmp_path / "result.json"
@@ -383,10 +387,11 @@ def served(tmp_path_factory) -> dict:
         **os.environ,
         "NEXTHMI_FRONTEND_DIST": str(dist),
         "NEXTHMI_DATA_DIR": str(home),
+        "NEXTHMI_ACTIVE_PROJECT_PATH": str(project),
         "NEXTHMI_TELEMETRY": "off",
         "PYTHONPATH": os.pathsep.join([str(BACKEND), os.environ.get("PYTHONPATH", "")]),
     }
-    for name in ("NEXTHMI_EDITION", "NEXTHMI_ACTIVE_PROJECT_PATH", "NEXTHMI_BASE_PATH"):
+    for name in ("NEXTHMI_EDITION", "NEXTHMI_BASE_PATH"):
         env.pop(name, None)
     proc = subprocess.run(
         [sys.executable, str(script), str(out)],
@@ -397,6 +402,7 @@ def served(tmp_path_factory) -> dict:
         timeout=180,
     )
     assert proc.returncode == 0, f"probe failed:\n{proc.stdout}\n{proc.stderr}"
+    assert (project / "assets" / "report.html").is_file()
     return json.loads(out.read_text(encoding="utf-8"))
 
 

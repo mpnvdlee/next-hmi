@@ -29,7 +29,6 @@ def _client(monkeypatch, tmp_path: Path, base_url: str, root_path: str = "") -> 
 
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     return TestClient(manager.app, base_url=base_url, root_path=root_path)
@@ -332,12 +331,16 @@ def test_instance_refuses_a_page_that_goes_around_the_manager(tmp_path: Path) ->
     backend = Path(__file__).resolve().parents[1]
     home = tmp_path / "runtime-home"
     home.mkdir()
+    # Its own project, not the checkout's project-testbench/ that importing main bootstraps.
+    project = tmp_path / "project"
+    project.mkdir()
     script = tmp_path / "probe.py"
     script.write_text(_INSTANCE_PROBE, encoding="utf-8")
     out = tmp_path / "result.json"
     env = {
         **os.environ,
         "NEXTHMI_DATA_DIR": str(home),
+        "NEXTHMI_ACTIVE_PROJECT_PATH": str(project),
         "PYTHONPATH": os.pathsep.join([str(backend), os.environ.get("PYTHONPATH", "")]),
     }
     env.pop("NEXTHMI_FRONTEND_DIST", None)

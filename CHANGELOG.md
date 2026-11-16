@@ -13,6 +13,10 @@ heading.
 
 ### Changed
 
+- **A fresh install starts with an empty project list.** The first launch no
+  longer creates and starts a `Default-Project`; click **+ New project** to
+  create one. Existing installations keep their projects.
+
 - **Background sync reports every 10 seconds by default.** An OPC-UA
   datasource that sets no **BG Interval** of its own now follows its
   off-screen variables every 10 s instead of every second, sparing the PLC.

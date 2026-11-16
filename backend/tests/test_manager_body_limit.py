@@ -37,7 +37,6 @@ def _reset_throttle():
 def client(monkeypatch, home: Path):
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     with TestClient(manager.app) as tc:

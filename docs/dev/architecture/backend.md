@@ -309,11 +309,11 @@ The **supervisor** (`backend/services/supervisor.py`) is a singleton owned by th
 - persists the running set to the manifest (`running[]`) so `resume_all()` can bring projects back after a manager restart, re-binding the previous port when still free. `resume_all()` prunes any entry it cannot bring up — a missing project or folder, and a project `start()` refuses (pending format upgrade, unusable credentials, a start guard). Such a project has no instance at all, so an entry left behind would make the manifest claim it is up while the dashboard shows it `stopped` with Stop disabled and the delete guard refuses with "stop it first". Starting it once the refusal is cleared re-adds it.
 - `running_snapshot()` returns per-instance `{id, name, path, basePath, port, pid, status, startedAt, restarts, lastError}` for the dashboard. `status ∈ {starting, running, stopped, crashed}`.
 
-`backend/services/project_resume.py` (`prepare_running_set`) runs once in the manager lifespan before `resume_all()`: on a fresh install with no projects at all, it seeds the bundled project and adds it to the running set, unless its `users.json` does not read back as valid, which leaves it stopped. Existing projects recorded in the running set are resumed, while an operator who deliberately stopped everything is respected.
+A fresh install starts with an empty project list: the manager seeds no project. Existing projects recorded in the running set are resumed, while an operator who deliberately stopped everything is respected.
 
 ## Startup And Shutdown
 
-The **manager** lifespan logs the setup code while no device-admin password is set, opens the proxy `httpx` client, runs `project_resume.prepare_running_set()` then `supervisor.resume_all()`, starts mDNS peer discovery and the usage-reporting task, and on shutdown calls `supervisor.shutdown()` (terminates every child), stops discovery and the reporting task, and closes the proxy client.
+The **manager** lifespan logs the setup code while no device-admin password is set, opens the proxy `httpx` client, runs `supervisor.resume_all()`, starts mDNS peer discovery and the usage-reporting task, and on shutdown calls `supervisor.shutdown()` (terminates every child), stops discovery and the reporting task, and closes the proxy client.
 
 In a **project instance** (`backend/main.py`), startup performs these steps:
 

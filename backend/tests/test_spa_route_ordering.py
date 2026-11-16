@@ -98,6 +98,9 @@ def _run_probe(module_name: str, tmp_path: Path) -> dict:
     )
     home = tmp_path / "runtime-home"
     home.mkdir()
+    # Its own project, not the checkout's project-testbench/ that importing main bootstraps.
+    project = tmp_path / "project"
+    project.mkdir()
 
     script = tmp_path / "probe.py"
     script.write_text(_PROBE, encoding="utf-8")
@@ -107,6 +110,7 @@ def _run_probe(module_name: str, tmp_path: Path) -> dict:
         **os.environ,
         "NEXTHMI_FRONTEND_DIST": str(dist),
         "NEXTHMI_DATA_DIR": str(home),
+        "NEXTHMI_ACTIVE_PROJECT_PATH": str(project),
         "PYTHONPATH": os.pathsep.join([str(BACKEND), os.environ.get("PYTHONPATH", "")]),
     }
     env.pop("NEXTHMI_EDITION", None)

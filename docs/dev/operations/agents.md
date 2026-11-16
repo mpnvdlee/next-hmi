@@ -121,14 +121,15 @@ widget schema.
   project. Symlinked to a sibling checkout
   (`ln -s ../next-hmi-testbench/aquavane project-testbench`) — gitignored
   (root-anchored `/project-testbench`), same pattern as `enterprise/`. Without
-  it, the `project-testbench` tests skip silently. When present it is the
-  auto-bootstrapped live project in dev; when absent the backend bootstrap seeds
-  a fresh `Default-Project/` from `project-seed/`. Never included in Docker or
+  it, the `project-testbench` tests skip silently. A standalone
+  `uvicorn main:app` bootstraps it as its project, or a fresh
+  `Default-Project/` from `project-seed/` when it is absent; the manager seeds
+  nothing. Never included in Docker or
   portable-executable builds — in production the operator creates projects
   anywhere on disk, tracked via the runtime-home manifest.
 - `project-seed/` — the clean, customer-facing template, no intentional
-  diagnostics. Packaged into binary/Docker builds, used by the launcher on first
-  run and by the projects API when creating a fresh project.
+  diagnostics. Packaged into binary/Docker builds, used by the projects API when
+  creating a fresh project.
 - `project-example/` — the "NEXT BREW" demo template offered alongside
   `project-seed/` at project creation (`template: "example"`): three pages, a
   static datasource, alarms, recipes, two themes and two languages.

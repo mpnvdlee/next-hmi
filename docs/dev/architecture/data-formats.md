@@ -6,7 +6,7 @@ Back to architecture hub: [overview.md](overview.md).
 
 This document describes the user-managed files inside a single project folder and the data formats currently used by the application.
 
-A project is a self-contained folder anywhere on disk, registered in the runtime-home manifest (`<runtime_home>/projects.json`). The manager runs a *set* of projects concurrently — each running project is a separate backend instance pinned to its folder (see [backend.md](backend.md)). In a development checkout that has the private `project-testbench/` cloned in, that folder doubles as the auto-bootstrapped first project — that's why the layout below uses `<project>/` as the root. `project-seed/` is the separate clean template in this repository, used to seed the first project when `project-testbench/` is absent and by binary/Docker builds.
+A project is a self-contained folder anywhere on disk, registered in the runtime-home manifest (`<runtime_home>/projects.json`). The manager runs a *set* of projects concurrently — each running project is a separate backend instance pinned to its folder (see [backend.md](backend.md)). The layout below uses `<project>/` as the root. A fresh install starts with no projects. `project-seed/` is the clean template in this repository behind the **+ New project** "empty" choice, and what a standalone `uvicorn main:app` seeds when no `project-testbench/` is cloned in.
 
 ## Directory Layout
 
