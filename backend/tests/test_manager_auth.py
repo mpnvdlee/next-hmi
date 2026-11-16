@@ -286,7 +286,6 @@ def app(monkeypatch, home: Path):
     import manager
 
     monkeypatch.setenv("NEXTHMI_DATA_DIR", str(home))
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     # asyncio.Lock binds to the first loop that waits on it; each test has its own.

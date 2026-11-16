@@ -118,7 +118,6 @@ def manager_client(monkeypatch, home: Path):
     monkeypatch.setenv("NEXTHMI_DATA_DIR", str(home))
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     with TestClient(manager.app) as client:

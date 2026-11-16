@@ -5,10 +5,9 @@ checkout, or a fresh ``Default-Project/`` otherwise) and registers it in the
 manifest when the runtime has none. Without it, a fresh runtime home would
 have no project for a standalone backend to mount its static dirs against.
 
-Called from ``manager.py`` (via ``services.project_resume`` on a fresh
-install — the path both the launcher binary and ``start-dev.py`` take) and
-``main.py`` (so direct ``uvicorn main:app`` still works without the manager).
-Idempotent — reuses the existing entry on every later call instead of
+Called only from ``main.py``, so direct ``uvicorn main:app`` still works
+without the manager. The manager itself seeds nothing: a fresh install starts
+with an empty project list. Idempotent — reuses the existing entry on every later call instead of
 registering a duplicate.
 """
 from __future__ import annotations

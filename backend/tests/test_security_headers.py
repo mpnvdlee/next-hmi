@@ -163,7 +163,6 @@ def home(monkeypatch, tmp_path: Path) -> Path:
 def manager_module(monkeypatch, home: Path):
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     return manager

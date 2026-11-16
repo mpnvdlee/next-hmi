@@ -29,7 +29,6 @@ def _client(monkeypatch, tmp_path: Path, base_url: str, root_path: str = "") -> 
 
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     return TestClient(manager.app, base_url=base_url, root_path=root_path)

@@ -368,7 +368,6 @@ def test_switching_modes_keeps_both_certificates(tmp_path: Path, home: Path) -> 
 def client(monkeypatch, home: Path) -> TestClient:
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     with TestClient(manager.app) as tc:
@@ -382,7 +381,6 @@ def client(monkeypatch, home: Path) -> TestClient:
 def test_status_is_gated_behind_the_device_admin_session(monkeypatch, home: Path) -> None:
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     with TestClient(manager.app) as tc:
