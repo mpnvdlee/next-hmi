@@ -36,6 +36,11 @@ apply_asyncua_watchdog_log_patch()
 
 logger = logging.getLogger(__name__)
 
+# Publishing interval of the background subscription, which follows every
+# enabled variable: a page's own variables move to the fast subscription while
+# it is open, so this only sets how fresh an off-screen value is when a page
+# first shows it, and a slower one spares the PLC.
+BG_PUBLISH_INTERVAL_DEFAULT_MS = 10_000.0
 # Background CreateMonitoredItems batch cap. Larger batches save round trips
 # but hold the transition lock (and the server) longer per request.
 BG_SUBSCRIBE_CHUNK = 1000
@@ -210,7 +215,7 @@ class DatasourceOpcuaEngine:
         # are actually live on the priority subscription.
         self._requested_priority_paths: set[str] = set()
         self._current_priority_paths: set[str] = set()
-        self._requested_bg_publish_interval_ms = 1000.0
+        self._requested_bg_publish_interval_ms = BG_PUBLISH_INTERVAL_DEFAULT_MS
         self._requested_priority_publish_interval_ms = 50.0
         self._requested_priority_sampling_interval_ms = 50.0
         self._requested_priority_ws_batch_ms = 10.0
@@ -272,7 +277,9 @@ class DatasourceOpcuaEngine:
         self._priority_recompute_callback = cb
 
     def _background_publish_interval_ms(self) -> float:
-        return get_config_float(self._config, "bg_publish_interval_ms", 1000.0, minimum=250.0, maximum=60_000.0)
+        return get_config_float(
+            self._config, "bg_publish_interval_ms", BG_PUBLISH_INTERVAL_DEFAULT_MS, minimum=250.0, maximum=60_000.0,
+        )
 
     def _priority_publish_interval_ms(self) -> float:
         return get_config_float(self._config, "priority_publish_interval_ms", 50.0, minimum=10.0, maximum=5_000.0)

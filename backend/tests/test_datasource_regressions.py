@@ -342,6 +342,15 @@ def test_delete_datasource_broadcasts_removed_keys(monkeypatch) -> None:
     }
 
 
+def test_background_sync_publishes_every_ten_seconds_unless_set() -> None:
+    engine = DatasourceOpcuaEngine("DS")
+    assert engine._requested_bg_publish_interval_ms == 10_000.0
+    engine._config = {}
+    assert engine._background_publish_interval_ms() == 10_000.0
+    engine._config = {"bg_publish_interval_ms": 1000}
+    assert engine._background_publish_interval_ms() == 1000.0
+
+
 def test_subscription_status_reports_fast_sub_tuning() -> None:
     engine = DatasourceOpcuaEngine("DS")
     engine._requested_bg_publish_interval_ms = 1000.0

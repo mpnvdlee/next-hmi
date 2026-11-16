@@ -201,9 +201,10 @@ async def _engine_for(run: RunningProfile, profile: Profile, client: Client):
     dm.datasources[profile.name] = entry
     engine = DatasourceOpcuaEngine(profile.name)
     engine.set_datasource_manager(dm)
-    engine.attach_client(
-        client, {"server_url": run.url}, operation_limits=await read_operation_limits(client)
-    )
+    # Fast enough for a PLC change to land inside the wait in
+    # `test_imported_tree_follows_server_changes`; the 10 s default is not.
+    settings = {"server_url": run.url, "bg_publish_interval_ms": 250}
+    engine.attach_client(client, settings, operation_limits=await read_operation_limits(client))
     root_name = fixture["browse"]["display_name"]
     return engine, dm, entry, root_name
 

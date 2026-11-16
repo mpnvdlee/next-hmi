@@ -11,6 +11,14 @@ heading.
 
 ## [Unreleased]
 
+### Changed
+
+- **Background sync reports every 10 seconds by default.** An OPC-UA
+  datasource that sets no **BG Interval** of its own now follows its
+  off-screen variables every 10 s instead of every second, sparing the PLC.
+  A page's own variables still update at the fast rate while it is open; set
+  BG Interval on the datasource to keep the old pace.
+
 ### Added
 
 - **A Data Grid column shows its values through a value map.** Each column

@@ -412,7 +412,7 @@ function OpcuaClientFields({
           max={60000}
           step={100}
           disabled={settings.disable_background_sync ?? false}
-          value={settings.bg_publish_interval_ms ?? 1000}
+          value={settings.bg_publish_interval_ms ?? 10000}
           onChange={(e) => onChange('bg_publish_interval_ms', Number(e.target.value))}
         />
       </PropRow>
