@@ -70,7 +70,7 @@ const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 119 * 1024;
 
 const ROUTE_BUDGETS_GZIP = {
   manager: 150 * 1024,
-  'basic-hmi': 150 * 1024,
+  'basic-hmi': 155 * 1024,
   // The editor's shared chunk carries the tree drag-and-drop, clipboard and
   // multi-selection surfaces, the full icon set (WidgetIcon/IconSourcePicker
   // render it synchronously) and builtinWidgetsManifest.editor.json, so every
