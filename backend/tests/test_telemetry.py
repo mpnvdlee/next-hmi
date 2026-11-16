@@ -296,7 +296,6 @@ async def test_server_error_is_swallowed(monkeypatch, home: Path) -> None:
 def client(monkeypatch, home: Path) -> TestClient:
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     monkeypatch.setattr(manager.telemetry, "start", lambda: None)
@@ -311,7 +310,6 @@ def client(monkeypatch, home: Path) -> TestClient:
 def test_status_is_gated_behind_the_device_admin_session(monkeypatch, home: Path) -> None:
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     monkeypatch.setattr(manager.telemetry, "start", lambda: None)

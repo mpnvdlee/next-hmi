@@ -11,6 +11,12 @@ heading.
 
 ## [Unreleased]
 
+### Changed
+
+- **A fresh install starts with an empty project list.** The first launch no
+  longer creates and starts a `Default-Project`; click **+ New project** to
+  create one. Existing installations keep their projects.
+
 ## [1.3.0] - 2026-11-13
 
 Keeps pace with large OPC-UA servers and shuts out what should not reach the

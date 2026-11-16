@@ -131,17 +131,18 @@ jobs:
             sleep 1
           done
           echo "::error::manager never answered 200 on published port" && exit 1
-      - name: Seed created under mounted volume
-        run: test -f "$RUNNER_TEMP/project-data/projects.json" && test -d "$RUNNER_TEMP/project-data/Default-Project"
+      - name: No project seeded on first boot
+        run: test ! -e "$RUNNER_TEMP/project-data/Default-Project"
       # The runner made the folder, so the entrypoint had to hand it over
-      # before the app, as uid 10001, could seed it.
+      # before the app, as uid 10001, could write its state into it.
       - name: App runs unprivileged and owns the volume
         run: |
           test "$(docker exec nexthmi-smoke stat -c %u /proc/1)" = 10001
-          test "$(stat -c %u "$RUNNER_TEMP/project-data/projects.json")" = 10001
+          test -n "$(ls -A "$RUNNER_TEMP/project-data")"
+          test -z "$(find "$RUNNER_TEMP/project-data" -mindepth 1 ! -uid 10001)"
       - name: Graceful stop (SIGTERM)
         run: docker stop -t 10 nexthmi-smoke
-      - name: Restart against the same volume — no re-seed/duplication
+      - name: Restart against the same volume — still no project
         run: |
           docker start nexthmi-smoke
           for i in $(seq 1 30); do
@@ -150,7 +151,7 @@ jobs:
             sleep 1
           done
           [ "$code" = "200" ] || { echo "::error::manager did not come back up after restart" && exit 1; }
-          test "$(ls "$RUNNER_TEMP/project-data" | grep -c '^Default-Project$')" = "1"
+          test ! -e "$RUNNER_TEMP/project-data/Default-Project"
       - name: Cleanup
         if: always()
         run: docker rm -f nexthmi-smoke || true
@@ -211,17 +212,18 @@ jobs:
             sleep 1
           done
           echo "::error::manager never answered 200 on published port" && exit 1
-      - name: Seed created under mounted volume
-        run: test -f "$RUNNER_TEMP/project-data/projects.json" && test -d "$RUNNER_TEMP/project-data/Default-Project"
+      - name: No project seeded on first boot
+        run: test ! -e "$RUNNER_TEMP/project-data/Default-Project"
       # The runner made the folder, so the entrypoint had to hand it over
-      # before the app, as uid 10001, could seed it.
+      # before the app, as uid 10001, could write its state into it.
       - name: App runs unprivileged and owns the volume
         run: |
           test "$(docker exec nexthmi-smoke stat -c %u /proc/1)" = 10001
-          test "$(stat -c %u "$RUNNER_TEMP/project-data/projects.json")" = 10001
+          test -n "$(ls -A "$RUNNER_TEMP/project-data")"
+          test -z "$(find "$RUNNER_TEMP/project-data" -mindepth 1 ! -uid 10001)"
       - name: Graceful stop (SIGTERM)
         run: docker stop -t 10 nexthmi-smoke
-      - name: Restart against the same volume — no re-seed/duplication
+      - name: Restart against the same volume — still no project
         run: |
           docker start nexthmi-smoke
           for i in $(seq 1 30); do
@@ -230,7 +232,7 @@ jobs:
             sleep 1
           done
           [ "$code" = "200" ] || { echo "::error::manager did not come back up after restart" && exit 1; }
-          test "$(ls "$RUNNER_TEMP/project-data" | grep -c '^Default-Project$')" = "1"
+          test ! -e "$RUNNER_TEMP/project-data/Default-Project"
       - name: Cleanup
         if: always()
         run: docker rm -f nexthmi-smoke || true
@@ -331,8 +333,8 @@ jobs:
             sleep 1
           done
           echo "::error::manager never answered 200" && exit 1
-      - name: Seed created under runtime home
-        run: test -f "$RUNTIME_HOME/projects.json" && test -d "$RUNTIME_HOME/Default-Project"
+      - name: Runtime home created, no project seeded
+        run: test -d "$RUNTIME_HOME" && test ! -e "$RUNTIME_HOME/Default-Project"
       - name: Graceful shutdown (SIGTERM)
         run: |
           PID=$(cat "$RUNNER_TEMP/nexthmi.pid")
@@ -425,8 +427,8 @@ jobs:
             sleep 1
           done
           echo "::error::manager never answered 200" && exit 1
-      - name: Seed created under runtime home
-        run: test -f "$RUNTIME_HOME/projects.json" && test -d "$RUNTIME_HOME/Default-Project"
+      - name: Runtime home created, no project seeded
+        run: test -d "$RUNTIME_HOME" && test ! -e "$RUNTIME_HOME/Default-Project"
       - name: Graceful shutdown (SIGTERM)
         run: |
           PID=$(cat "$RUNNER_TEMP/nexthmi.pid")
@@ -515,11 +517,11 @@ jobs:
           }
           Write-Host "::error::manager never answered 200 on published port"
           exit 1
-      - name: Seed created under runtime home
+      - name: Runtime home created, no project seeded
         shell: pwsh
         run: |
-          if (-not (Test-Path "$env:RUNTIME_HOME\projects.json")) { Write-Host "::error::projects.json missing"; exit 1 }
-          if (-not (Test-Path "$env:RUNTIME_HOME\Default-Project")) { Write-Host "::error::Default-Project missing"; exit 1 }
+          if (-not (Test-Path "$env:RUNTIME_HOME")) { Write-Host "::error::runtime home missing"; exit 1 }
+          if (Test-Path "$env:RUNTIME_HOME\Default-Project") { Write-Host "::error::Default-Project was seeded"; exit 1 }
       - name: Stop the manager
         shell: pwsh
         run: |
@@ -527,7 +529,7 @@ jobs:
           # console-signal shutdown is not yet asserted (see the note below).
           $managerPid = Get-Content "$env:RUNNER_TEMP\nexthmi.pid"
           Stop-Process -Id $managerPid -Force -ErrorAction SilentlyContinue
-      - name: Restart against the same runtime home — no re-seed
+      - name: Restart against the same runtime home
         shell: pwsh
         run: |
           $p = Start-Process -FilePath "$env:RUNNER_TEMP\portable\nexthmi-windows-x64\nexthmi.exe" -PassThru

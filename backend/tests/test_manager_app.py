@@ -19,8 +19,7 @@ def _make_client(monkeypatch, tmp_path: Path, base_url: str, root_path: str = ""
 
     import manager
 
-    # Don't seed/spawn/teardown real instances during the lifespan.
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
+    # Don't spawn/teardown real instances during the lifespan.
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
 
@@ -1026,7 +1025,6 @@ def test_document_navigation_to_unopenable_project_is_served_the_project_shell(
     os.environ["NEXTHMI_FRONTEND_DIST"] = str(dist)
     try:
         manager = importlib.reload(manager)
-        monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
         monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
         monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
         with TestClient(manager.app) as tc:
@@ -1087,7 +1085,6 @@ def test_document_navigation_to_unopenable_project_without_a_session_is_sent_bac
     os.environ["NEXTHMI_FRONTEND_DIST"] = str(dist)
     try:
         manager = importlib.reload(manager)
-        monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
         monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
         monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
         with TestClient(manager.app) as tc:
@@ -1174,7 +1171,6 @@ def test_bundled_help_is_reachable_without_a_trailing_slash(
     monkeypatch.setattr(manager, "bundled_docs_dir", lambda: docs)
     try:
         reloaded = importlib.reload(manager)
-        monkeypatch.setattr(reloaded.project_resume, "prepare_running_set", lambda: None)
         monkeypatch.setattr(reloaded.supervisor, "resume_all", lambda: None)
         monkeypatch.setattr(reloaded.supervisor, "shutdown", lambda: None)
         with TestClient(reloaded.app) as tc:
@@ -1198,6 +1194,13 @@ def test_legacy_p_prefix_routing_removed(client: TestClient) -> None:
     )
     assert client.get("/p/ghost/api/health").status_code == 404
     assert client.get("/p/ghost/").status_code == 404
+
+
+def test_fresh_install_starts_with_an_empty_project_list(client: TestClient, tmp_path: Path) -> None:
+    from core import manifest as manifest_mod
+
+    assert manifest_mod.load_manifest().projects == []
+    assert not (tmp_path / "runtime-home" / "Default-Project").exists()
 
 
 def test_manager_index_served_in_manager_mode(monkeypatch, tmp_path: Path) -> None:
@@ -1230,7 +1233,6 @@ def test_manager_index_served_in_manager_mode(monkeypatch, tmp_path: Path) -> No
     os.environ["NEXTHMI_FRONTEND_DIST"] = str(dist)
     try:
         manager = importlib.reload(manager)
-        monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
         monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
         monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
         with TestClient(manager.app) as tc:
@@ -1290,7 +1292,6 @@ def test_root_redirects_to_running_default(monkeypatch, tmp_path: Path) -> None:
     os.environ["NEXTHMI_FRONTEND_DIST"] = str(dist)
     try:
         manager = importlib.reload(manager)
-        monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
         monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
         monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
         monkeypatch.setattr(
@@ -1343,7 +1344,6 @@ def test_peer_transfer_body_is_rejected_before_it_is_spooled(monkeypatch, tmp_pa
     # Don't seed/spawn/teardown real instances during the lifespan — an empty
     # tmp manifest would otherwise fall back to bootstrapping and resuming
     # the repo's actual project-testbench/ (see the `client` fixture above).
-    monkeypatch.setattr(manager_module.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager_module.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager_module.supervisor, "shutdown", lambda: None)
     manager_auth.set_password("device-admin")

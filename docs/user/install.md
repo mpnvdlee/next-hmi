@@ -538,9 +538,9 @@ version tag such as `:1.0.1` to pin a release.
 
 Open <http://localhost:8000> and set the device-admin password when the
 manager dashboard prompts. It asks for the setup code first:
-`docker logs nexthmi` shows it. On first boot the bundled seed project is
-registered and started; open its HMI or editor from the dashboard. The project
-needs no password of its own.
+`docker logs nexthmi` shows it. The project list starts empty: click
+**+ New project** to create one, then open its HMI or editor from the
+dashboard. The project needs no password of its own.
 
 Reaching the container from another machine works the same way, with one
 exception: `http://192.168.1.10:8000` is not a secure context, so the browser
@@ -634,13 +634,12 @@ the container](#the-user-inside-the-container)). The backend checks each
 project's stamped format version on activation and refuses to open one
 written by a newer build.
 
-### Re-seeding
+### Starting over
 
 If you delete `./project-data/` (or point the volume at a fresh
-directory), the manager reseeds from the image's bundled seed project on
-the next start and registers it. A fresh device-admin password is required again,
-and the reseeded project starts out with only its `guest` user.
-Existing volumes retain their current project credentials unchanged.
+directory), the next start is a fresh install: an empty project list, and a
+fresh device-admin password is required again. Existing volumes retain their
+current projects and credentials unchanged.
 
 ## Portable binaries
 
@@ -676,8 +675,8 @@ network block goes with it: nothing else is answering. See [HTTPS](#https)
 before putting an install on a network you do not control.
 
 On the first launch, set the device-admin password, with the setup code from
-the banner. That is the only credential the install asks for: the seeded
-project holds only its `guest` user and opens straight away. Upgrades preserve
+the banner. That is the only credential the install asks for: a new project
+holds only its `guest` user and opens straight away. Upgrades preserve
 an existing project's users and passwords byte-for-byte.
 
 **The setup code is what claims the install.** Until a password exists there is

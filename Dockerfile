@@ -142,8 +142,7 @@ COPY --from=frontend-build /src/frontend/dist /app/frontend/dist
 # frontend Theme Editor. Copied as a source file, not part of the SPA dist.
 COPY --from=frontend-build /src/frontend/src/shared/themeDefaults.json /app/frontend/src/shared/themeDefaults.json
 COPY --from=node-deps /usr/local/bin/esbuild /usr/local/bin/esbuild
-# The backend's project_bootstrap looks here on first boot to seed
-# /data/Default-Project/ when /data has no manifest yet.
+# Templates the "+ New project" dialog copies from.
 COPY project-seed/ /app/project-seed/
 COPY project-example/ /app/project-example/
 

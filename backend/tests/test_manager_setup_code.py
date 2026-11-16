@@ -37,7 +37,6 @@ def _reset_throttle():
 def client(monkeypatch, home: Path):
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     with TestClient(manager.app) as tc:
@@ -126,7 +125,6 @@ def test_manager_logs_the_code_at_startup(monkeypatch, home: Path, caplog) -> No
     import manager
 
     monkeypatch.setattr(manager, "configure_logging", lambda **_kwargs: None)
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
 
@@ -143,7 +141,6 @@ def test_manager_logs_no_code_once_a_password_is_set(monkeypatch, home: Path, ca
 
     manager_auth.set_password("secret")
     monkeypatch.setattr(manager, "configure_logging", lambda **_kwargs: None)
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
 

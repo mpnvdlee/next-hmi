@@ -103,7 +103,6 @@ def client(monkeypatch, tmp_path: Path):
 
     import manager
 
-    monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
     manager_auth.set_password(PASSWORD)

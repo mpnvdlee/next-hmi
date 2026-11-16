@@ -37,8 +37,9 @@ installer, admin rights, Python or Node on the host.
    one-time setup code the terminal prints next to the URL (with Docker:
    `docker logs nexthmi`). The password gates the whole installation — the
    dashboard, and every project's runtime and editor.
-   Then **Start** the seeded example project and open its runtime or its
-   editor. You have something to click before a PLC is connected.
+   The project list starts empty: click **+ New project**, pick the
+   **NEXT BREW example** template, and open its runtime or its editor. You
+   have something to click before a PLC is connected.
 
 These builds are unsigned, so the OS asks once — Gatekeeper on macOS,
 SmartScreen on Windows. The
@@ -52,7 +53,7 @@ from the editor's **Users** area.
 
 ### Docker — Linux, servers and anything with a container runtime
 
-Same runtime, same project folder, same seeded example. No registry access?
+Same runtime, same project folder, same templates. No registry access?
 Take the offline installer zip from step 1 instead.
 
 ```bash
