@@ -757,7 +757,7 @@ Example shape:
     "reconnect_interval_s": 5,
     "request_timeout_s": 30,
     "deadband_abs": 0.001,
-    "bg_publish_interval_ms": 1000,
+    "bg_publish_interval_ms": 10000,
     "disable_background_sync": false,
     "browse_root_node": ""
   },
@@ -777,6 +777,11 @@ Settings worth a note:
   reconnect attempts: after a drop the first one comes 0.5 s later, and the
   wait doubles up to this value while the server stays away
   ([engine](backend.md#main-modules))
+- `bg_publish_interval_ms` (**BG Interval (ms)**, 250–60000, default `10000`)
+  is how often the background subscription, which follows every enabled
+  variable while `disable_background_sync` is off, reports changes. A page's
+  own variables move to the fast subscription while it is open, so this only
+  sets how fresh an off-screen value is when a page first shows it
 - an `opcua-test-server`'s `settings` hold `port` (default `4855`),
   `endpoint_path`, `security_policies` (`"<Policy>/<Mode>"` entries) and
   `reachable_from_network`: absent or `false` binds `127.0.0.1` only, `true`

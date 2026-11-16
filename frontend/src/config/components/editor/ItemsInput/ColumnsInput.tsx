@@ -2,6 +2,7 @@ import Select from '@config/components/ui/Select';
 import PropRow from '@config/components/ui/PropRow';
 import SchemaFieldRow from '@config/components/ui/SchemaFieldRow';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
+import { useConfigStore } from '@shared/store/configStore';
 import { renderSchemaField } from '@config/utils/renderSchemaField';
 import { LengthField } from '@config/utils/LengthField';
 import { isLocSource } from '@shared/types/propertyValueGuards';
@@ -18,6 +19,8 @@ export interface ColumnEntry {
   title?: unknown;
   width?: string | number;
   align?: string;
+  /** The project value map each cell is shown through, by id. */
+  map?: string;
 }
 
 interface Props {
@@ -98,6 +101,23 @@ function MemberField({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
+/** The value map a column's cells are shown through: any map but a Color one,
+ *  since a cell shows text. */
+function MapField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const maps = useConfigStore((s) => s.valueMaps).filter((m) => m.type !== 'Color');
+  return (
+    <Select value={value} onChange={onChange}>
+      <option value="">None</option>
+      {value && !maps.some((m) => m.id === value) && <option value={value}>{value}</option>}
+      {maps.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.id}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
 /** The static value of a `format: 'columns'` item list: one line per column
  *  in the panel, as an option list has (see `PanelList`); its drawer row holds
  *  the member, title (any source), width and alignment. */
@@ -169,6 +189,12 @@ export default function ColumnsInput({ value, onChange, rows }: Props) {
             {renderSchemaField(ALIGN_SCHEMA, column.align, (align) =>
               update({ align: (align as string | undefined) ?? undefined }),
             )}
+          </PropRow>
+          <PropRow label="Value map">
+            <MapField
+              value={column.map ?? ''}
+              onChange={(map) => update({ map: map || undefined })}
+            />
           </PropRow>
         </>
       )}

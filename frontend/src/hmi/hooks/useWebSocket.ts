@@ -168,6 +168,39 @@ function flushPendingNow(): void {
   flushPendingVarUpdates();
 }
 
+// ── Holding value frames while a page is built ──────────────────────────────
+// A value that lands while React is building a page makes it throw the build
+// away and start again, so a page whose values arrive mid-build drew later
+// than one built without them. A navigation holds the frames that change
+// values until its page has committed, then applies them before the browser
+// paints (`releaseValueFrames`): the page is built once, and drawn with them.
+const HELD_FRAME_TYPES: ReadonlySet<string> = new Set([
+  'var_metadata',
+  'var_update',
+  'var_removed',
+  'context_ready',
+]);
+let _heldFrames: MessageEvent[] | null = null;
+let _holdTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Hold value frames until `releaseValueFrames`, or `maxMs` at the latest. */
+export function holdValueFrames(maxMs: number): void {
+  _heldFrames ??= [];
+  if (_holdTimer !== null) clearTimeout(_holdTimer);
+  _holdTimer = setTimeout(releaseValueFrames, maxMs);
+}
+
+/** Handle the held frames, in order, and apply their values at once. */
+export function releaseValueFrames(): void {
+  if (_holdTimer !== null) clearTimeout(_holdTimer);
+  _holdTimer = null;
+  const frames = _heldFrames;
+  _heldFrames = null;
+  if (!frames?.length) return;
+  for (const frame of frames) _ws?.onmessage?.(frame);
+  flushPendingNow();
+}
+
 function enqueueVarUpdate(
   type: 'var_snapshot' | 'var_update',
   values: Record<string, unknown> | undefined,
@@ -417,6 +450,10 @@ export function useWebSocket(): void {
       ws.onmessage = (event: MessageEvent) => {
         const msg = parseWsMessage(event.data as string);
         if (!msg) return;
+        if (_heldFrames && HELD_FRAME_TYPES.has(msg.type)) {
+          _heldFrames.push(event);
+          return;
+        }
 
         switch (msg.type) {
           case 'var_snapshot':
@@ -576,6 +613,8 @@ export function useWebSocket(): void {
         // flushes the in-flight actions itself.
         if (_ws !== ws) return;
         _ws = null;
+        // A new socket starts a new value generation; this one's frames are stale.
+        _heldFrames = null;
         setWsConnectedRef.current(false);
         clearOpcuaConnectedRef.current(); // backend is unreachable, OPC-UA state unknown
         // Fail any in-flight action requests — backend responses can no longer
@@ -605,6 +644,7 @@ export function useWebSocket(): void {
       _pendingValues = null;
       _pendingSnapshot = false;
       _pendingContextReady = null;
+      _heldFrames = null;
       _flushFns = null;
       if (_ws) {
         const closing = _ws;

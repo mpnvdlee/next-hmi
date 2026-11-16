@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { useConfigStore } from '@shared/store/configStore';
 import ItemListInput from './ItemListInput';
 
 describe('ItemListInput', () => {
@@ -123,5 +124,37 @@ describe('ItemListInput', () => {
 
     fireEvent.click(screen.getByText('+ Add column'));
     expect(onChange).toHaveBeenLastCalledWith([...columns, { member: '' }]);
+  });
+
+  it("shows a Data Grid column's cells through a value map, any but a Color one", () => {
+    useConfigStore.setState({
+      valueMaps: [
+        { id: 'ecState', type: 'String', cases: [] },
+        { id: 'stateColor', type: 'Color', cases: [] },
+        { id: 'code', type: 'Integer', cases: [] },
+      ],
+    });
+    const onChange = vi.fn();
+    const { unmount } = render(
+      <ItemListInput columns value={[{ member: 'nState', map: 'ecState' }]} onChange={vi.fn()} />,
+    );
+    // A column with a map is still a column, not a reason to open the list as JSON.
+    expect(screen.getByTitle('Edit column')).toHaveTextContent('nState');
+    unmount();
+
+    render(<ItemListInput columns value={[{ member: 'nState' }]} onChange={onChange} />);
+    fireEvent.click(screen.getByTitle('Expand in drawer'));
+    fireEvent.click(screen.getByTitle('Expand'));
+
+    Element.prototype.scrollIntoView = vi.fn();
+    const row = screen.getByText('Value map').closest('.cfg-field-group') as HTMLElement;
+    fireEvent.click(within(row).getByRole('combobox'));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'None',
+      'ecState',
+      'code',
+    ]);
+    fireEvent.click(screen.getByRole('option', { name: 'ecState' }));
+    expect(onChange).toHaveBeenLastCalledWith([{ member: 'nState', map: 'ecState' }]);
   });
 });

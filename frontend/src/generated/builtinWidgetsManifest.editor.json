@@ -436,7 +436,7 @@
         "format": "columns",
         "label": "Columns",
         "group": "Data",
-        "description": "One entry per column: the member it shows, its title from any source, a width — Fill shares the free space, Fixed is a length such as 60px — and its alignment. Empty shows a column per member of the first row."
+        "description": "One entry per column: the member it shows, its title from any source, a width — Fill shares the free space, Fixed is a length such as 60px — its alignment, and a value map that shows each value as its text, such as a state number as its name. Empty shows a column per member of the first row."
       },
       "sortMember": {
         "label": "Sort by",

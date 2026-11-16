@@ -17,6 +17,46 @@ heading.
   longer creates and starts a `Default-Project`; click **+ New project** to
   create one. Existing installations keep their projects.
 
+- **Background sync reports every 10 seconds by default.** An OPC-UA
+  datasource that sets no **BG Interval** of its own now follows its
+  off-screen variables every 10 s instead of every second, sparing the PLC.
+  A page's own variables still update at the fast rate while it is open; set
+  BG Interval on the datasource to keep the old pace.
+
+### Added
+
+- **A Data Grid column shows its values through a value map.** Each column
+  gains **Value map**: an EtherCAT table shows State as `OP`, CRC and Lost link
+  as text, instead of their numbers. A value no case matches shows the map's
+  default, or itself; sorting and the filter still work on the value. Renaming
+  the map takes the column along.
+
+### Fixed
+
+- **A page opens with the values the server already holds.** A page asked for
+  its values only once it had been built and drawn, so with background sync
+  on a widget whose Visible reads a hidden tag still showed for a frame or
+  two. The request now goes out at the click, and the answer is applied as
+  the page is drawn, so its first frame shows them.
+
+- **A dialog follows the Data Grid row it was opened for.** On Select handed
+  Repeat item to an Open Dialog as a copy of the row, so a details dialog read
+  the picked EtherCAT slave once and never updated, and a Binding input got
+  nothing at all. When Items is a tag, Repeat item and `[#]` now name the row's
+  own element, as in a Repeater copy, so the dialog stays live.
+
+- **A page opened again starts from its last values.** A Repeater row whose
+  Visible reads a member of the array at the copy's position (`[#]`) flashed up
+  on every return to its page, for as long as the page's own metadata took to
+  arrive, though its last value was in hand. It now reads that member from the
+  array it already holds, so a hidden row stays hidden. A first visit still
+  shows a widget until its Visible has a value.
+
+- **Open and close folders while searching the binding picker.** During a
+  search every folder was forced open and a click on its arrow did nothing.
+  The arrows work during a search now; a new search opens every folder again,
+  and clearing it restores the tree as it was.
+
 ## [1.3.0] - 2026-11-13
 
 Keeps pace with large OPC-UA servers and shuts out what should not reach the

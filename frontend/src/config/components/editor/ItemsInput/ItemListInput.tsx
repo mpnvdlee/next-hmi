@@ -14,7 +14,7 @@ interface Props {
 }
 
 const LABEL_VALUE_KEYS = ['label', 'value'];
-const COLUMN_KEYS = ['member', 'title', 'width', 'align'];
+const COLUMN_KEYS = ['member', 'title', 'width', 'align', 'map'];
 
 /**
  * The static value of an `item-list` field: label / value rows (column rows

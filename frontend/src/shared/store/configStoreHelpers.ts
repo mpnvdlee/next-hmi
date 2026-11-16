@@ -379,9 +379,10 @@ export function removeComponentFromPage(
 }
 
 /**
- * `value` with every `$map` reference to value map `from` pointing at `to`. Hands
- * back the very same object wherever nothing changed, so a caller can tell which
- * pages a rename reached by identity.
+ * `value` with every `$map` reference to value map `from` pointing at `to`, and
+ * every Data Grid column showing its cells through it. Hands back the very same
+ * object wherever nothing changed, so a caller can tell which pages a rename
+ * reached by identity.
  */
 export function renameValueMapReferences<T>(value: T, from: string, to: string): T {
   if (Array.isArray(value)) {
@@ -394,6 +395,12 @@ export function renameValueMapReferences<T>(value: T, from: string, to: string):
     if (key === '$map' && mapped && typeof mapped === 'object') {
       const ref = mapped as { id?: unknown };
       if (ref.id === from) mapped = { ...ref, id: to };
+    }
+    // A `format: 'columns'` list names a column's map by id, not by `$map`.
+    if (key === 'columns' && Array.isArray(mapped)) {
+      mapped = mapPreserving(mapped as unknown[], (c) =>
+        c && typeof c === 'object' && (c as { map?: unknown }).map === from ? { ...c, map: to } : c,
+      );
     }
     if (mapped === child) continue;
     next ??= { ...(value as Record<string, unknown>) };

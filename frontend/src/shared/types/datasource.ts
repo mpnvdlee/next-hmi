@@ -234,7 +234,7 @@ function defaultSettings(type: DatasourceType): DatasourceSettings {
         reconnect_interval_s: 5,
         request_timeout_s: 30,
         deadband_abs: 0.001,
-        bg_publish_interval_ms: 1000,
+        bg_publish_interval_ms: 10000,
         priority_publish_interval_ms: 50,
         priority_sampling_interval_ms: 50,
         priority_ws_batch_ms: 10,

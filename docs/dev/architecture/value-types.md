@@ -529,9 +529,11 @@ filters and marks the pick by the same types.
   type `actions` that declares `repeatsOver: '<item-list prop>'` runs with one
   element of that list — Data Grid's **On Select** with the picked row. The
   editor offers Repeat item inside it and the validator types it against that
-  list, as if a Repeater enclosed it; at run time the widget passes
-  `repeatIndex` and `resolveRepeatItem` on the `evalCtx` it hands
-  `executeWidgetActions`, which reads the element's value (read-only).
+  list, as if a Repeater enclosed it; at run time the widget hands
+  `executeWidgetActions` the element as `repeatItem`, which resolves every
+  repeat reference in the actions as a Repeater copy does — to the element's
+  own `$var` when the items come from a variable, so a dialog input bound to
+  the chosen row follows it live.
 - **Outside a Repeater** `$repeatItem` resolves to *absent* and a `repeatIndex`
   binding reads the whole array. The warnings pill flags both
   (`repeatitem-no-scope`), except inside a component definition, whose

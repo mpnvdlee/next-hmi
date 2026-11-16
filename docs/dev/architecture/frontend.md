@@ -283,6 +283,19 @@ recoloured icon per URL for the rest of the page load, so a revisited page
 draws it on the first frame. A page's variables do not gate the reveal
 at all, so a slow OPC-UA read never stalls a navigation.
 
+A navigation still asks for its page's values before React builds the page.
+React Router runs each navigation as a transition, and `HmiView`'s context
+effect fires only after the new page has committed, so on its own a page drew
+before the values the server already held for it (background sync on) had
+arrived. `useNavigateToPage`, page-group tabs and browser back/forward call
+`announcePage` (`hmi/utils/pageAnnouncer.ts`) first: `HmiView` sends the same
+context its effect would, which the effect then finds already sent. The value
+frames that answer it are held (`holdValueFrames`, at most 300 ms) and
+replayed in a layout effect once the page has committed (`releaseValueFrames`),
+before the browser paints. Applied mid-build, they would make React throw the
+build away and start again; held, the page is built once and its first frame
+already shows them.
+
 **Marking** is a data question, and it can only start once data has stopped
 arriving. `DataSettleGate` + `useDataSettling` hold the binding overlays off a
 subtree until the surface's `set_context` has been acked by `context_ready`

@@ -1,6 +1,6 @@
 import '../styles/hmi.css';
 import '../styles/hmi-view.css';
-import { useDeferredValue, useEffect, useRef } from 'react';
+import { useDeferredValue, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useConfig, usePage, usePages } from '@shared/hooks/useConfig';
 import { useTranslations } from '@shared/hooks/useTranslations';
@@ -13,13 +13,17 @@ import {
   setBackendRestartHandler,
   setContextProducer,
   clearContextProducer,
+  holdValueFrames,
+  releaseValueFrames,
 } from '../hooks/useWebSocket';
 import { useVariableStore } from '../store/variableStore';
 import { resolveMainStyle, resolvePageContext } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
 import { randomUuid } from '@shared/utils/id';
+import { routerBasename } from '@shared/utils/runtimeBase';
 import { HmiScopeContext } from '../context/HmiScopeContext';
-import { useResolvedPageOverlays } from '../hooks/useOpenOverlays';
+import { resolvePageOverlays, useResolvedPageOverlays } from '../hooks/useOpenOverlays';
+import { announcePage, setPageAnnouncer } from '../utils/pageAnnouncer';
 import { renderRegionChildren } from '../components/renderRegion';
 import ShellRegion from '../components/ShellRegion';
 import { useSidebarFullHeight } from '../components/ShellRegion/useSidebarFullHeight';
@@ -47,6 +51,50 @@ import ConnectionLostOverlay from '@shared/components/ConnectionLostOverlay';
 import { identityRequest } from '../utils/runtimeSession';
 
 const reloadPage = () => window.location.reload();
+
+/** The longest a navigation holds its page's value frames back: past it, a
+ *  page still building takes them as before, and a navigation that never
+ *  commits (to the page already shown) stops holding. */
+const PAGE_BUILD_HOLD_MS = 300;
+
+/**
+ * The runtime's `set_context` for page `id` (a group resolves to its active
+ * page) and the open overlays, read from the stores as they are now. The
+ * backend computes the full variable set itself, so nested expressions (for
+ * example $if/$switch/$compare) are included; the priority keys, collected
+ * from the in-memory component tree, let it subscribe variables even before
+ * the config is saved to disk. HmiView's effect and a navigation's announce
+ * both send it, so the second finds an identical context and sends nothing.
+ */
+function runtimePageContext(id: string | undefined): {
+  currentPageIds: string[];
+  priorityKeys: string[];
+} {
+  const { pages, dialogs, header, footer, leftSidebar, rightSidebar, globalEvents } =
+    useConfigStore.getState();
+  const { page } = resolvePageContext(pages, id);
+  const overlays = resolvePageOverlays(useHmiStore.getState().openPageOverlays, pages, dialogs);
+  const overlayIds = overlays.flatMap((item) => (item.page ? [item.page.id] : []));
+  const components = [
+    ...(page ? getPageChildren(page) : []),
+    ...header,
+    ...footer,
+    ...leftSidebar,
+    ...rightSidebar,
+    ...overlays.flatMap((item) => (item.page ? getPageChildren(item.page) : [])),
+  ];
+  // onHmiLoaded's variables too: useGlobalEvents holds that event back until
+  // this context's values have arrived, so its `if` reads them, not "no value".
+  // A variable trigger watches its variable on every page.
+  return {
+    currentPageIds: page?.id ? [page.id, ...overlayIds] : overlayIds,
+    priorityKeys: [
+      ...collectComponentPriorityKeys(components),
+      ...extractVarKeys(globalEvents.onHmiLoaded),
+      ...extractVarKeys(globalEvents.onVariableChanged),
+    ],
+  };
+}
 
 export default function HmiView() {
   useConfig();
@@ -120,40 +168,13 @@ export default function HmiView() {
     return () => setBackendRestartHandler(null);
   }, []);
 
-  // Send active runtime context. Backend computes the full variable set so
-  // nested expressions (for example $if/$switch/$compare) are included.
-  // Additionally, derive explicit priorityKeys from the in-memory component
-  // tree so the backend subscribes variables even before config is saved to disk.
-  // Component definitions load asynchronously; the priority keys a
-  // `$component:` instance derives from its definition only exist once it has.
+  // Send active runtime context (see `runtimePageContext`). Component
+  // definitions load asynchronously; the priority keys a `$component:`
+  // instance derives from its definition only exist once it has.
   const componentDefinitions = useComponentStore((s) => s.components);
   useEffect(() => {
     if (!wsConnected) return;
-
-    const currentPageIds = page?.id ? [page.id, ...openPageOverlayIds] : [...openPageOverlayIds];
-
-    // Walk the visible component tree to collect $var binding keys. These are
-    // sent as priorityKeys so the backend can push values without needing the
-    // page config to be saved to disk first.
-    const components = [
-      ...(page ? getPageChildren(page) : []),
-      ...header,
-      ...footer,
-      ...leftSidebar,
-      ...rightSidebar,
-      ...openPageOverlays.flatMap((item) => (item.page ? getPageChildren(item.page) : [])),
-    ];
-    // onHmiLoaded's variables too: useGlobalEvents holds that event back until
-    // this context's values have arrived, so its `if` reads them, not "no value".
-    // A variable trigger watches its variable on every page.
-    const { onHmiLoaded, onVariableChanged } = useConfigStore.getState().globalEvents;
-    const priorityKeys = [
-      ...collectComponentPriorityKeys(components),
-      ...extractVarKeys(onHmiLoaded),
-      ...extractVarKeys(onVariableChanged),
-    ];
-
-    setContextProducer('page', { currentPageIds, priorityKeys });
+    setContextProducer('page', runtimePageContext(id));
     // page, header, footer, openPageOverlays are intentionally
     // omitted from deps: page?.id already re-triggers on navigation, and we
     // do NOT want to re-send set_context on every component edit in the
@@ -162,6 +183,33 @@ export default function HmiView() {
     // are actually added/removed, avoiding spurious re-fires.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wsConnected, page?.id, openPageOverlayEntries, componentDefinitions]);
+
+  // A navigation sends the page's context before React builds the page
+  // (`pageAnnouncer`), so the values the server holds arrive while it builds;
+  // the effect above then finds the same context already sent. Their frames
+  // wait until the page has committed and land before the browser paints, so
+  // the build is not thrown away for them and the page draws with its values.
+  // Browser back and forward navigate without a call site, so they announce
+  // from here.
+  useEffect(() => {
+    setPageAnnouncer((pageId) => {
+      if (!useVariableStore.getState().wsConnected) return;
+      holdValueFrames(PAGE_BUILD_HOLD_MS);
+      setContextProducer('page', runtimePageContext(pageId));
+    });
+    const onPopState = () => {
+      const path = window.location.pathname.slice(routerBasename().length);
+      const match = /^\/pages\/([^/]+)/.exec(path);
+      if (match) announcePage(decodeURIComponent(match[1]));
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      setPageAnnouncer(null);
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, []);
+
+  useLayoutEffect(() => releaseValueFrames(), [id]);
 
   // Clear this client's runtime context only on true unmount (navigating away
   // from the HMI view entirely). Deliberately a separate, empty-deps effect:
@@ -238,6 +286,7 @@ export default function HmiView() {
       onNavigate={(pageId, replace) => {
         // Navigate urgently so the URL/menu react immediately; the deferred
         // requestedId keeps the actual page render/teardown at low priority.
+        announcePage(pageId);
         navigate(`/pages/${pageId}`, { replace: replace ?? false });
       }}
       readsArrivals

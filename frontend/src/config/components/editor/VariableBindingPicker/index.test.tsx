@@ -16,6 +16,7 @@ const mockedApiJson = vi.mocked(apiJson);
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
   useEditorDomainStore.getState().closeBindingPicker();
 });
@@ -90,6 +91,40 @@ describe('VariableBindingPicker search', () => {
       { path: 'Demo PLC:Top Speed' },
       expect.objectContaining({ dataType: 'Float' }),
     );
+  });
+});
+
+describe('VariableBindingPicker folders during a search', () => {
+  it('closes and reopens a folder while a search shows it', async () => {
+    // A list with a height, so the virtualizer draws its rows.
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(400);
+    mockedApiJson
+      .mockResolvedValueOnce([{ name: 'Demo PLC', type: 'static' }] as never)
+      .mockResolvedValueOnce({
+        variables: [
+          {
+            kind: 'folder',
+            name: 'Pump',
+            children: [{ display_name: 'Speed', data_type: 'Float', enabled: true }],
+          },
+        ],
+      } as never);
+    useEditorDomainStore.getState().openBindingPicker('', 'speed', { onPick: vi.fn() });
+    render(<VariableBindingPicker />);
+    await waitFor(() => expect(mockedApiJson).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'speed' } });
+    const list = () => document.querySelector('.editor-binding-list > div');
+    // The datasource, Pump and Speed.
+    await waitFor(() => expect(list()).toHaveStyle({ height: '78px' }));
+
+    const toggle = () =>
+      screen.getByText('Pump').closest('.editor-binding-item')!.querySelector('button')!;
+    fireEvent.click(toggle());
+    await waitFor(() => expect(list()).toHaveStyle({ height: '52px' }));
+    expect(toggle()).toHaveTextContent('▶');
+    fireEvent.click(toggle());
+    await waitFor(() => expect(list()).toHaveStyle({ height: '78px' }));
+    expect(toggle()).toHaveTextContent('▼');
   });
 });
 
