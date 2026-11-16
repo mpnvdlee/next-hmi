@@ -332,12 +332,16 @@ def test_instance_refuses_a_page_that_goes_around_the_manager(tmp_path: Path) ->
     backend = Path(__file__).resolve().parents[1]
     home = tmp_path / "runtime-home"
     home.mkdir()
+    # Its own project, not the checkout's project-testbench/ that importing main bootstraps.
+    project = tmp_path / "project"
+    project.mkdir()
     script = tmp_path / "probe.py"
     script.write_text(_INSTANCE_PROBE, encoding="utf-8")
     out = tmp_path / "result.json"
     env = {
         **os.environ,
         "NEXTHMI_DATA_DIR": str(home),
+        "NEXTHMI_ACTIVE_PROJECT_PATH": str(project),
         "PYTHONPATH": os.pathsep.join([str(backend), os.environ.get("PYTHONPATH", "")]),
     }
     env.pop("NEXTHMI_FRONTEND_DIST", None)
